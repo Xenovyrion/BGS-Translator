@@ -1,0 +1,48 @@
+{
+  "productName": "BGS Translator",
+  "version": "1.0.0",
+  "identifier": "io.github.bgstranslator",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BGS Translator",
+        "width": 1400,
+        "height": 860,
+        "minWidth": 1000,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "maximized": true,
+        "center": true,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REMPLACER_PAR_VOTRE_CLE_PUBLIQUE_MINISIGN",
+      "endpoints": [
+        "https://github.com/VOTRE_USER/BGSTranslator/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
