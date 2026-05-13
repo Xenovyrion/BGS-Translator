@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { PluginInfo, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo } from "../types";
+import { listen } from "@tauri-apps/api/event";
+import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo } from "../types";
 
 /** Unique key based on _idx (assigned at load time) to avoid collisions
  *  on records that have multiple sub-fields of the same type (e.g. QUST/CNAM). */
@@ -35,10 +36,11 @@ function detectGame(masters: string[]): string {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePlugin() {
-  const [pluginInfo, setPluginInfo]       = useState<PluginInfo | null>(null);
-  const [entries, setEntries]             = useState<TranslationEntry[]>([]);
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState<string | null>(null);
+  const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
+  const [entries, setEntries]               = useState<TranslationEntry[]>([]);
+  const [loading, setLoading]               = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState<number | null>(null);
+  const [error, setError]                   = useState<string | null>(null);
   const [filter, setFilter]               = useState<FilterMode>("all");
   const [search, setSearch]               = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -101,32 +103,63 @@ export function usePlugin() {
 
   const openPlugin = useCallback(async (path: string, dbFolder = "") => {
     setLoading(true);
+    setLoadingProgress(0);
     setError(null);
     resetState();
-    try {
-      const result = await invoke<PluginInfo>("open_plugin_cmd", { path });
-      let indexed: TranslationEntry[] = result.entries.map((e, i) => ({ ...e, _idx: i }));
 
-      const game = detectGame(result.masters);
+    const accumulated: TranslationEntry[] = [];
+    let unlistenChunk: (() => void) | undefined;
+    let unlistenDone:  (() => void) | undefined;
+
+    const cleanup = () => { unlistenChunk?.(); unlistenDone?.(); };
+
+    try {
+      // Create a promise that resolves when plugin:done fires, then set up both
+      // listeners atomically (before invoke) to avoid missing early events.
+      let resolveDone!: (count: number) => void;
+      const donePromise = new Promise<number>((res) => { resolveDone = res; });
+
+      [unlistenChunk, unlistenDone] = await Promise.all([
+        listen<TranslationEntry[]>("plugin:chunk", (event) => {
+          accumulated.push(...event.payload);
+          setLoadingProgress(accumulated.length);
+        }),
+        listen<number>("plugin:done", (event) => {
+          resolveDone(event.payload);
+        }),
+      ]);
+
+      const meta = await invoke<PluginMetadata>("open_plugin_cmd", { path });
+
+      // Show metadata immediately so the header is visible while DB applies
+      setPluginInfo({ ...meta, entries: [] });
+
+      await donePromise;
+      cleanup();
+
+      let indexed: TranslationEntry[] = accumulated.map((e, i) => ({ ...e, _idx: i }));
+      const game = detectGame(meta.masters);
       indexed = await tryAutoLoadDb(game, dbFolder, indexed);
 
-      setPluginInfo({ ...result, entries: indexed });
+      setPluginInfo((prev) => prev ? { ...prev, entries: indexed, entry_count: indexed.length } : null);
       setEntries(indexed);
     } catch (e) {
+      cleanup();
       setError(String(e));
     } finally {
       setLoading(false);
+      setLoadingProgress(null);
     }
   }, [resetState, tryAutoLoadDb]);
 
-  // ── Load a saved session (.bgts or legacy .json) ──────────────────────────
+  // ── Load a saved session by its managed ID ───────────────────────────────
 
-  const loadSession = useCallback(async (path: string, dbFolder = "") => {
+  const loadSession = useCallback(async (id: string, dbFolder = "") => {
     setLoading(true);
     setError(null);
     resetState();
     try {
-      const session = await invoke<TranslationSession>("load_session_cmd", { path });
+      const session = await invoke<TranslationSession>("load_session_cmd", { id });
       const indexed: TranslationEntry[] = session.entries.map((e, i) => ({ ...e, _idx: i }));
 
       // Reconstruct PluginInfo from the session
@@ -337,7 +370,7 @@ export function usePlugin() {
     : 0;
 
   return {
-    pluginInfo, entries, displayEntries, loading, error,
+    pluginInfo, entries, displayEntries, loading, loadingProgress, error,
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,

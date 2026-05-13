@@ -40,7 +40,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::open_plugin_cmd,
             commands::save_session_cmd,
+            commands::list_sessions_cmd,
             commands::load_session_cmd,
+            commands::delete_session_cmd,
             commands::export_plugin_cmd,
             database::commands::load_db_cmd,
             database::commands::apply_db_full_cmd,

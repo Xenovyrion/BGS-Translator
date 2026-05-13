@@ -36,6 +36,7 @@ encoding_rs = "0.8"
 # Base de données
 bincode = "1"
 zstd    = "0.13"
+ahash   = "0.8"
 
 # Utilitaires
 uuid    = { version = "1", features = ["v4"] }

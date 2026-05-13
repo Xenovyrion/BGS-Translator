@@ -22,8 +22,9 @@ import EditPanel, { type EditPanelHandle } from "./components/translation/EditPa
 import BulkActionBar from "./components/translation/BulkActionBar";
 import StatusBar   from "./components/translation/StatusBar";
 import SettingsModal    from "./components/settings/SettingsModal";
-import UpdateModal      from "./components/shared/UpdateModal";
-import ChangelogModal   from "./components/shared/ChangelogModal";
+import UpdateModal       from "./components/shared/UpdateModal";
+import ChangelogModal    from "./components/shared/ChangelogModal";
+import SessionPickerModal from "./components/shared/SessionPickerModal";
 import ThemeManagerModal from "./components/themes/ThemeManagerModal";
 
 interface UpdateInfo { version: string; notes?: string }
@@ -68,7 +69,7 @@ export default function App() {
   })();
 
   const {
-    pluginInfo, entries, displayEntries, loading, error,
+    pluginInfo, entries, displayEntries, loading, loadingProgress, error,
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,
@@ -85,15 +86,16 @@ export default function App() {
     loadedDbInfo,
   } = usePlugin();
 
-  const [showSettings,      setShowSettings]      = useState(false);
-  const [showThemeManager,  setShowThemeManager]  = useState(false);
-  const [showUpdateModal,   setShowUpdateModal]    = useState(false);
-  const [showChangelog,     setShowChangelog]      = useState(false);
-  const [update,            setUpdate]             = useState<UpdateInfo | null>(null);
-  const [showColumnFilters, setShowColumnFilters]  = useState(false);
-  const [appVersion,        setAppVersion]         = useState("0.1.0");
-  const [autosavePath,      setAutosavePath]       = useState<string | null>(null);
-  const [lastAutosave,      setLastAutosave]       = useState<Date | null>(null);
+  const [showSettings,       setShowSettings]       = useState(false);
+  const [showThemeManager,   setShowThemeManager]   = useState(false);
+  const [showUpdateModal,    setShowUpdateModal]     = useState(false);
+  const [showChangelog,      setShowChangelog]       = useState(false);
+  const [showSessionPicker,  setShowSessionPicker]  = useState(false);
+  const [update,             setUpdate]             = useState<UpdateInfo | null>(null);
+  const [showColumnFilters,  setShowColumnFilters]  = useState(false);
+  const [appVersion,         setAppVersion]         = useState("0.1.0");
+  const [lastAutosave,       setLastAutosave]       = useState<Date | null>(null);
+  const [sessionError,       setSessionError]       = useState<string | null>(null);
 
   const editPanelRef = useRef<EditPanelHandle>(null);
   const tableRef     = useRef<HTMLDivElement>(null);
@@ -106,22 +108,10 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  /* Compute autosave path when a plugin is open */
-  useEffect(() => {
-    if (pluginInfo?.plugin_name) {
-      invoke<string>("get_autosave_path_cmd", { pluginName: pluginInfo.plugin_name })
-        .then(setAutosavePath)
-        .catch(() => {});
-    } else {
-      setAutosavePath(null);
-      setLastAutosave(null);
-    }
-  }, [pluginInfo?.plugin_name]);
-
-  /* Autosave interval */
+  /* Autosave interval — saves to the managed sessions directory automatically */
   useEffect(() => {
     const interval = settings.autosaveInterval ?? 0;
-    if (!interval || !pluginInfo || !autosavePath) return;
+    if (!interval || !pluginInfo) return;
     const ms = interval * 60 * 1000;
     const timer = setInterval(async () => {
       if (!pluginInfo) return;
@@ -134,13 +124,12 @@ export default function App() {
             entries,
             target_language: settings.targetLanguage,
           },
-          path: autosavePath,
         });
         setLastAutosave(new Date());
-      } catch { /* Fail silently */ }
+      } catch (e) { console.warn("[autosave] failed:", e); }
     }, ms);
     return () => clearInterval(timer);
-  }, [settings.autosaveInterval, pluginInfo, autosavePath, entries, settings.targetLanguage]);
+  }, [settings.autosaveInterval, pluginInfo, entries, settings.targetLanguage]);
 
   /* ── File actions ────────────────────────────────────────────────────────── */
 
@@ -153,29 +142,27 @@ export default function App() {
     await openPlugin(selected, settings.dbFolder);
   }, [openPlugin, settings.dbFolder]);
 
-  const handleOpenSession = useCallback(async () => {
-    const selected = await open({
-      filters: [{ name: "Session BGS Translator", extensions: ["bgts", "json"] }],
-      multiple: false,
-    });
-    if (!selected || typeof selected !== "string") return;
-    await loadSession(selected, settings.dbFolder);
-  }, [loadSession, settings.dbFolder]);
+  const handleOpenSession = useCallback(() => {
+    setShowSessionPicker(true);
+  }, []);
 
   const handleSaveSession = useCallback(async () => {
     if (!pluginInfo) return;
-    const path = await save({ filters: [{ name: "Session BGS Translator", extensions: ["bgts"] }] });
-    if (!path) return;
-    await invoke("save_session_cmd", {
-      session: {
-        plugin_path: "",
-        plugin_name: pluginInfo.plugin_name,
-        plugin_info: pluginInfo,
-        entries,
-        target_language: settings.targetLanguage,
-      },
-      path,
-    });
+    setSessionError(null);
+    try {
+      await invoke("save_session_cmd", {
+        session: {
+          plugin_path: "",
+          plugin_name: pluginInfo.plugin_name,
+          plugin_info: pluginInfo,
+          entries,
+          target_language: settings.targetLanguage,
+        },
+      });
+      setLastAutosave(new Date());
+    } catch (e) {
+      setSessionError(String(e));
+    }
   }, [pluginInfo, entries, settings.targetLanguage]);
 
   const handleExport = useCallback(async () => {
@@ -275,6 +262,7 @@ export default function App() {
       <ToolBar
         pluginName={pluginInfo?.plugin_name ?? null}
         loading={loading}
+        loadingProgress={loadingProgress}
         onOpenPlugin={handleOpenPlugin}
         onOpenSession={handleOpenSession}
         onSave={pluginInfo ? handleSaveSession : undefined}
@@ -317,6 +305,19 @@ export default function App() {
             {t("db.no_db_message", { game: dbNotFound })}
           </span>
           <button onClick={clearDbNotFound} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
+        </div>
+      )}
+
+      {/* ── Session save error ────────────────────────────────────────────── */}
+      {sessionError && (
+        <div style={{
+          padding: "5px 14px", flexShrink: 0,
+          background: "rgba(239,68,68,0.1)", borderBottom: "1px solid rgba(239,68,68,0.25)",
+          display: "flex", alignItems: "center", gap: 10, fontSize: 12,
+        }}>
+          <span style={{ color: "#ef4444", fontWeight: 700 }}>⚠ {t("session.save_error_title")}</span>
+          <span style={{ color: "var(--text-2)", fontFamily: "var(--font-mono, monospace)", fontSize: 11 }}>{sessionError}</span>
+          <button onClick={() => setSessionError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
         </div>
       )}
 
@@ -366,6 +367,7 @@ export default function App() {
               columnFilters={columnFilters}
               showColumnFilters={showColumnFilters}
               alternateRows={settings.alternateRows !== false}
+              rowHover={settings.rowHover !== false}
               columnWidths={layout.columnWidths}
               textSplit={layout.textSplit}
               onRowClick={handleRowClickWrapped}
@@ -440,6 +442,17 @@ export default function App() {
         <ChangelogModal
           appVersion={appVersion}
           onClose={() => setShowChangelog(false)}
+        />
+      )}
+
+      {showSessionPicker && (
+        <SessionPickerModal
+          onClose={() => setShowSessionPicker(false)}
+          onLoad={(id) => {
+            setShowSessionPicker(false);
+            loadSession(id, settings.dbFolder);
+          }}
+          iconSet={activeIconSet}
         />
       )}
     </div>

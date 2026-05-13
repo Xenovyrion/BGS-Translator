@@ -194,6 +194,10 @@
       "alt_rows_desc":      "Colors every other row in the entry list to improve readability.",
       "alt_rows_on":        "Enabled",
       "alt_rows_off":       "Disabled",
+      "row_hover_section":  "Row hover",
+      "row_hover_desc":     "Highlights each translatable row when the mouse hovers over it.",
+      "row_hover_on":       "Enabled",
+      "row_hover_off":      "Disabled",
       "interface_section":  "Interface",
       "reset_layout_desc":  "Resets the sidebar width, edit panel height, column widths and the Original / Translated split to their default values.",
       "reset_layout_btn":   "Reset layout"
@@ -342,6 +346,20 @@
       "col_original":     "Original",
       "col_translation":  "Translation"
     }
+  },
+  "session": {
+    "title":          "Open a session",
+    "subtitle":       "{{count}} saved sessions",
+    "loading":        "Loading sessions…",
+    "empty":          "No sessions saved",
+    "empty_hint":     "Open a file, translate, then click 💾 to save your progress.",
+    "load":           "Resume",
+    "delete":         "Delete",
+    "confirm_delete": "Delete?",
+    "delete_yes":     "Yes",
+    "delete_no":       "No",
+    "save_error_title":"Save error",
+    "load_latest":     "Load latest"
   },
   "theme": {
     "name": {

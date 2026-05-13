@@ -27,8 +27,22 @@ export interface PluginInfo {
   description:  string;
   masters:      string[];
   is_localized: boolean;
+  version?:     number;
   entry_count:  number;
   entries:      TranslationEntry[];
+}
+
+/** Metadata returned by open_plugin_cmd — entries are streamed separately via events. */
+export type PluginMetadata = Omit<PluginInfo, "entries">;
+
+export interface SessionListItem {
+  id:               string;
+  plugin_name:      string;
+  plugin_path:      string;
+  entry_count:      number;
+  translated_count: number;
+  progress_percent: number;
+  saved_at:         string;  // ISO 8601
 }
 
 export interface TranslationSession {

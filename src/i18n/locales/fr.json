@@ -194,6 +194,10 @@
       "alt_rows_desc":      "Colore une ligne sur deux dans la liste des entrées pour améliorer la lisibilité.",
       "alt_rows_on":        "Activées",
       "alt_rows_off":       "Désactivées",
+      "row_hover_section":  "Survol des lignes",
+      "row_hover_desc":     "Affiche une couleur de fond au survol de chaque ligne traduisible.",
+      "row_hover_on":       "Activé",
+      "row_hover_off":      "Désactivé",
       "interface_section":  "Interface",
       "reset_layout_desc":  "Réinitialise la largeur du panneau latéral, la hauteur du panneau d'édition, la largeur des colonnes et la répartition Original / Traduit à leurs valeurs par défaut.",
       "reset_layout_btn":   "Réinitialiser l'interface"
@@ -342,6 +346,20 @@
       "col_original":     "Original",
       "col_translation":  "Traduction"
     }
+  },
+  "session": {
+    "title":          "Reprendre une session",
+    "subtitle":       "{{count}} sessions sauvegardées",
+    "loading":        "Chargement des sessions…",
+    "empty":          "Aucune session sauvegardée",
+    "empty_hint":     "Ouvrez un fichier, traduisez, puis cliquez sur 💾 pour sauvegarder votre progression.",
+    "load":           "Reprendre",
+    "delete":         "Supprimer",
+    "confirm_delete": "Supprimer ?",
+    "delete_yes":     "Oui",
+    "delete_no":       "Non",
+    "save_error_title":"Erreur de sauvegarde",
+    "load_latest":     "Charger dernière session"
   },
   "theme": {
     "name": {

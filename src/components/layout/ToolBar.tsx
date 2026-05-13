@@ -4,18 +4,19 @@ import { useTranslation } from "react-i18next";
 import type { IconSetId } from "../../themes";
 
 interface Props {
-  pluginName:    string | null;
-  loading?:      boolean;
-  onOpenPlugin:  () => void;
-  onOpenSession: () => void;
-  onSave?:       () => void;
-  onExport?:     () => void;
-  onSettings:    () => void;
-  iconSet?:      IconSetId;
-  lastAutosave?: Date | null;
+  pluginName:      string | null;
+  loading?:        boolean;
+  loadingProgress?: number | null;
+  onOpenPlugin:    () => void;
+  onOpenSession:   () => void;
+  onSave?:         () => void;
+  onExport?:       () => void;
+  onSettings:      () => void;
+  iconSet?:        IconSetId;
+  lastAutosave?:   Date | null;
 }
 
-export default function ToolBar({ pluginName, loading, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
+export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
   const { t } = useTranslation();
 
   const openTitle = loading
@@ -94,7 +95,10 @@ export default function ToolBar({ pluginName, loading, onOpenPlugin, onOpenSessi
           </span>
           {loading && (
             <span style={{ fontSize: 11, color: "var(--accent)", marginLeft: 8, display: "flex", alignItems: "center", gap: 5 }}>
-              <SpinSVG /> {t("toolbar.loading")}
+              <SpinSVG />
+              {loadingProgress != null && loadingProgress > 0
+                ? `${loadingProgress.toLocaleString()} …`
+                : t("toolbar.loading")}
             </span>
           )}
           {!loading && lastAutosave && (

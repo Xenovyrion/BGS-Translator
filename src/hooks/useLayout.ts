@@ -20,10 +20,10 @@ export const DEFAULT_LAYOUT: LayoutState = {
   sidebarWidth:    200,
   editPanelHeight: 160,
   columnWidths: {
-    record_type: 54,
-    form_id:     80,
+    record_type: 48,
+    form_id:     72,
     editor_id:   160,
-    sub_type:    50,
+    sub_type:    44,
   },
   textSplit: 0.5,
 };

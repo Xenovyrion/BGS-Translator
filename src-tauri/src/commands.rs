@@ -1,65 +1,100 @@
 use serde::Serialize;
+use tauri::Emitter;
 
 use crate::parser::open_file;
 use crate::translation::{
     entry::TranslationEntry,
-    session::{load_session, save_session, TranslationSession},
+    session::{
+        save_session_auto, list_sessions_all, load_session_by_id, delete_session_by_id,
+        SessionListItem, TranslationSession,
+    },
     writer::write_translated_plugin,
 };
 
+/// Metadata returned synchronously by open_plugin_cmd.
+/// The entries themselves are streamed via "plugin:chunk" / "plugin:done" events.
 #[derive(Serialize)]
-pub struct PluginLoadResult {
+pub struct PluginMetadata {
     pub plugin_name:  String,
     pub author:       String,
     pub description:  String,
     pub masters:      Vec<String>,
     pub is_localized: bool,
     pub entry_count:  usize,
-    pub entries:      Vec<TranslationEntry>,
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn open_plugin_cmd(path: String) -> Result<PluginLoadResult, String> {
+pub async fn open_plugin_cmd(
+    path: String,
+    window: tauri::WebviewWindow,
+) -> Result<PluginMetadata, String> {
     log::info!("[cmd] open_plugin: {}", path);
     let loaded = open_file(std::path::Path::new(&path)).map_err(|e| {
         log::error!("[cmd] open_plugin failed: {}", e);
         e.to_string()
     })?;
 
-    Ok(PluginLoadResult {
+    let entry_count = loaded.entries.len();
+    log::debug!("[cmd] open_plugin: streaming {} entries in chunks of 200", entry_count);
+
+    for chunk in loaded.entries.chunks(200) {
+        window.emit("plugin:chunk", chunk).map_err(|e| e.to_string())?;
+    }
+    window.emit("plugin:done", entry_count).map_err(|e| e.to_string())?;
+
+    Ok(PluginMetadata {
         plugin_name:  loaded.path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_owned(),
         author:       loaded.info.author,
         description:  loaded.info.description,
         masters:      loaded.info.masters,
         is_localized: loaded.info.is_localized,
-        entry_count:  loaded.entries.len(),
-        entries:      loaded.entries,
+        entry_count,
     })
 }
 
 #[tauri::command]
-pub async fn save_session_cmd(session: TranslationSession, path: String) -> Result<(), String> {
-    log::info!("[cmd] save_session: {} ({} entries)", path, session.entries.len());
-    let result = save_session(&session, std::path::Path::new(&path));
-    if result.is_ok() {
-        log::debug!("[cmd] session saved successfully");
-    } else {
-        log::error!("[cmd] save_session failed: {:?}", result);
+pub async fn save_session_cmd(
+    session: TranslationSession,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    log::info!("[cmd] save_session: {} ({} entries)", session.plugin_name, session.entries.len());
+    let id = save_session_auto(&session, &app).map_err(|e| {
+        log::error!("[cmd] save_session failed: {}", e);
+        e
+    })?;
+    log::debug!("[cmd] session saved as '{}'", id);
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn list_sessions_cmd(app: tauri::AppHandle) -> Result<Vec<SessionListItem>, String> {
+    log::debug!("[cmd] list_sessions");
+    list_sessions_all(&app)
+}
+
+#[tauri::command]
+pub async fn load_session_cmd(
+    id: String,
+    app: tauri::AppHandle,
+) -> Result<TranslationSession, String> {
+    log::info!("[cmd] load_session: {}", id);
+    let result = load_session_by_id(&id, &app);
+    match &result {
+        Ok(s)  => log::info!("[cmd] session loaded: {} ({} entries)", s.plugin_name, s.entries.len()),
+        Err(e) => log::error!("[cmd] load_session failed: {}", e),
     }
     result
 }
 
 #[tauri::command]
-pub async fn load_session_cmd(path: String) -> Result<TranslationSession, String> {
-    log::info!("[cmd] load_session: {}", path);
-    let result = load_session(std::path::Path::new(&path));
-    match &result {
-        Ok(s) => log::info!("[cmd] session loaded: {} ({} entries)", s.plugin_name, s.entries.len()),
-        Err(e) => log::error!("[cmd] load_session failed: {}", e),
-    }
-    result
+pub async fn delete_session_cmd(
+    id: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    log::info!("[cmd] delete_session: {}", id);
+    delete_session_by_id(&id, &app)
 }
 
 #[tauri::command]

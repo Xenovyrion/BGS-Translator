@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
@@ -12,6 +13,7 @@ export interface AppSettings {
   targetLanguage:   string;
   debugMode:        boolean;
   alternateRows:    boolean;
+  rowHover:         boolean;
   shortcuts:        KeyboardShortcuts;
   dbFolder:         string;
   logFolder:        string;
@@ -28,6 +30,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetLanguage:   "fr",
   debugMode:        false,
   alternateRows:    true,
+  rowHover:         true,
   shortcuts:        DEFAULT_SHORTCUTS,
   dbFolder:         "",
   logFolder:        "",
@@ -55,6 +58,11 @@ export function useSettings() {
   useEffect(() => {
     if (settings.language) i18n.changeLanguage(settings.language);
   }, [settings.language]);
+
+  /* Sync debug mode with the Rust backend — fires at startup and on change, never on modal open */
+  useEffect(() => {
+    invoke("set_debug_mode_cmd", { enabled: settings.debugMode }).catch(() => {});
+  }, [settings.debugMode]);
 
   const updateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings((prev) => {

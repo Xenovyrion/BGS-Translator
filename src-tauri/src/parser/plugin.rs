@@ -19,11 +19,12 @@ use crate::translation::entry::{StringSource, TranslationEntry};
 /// Metadata extracted from the TES4 record (file header).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
-    pub author:      String,
-    pub description: String,
-    pub masters:     Vec<String>,
+    pub author:       String,
+    pub description:  String,
+    pub masters:      Vec<String>,
     pub is_localized: bool,
-    pub version:     f32,
+    #[serde(default)]
+    pub version:      f32,
 }
 
 /// Result of opening file.

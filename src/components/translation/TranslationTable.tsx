@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import type { TranslationEntry, EntryStatus, SortConfig } from "../../types";
 import { entryKey } from "../../hooks/usePlugin";
 import type { ColumnWidths } from "../../hooks/useLayout";
 import { startDrag } from "../../hooks/useLayout";
-
 
 const STATUS_COLORS: Record<EntryStatus, string> = {
   untranslated: "#ef4444",
@@ -15,7 +15,6 @@ const STATUS_COLORS: Record<EntryStatus, string> = {
 
 type SortCol = SortConfig["column"];
 
-/** Colonnes fixes (px) — dans l'ordre d'affichage */
 const FIXED_COLS: Array<{
   key:       string;
   labelKey:  string;
@@ -30,7 +29,9 @@ const FIXED_COLS: Array<{
   { key: "sub_type",    labelKey: "table.col_field",     resizable: "sub_type",    sortable: "sub_type" },
 ];
 
-const DOT_WIDTH = 22; // largeur fixe non-redimensionnable
+const DOT_WIDTH  = 22;
+const COL_COUNT  = 7;
+const ROW_HEIGHT = 24; // px — estimation hauteur ligne
 
 interface Props {
   entries:           TranslationEntry[];
@@ -40,6 +41,7 @@ interface Props {
   columnFilters:     Partial<Record<string, string>>;
   showColumnFilters: boolean;
   alternateRows?:    boolean;
+  rowHover?:         boolean;
   columnWidths:      ColumnWidths;
   textSplit:         number;
   recordColors:      Record<string, string>;
@@ -55,16 +57,24 @@ interface Props {
 export default function TranslationTable({
   entries, selectedEntry, selectedKeys, sortConfig, columnFilters, showColumnFilters,
   alternateRows = true,
+  rowHover = true,
   columnWidths, textSplit, recordColors,
   onRowClick, onToggleSort, onColumnFilter, onKeyDown,
   onColumnResize, onTextSplit,
   tableRef,
 }: Props) {
   const { t } = useTranslation();
-  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(700);
 
-  /* ── Observer la largeur du conteneur ────────────────────────────────── */
+  /* ── Virtualizer ─────────────────────────────────────────────────────────── */
+  const virtualizer = useVirtualizer({
+    count:            entries.length,
+    getScrollElement: () => tableRef.current,
+    estimateSize:     () => ROW_HEIGHT,
+    overscan:         10,
+  });
+
+  /* ── Observer la largeur du conteneur ────────────────────────────────────── */
   useEffect(() => {
     const el = tableRef.current;
     if (!el) return;
@@ -76,12 +86,14 @@ export default function TranslationTable({
     return () => obs.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Scroll to the selected row */
+  /* ── Scroll vers la ligne sélectionnée ───────────────────────────────────── */
   useEffect(() => {
-    selectedRowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [selectedEntry]);
+    if (!selectedEntry) return;
+    const idx = entries.findIndex((e) => entryKey(e) === entryKey(selectedEntry));
+    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
+  }, [selectedEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Calcul des largeurs ──────────────────────────────────────────────── */
+  /* ── Calcul des largeurs ──────────────────────────────────────────────────── */
   const fixedTotal =
     DOT_WIDTH +
     columnWidths.record_type +
@@ -89,11 +101,10 @@ export default function TranslationTable({
     columnWidths.editor_id +
     columnWidths.sub_type;
 
-  const flexTotal      = Math.max(80, containerWidth - fixedTotal);
-  const originalWidth  = Math.round(flexTotal * textSplit);
+  const flexTotal       = Math.max(80, containerWidth - fixedTotal);
+  const originalWidth   = Math.round(flexTotal * textSplit);
   const translatedWidth = flexTotal - originalWidth;
 
-  /* ── Largeurs des 7 colonnes dans l'ordre ────────────────────────────── */
   const colPx = [
     DOT_WIDTH,
     columnWidths.record_type,
@@ -104,6 +115,7 @@ export default function TranslationTable({
     translatedWidth,
   ];
 
+  /* ── Empty state ─────────────────────────────────────────────────────────── */
   if (entries.length === 0) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", fontSize: 13 }}>
@@ -111,6 +123,12 @@ export default function TranslationTable({
       </div>
     );
   }
+
+  /* ── Virtual items ───────────────────────────────────────────────────────── */
+  const virtualItems  = virtualizer.getVirtualItems();
+  const totalSize     = virtualizer.getTotalSize();
+  const paddingTop    = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0 ? totalSize - virtualItems[virtualItems.length - 1].end : 0;
 
   return (
     <div
@@ -127,12 +145,9 @@ export default function TranslationTable({
         </colgroup>
 
         <thead>
-          {/* Sortable headers */}
           <tr style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-table-header, var(--bg-card))" }}>
-            {/* Dot */}
             <th style={{ padding: "5px 6px", textAlign: "center", width: DOT_WIDTH, borderBottom: showColumnFilters ? "none" : "1px solid var(--border)", position: "relative" }} />
 
-            {/* Colonnes fixes redimensionnables */}
             {FIXED_COLS.slice(1).map((col) => {
               const isSorted = col.sortable && sortConfig?.column === col.sortable;
               const label    = col.labelKey ? t(col.labelKey) : "";
@@ -149,8 +164,7 @@ export default function TranslationTable({
                     borderBottom: showColumnFilters ? "none" : "1px solid var(--border)",
                     cursor: col.sortable ? "pointer" : "default",
                     userSelect: "none", whiteSpace: "nowrap",
-                    position: "relative",
-                    overflow: "hidden",
+                    position: "relative", overflow: "hidden",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -162,15 +176,12 @@ export default function TranslationTable({
                     )}
                   </div>
                   {col.resizable && (
-                    <ColResizeHandle
-                      onDrag={(delta) => onColumnResize(col.resizable!, delta)}
-                    />
+                    <ColResizeHandle onDrag={(delta) => onColumnResize(col.resizable!, delta)} />
                   )}
                 </th>
               );
             })}
 
-            {/* Original */}
             <th
               onClick={() => onToggleSort("original")}
               style={{
@@ -189,12 +200,9 @@ export default function TranslationTable({
                   {sortConfig?.dir === "asc" ? "▲" : "▼"}
                 </span>
               </div>
-              <ColResizeHandle
-                onDrag={(delta) => onTextSplit(delta, flexTotal)}
-              />
+              <ColResizeHandle onDrag={(delta) => onTextSplit(delta, flexTotal)} />
             </th>
 
-            {/* Traduit */}
             <th
               onClick={() => onToggleSort("translated")}
               style={{
@@ -216,7 +224,6 @@ export default function TranslationTable({
             </th>
           </tr>
 
-          {/* Ligne de filtres colonnes */}
           {showColumnFilters && (
             <tr style={{ position: "sticky", top: 22, zIndex: 9, background: "var(--bg-table-header, var(--bg-card))" }}>
               {["_dot", "record_type", "form_id", "editor_id", "sub_type", "original", "translated"].map((key) => {
@@ -246,80 +253,117 @@ export default function TranslationTable({
         </thead>
 
         <tbody>
-          {entries.map((entry, idx) => {
-            const key         = entryKey(entry);
-            const isPrimary   = selectedEntry ? entryKey(selectedEntry) === key : false;
-            const isSelected  = selectedKeys.has(key);
-            const statusColor = STATUS_COLORS[entry.status];
-            const recordColor = recordColors[entry.record_type] ?? "#64748b";
-            const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
+          {/* Spacer haut — simule les lignes au-dessus de la zone visible */}
+          {paddingTop > 0 && (
+            <tr><td colSpan={COL_COUNT} style={{ height: paddingTop, padding: 0, border: "none" }} /></tr>
+          )}
 
+          {virtualItems.map((vItem) => {
+            const entry     = entries[vItem.index];
+            const key       = entryKey(entry);
+            const isPrimary = selectedEntry ? entryKey(selectedEntry) === key : false;
             return (
-              <tr
+              <TableRow
                 key={key}
-                ref={isPrimary ? selectedRowRef : undefined}
-                onMouseDown={(e) => {
-                  if ((e.target as HTMLElement).tagName !== "TEXTAREA" && (e.target as HTMLElement).tagName !== "INPUT") {
-                    e.preventDefault();
-                  }
-                }}
-                onClick={(e) => onRowClick(entry, e.ctrlKey || e.metaKey, e.shiftKey)}
-                style={{
-                  background: isPrimary
-                    ? "rgba(99,102,241,0.15)"
-                    : isSelected
-                    ? "rgba(99,102,241,0.07)"
-                    : alternateRows && idx % 2 !== 0 ? "rgba(255,255,255,0.015)" : "transparent",
-                  borderBottom: "1px solid var(--border)",
-                  borderLeft:   `3px solid ${statusColor}`,
-                  cursor: "pointer",
-                  userSelect: "none",
-                }}
-              >
-                {/* Dot statut */}
-                <td style={{ padding: "0 4px", textAlign: "center" }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, margin: "0 auto", boxShadow: `0 0 4px ${statusColor}55` }} />
-                </td>
-
-                {/* TYPE */}
-                <td style={{ padding: "3px 6px" }}>
-                  <span style={{ fontSize: "var(--fz-mono, 10px)", fontWeight: 700, fontFamily: "var(--font-mono, monospace)", color: recordColor }}>
-                    {entry.record_type}
-                  </span>
-                </td>
-
-                {/* ID (FormID hex) */}
-                <td style={{ padding: "3px 6px", fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>
-                  {formIdHex}
-                </td>
-
-                {/* EDID */}
-                <td style={{ padding: "3px 6px", fontSize: 10, color: "var(--text-2)", fontFamily: "var(--font-mono, monospace)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={entry.editor_id}>
-                  {entry.editor_id}
-                </td>
-
-                {/* CHAMP */}
-                <td style={{ padding: "3px 6px" }}>
-                  <span style={{ fontSize: "var(--fz-mono, 10px)", color: "var(--text-3)", fontFamily: "var(--font-mono, monospace)" }}>{entry.sub_type}</span>
-                </td>
-
-                {/* Original */}
-                <td style={{ padding: "3px 6px", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }} title={entry.original}>
-                  {entry.original}
-                </td>
-
-                {/* Traduit */}
-                <td style={{ padding: "3px 6px", color: entry.translated ? "var(--text-1)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0, fontStyle: entry.translated ? "normal" : "italic" }} title={entry.translated || t("table.not_translated")}>
-                  {entry.translated || "–"}
-                </td>
-              </tr>
+                entry={entry}
+                idx={vItem.index}
+                isPrimary={isPrimary}
+                isSelected={selectedKeys.has(key)}
+                alternateRows={alternateRows}
+                rowHover={rowHover}
+                recordColors={recordColors}
+                onRowClick={onRowClick}
+                notTranslatedLabel={t("table.not_translated")}
+              />
             );
           })}
+
+          {/* Spacer bas — simule les lignes sous la zone visible */}
+          {paddingBottom > 0 && (
+            <tr><td colSpan={COL_COUNT} style={{ height: paddingBottom, padding: 0, border: "none" }} /></tr>
+          )}
         </tbody>
       </table>
     </div>
   );
 }
+
+// ── Memoized table row ────────────────────────────────────────────────────────
+
+interface RowProps {
+  entry:              TranslationEntry;
+  idx:                number;
+  isPrimary:          boolean;
+  isSelected:         boolean;
+  alternateRows:      boolean;
+  rowHover:           boolean;
+  recordColors:       Record<string, string>;
+  onRowClick:         (entry: TranslationEntry, ctrlKey: boolean, shiftKey: boolean) => void;
+  notTranslatedLabel: string;
+}
+
+const TableRow = memo(function TableRow({
+  entry, idx, isPrimary, isSelected, alternateRows, rowHover, recordColors, onRowClick, notTranslatedLabel,
+}: RowProps) {
+  const [hovered, setHovered] = useState(false);
+  const statusColor = STATUS_COLORS[entry.status];
+  const recordColor = recordColors[entry.record_type] ?? "#64748b";
+  const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
+
+  const rowBg = isPrimary
+    ? "rgba(99,102,241,0.15)"
+    : isSelected
+    ? "rgba(99,102,241,0.07)"
+    : hovered && rowHover
+    ? "var(--bg-row-hover)"
+    : alternateRows && idx % 2 !== 0
+    ? "rgba(255,255,255,0.015)"
+    : "transparent";
+
+  return (
+    <tr
+      onMouseDown={(e) => {
+        if ((e.target as HTMLElement).tagName !== "TEXTAREA" && (e.target as HTMLElement).tagName !== "INPUT") {
+          e.preventDefault();
+        }
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => onRowClick(entry, e.ctrlKey || e.metaKey, e.shiftKey)}
+      style={{
+        background:   rowBg,
+        borderBottom: "1px solid var(--border)",
+        borderLeft:   `3px solid ${statusColor}`,
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <td style={{ padding: "0 4px", textAlign: "center" }}>
+        <div style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, margin: "0 auto", boxShadow: `0 0 4px ${statusColor}55` }} />
+      </td>
+      <td style={{ padding: "3px 6px" }}>
+        <span style={{ fontSize: "var(--fz-mono, 10px)", fontWeight: 700, fontFamily: "var(--font-mono, monospace)", color: recordColor }}>
+          {entry.record_type}
+        </span>
+      </td>
+      <td style={{ padding: "3px 6px", fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+        {formIdHex}
+      </td>
+      <td style={{ padding: "3px 6px", fontSize: 10, color: "var(--text-2)", fontFamily: "var(--font-mono, monospace)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={entry.editor_id}>
+        {entry.editor_id}
+      </td>
+      <td style={{ padding: "3px 6px" }}>
+        <span style={{ fontSize: "var(--fz-mono, 10px)", color: "var(--text-3)", fontFamily: "var(--font-mono, monospace)" }}>{entry.sub_type}</span>
+      </td>
+      <td style={{ padding: "3px 6px", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }} title={entry.original}>
+        {entry.original}
+      </td>
+      <td style={{ padding: "3px 6px", color: entry.translated ? "var(--text-1)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0, fontStyle: entry.translated ? "normal" : "italic" }} title={entry.translated || notTranslatedLabel}>
+        {entry.translated || "–"}
+      </td>
+    </tr>
+  );
+});
 
 // ── Column resize handle ──────────────────────────────────────────────────────
 
@@ -329,7 +373,7 @@ function ColResizeHandle({ onDrag }: { onDrag: (delta: number) => void }) {
   return (
     <div
       onMouseDown={(e) => {
-        e.stopPropagation(); // prevent sort from triggering
+        e.stopPropagation();
         startDrag(e, "h", onDrag);
       }}
       onMouseEnter={() => setHover(true)}

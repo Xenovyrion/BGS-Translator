@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use ahash::AHashMap;
 use crate::database::types::{DbEntry, DbInfo};
 
 pub struct TranslationDb {
@@ -9,9 +9,9 @@ pub struct TranslationDb {
     pub read_only: bool,
     entries:    Vec<DbEntry>,
     // Contextual index: "record_type|sub_type|original" → translated
-    contextual: HashMap<String, String>,
+    contextual: AHashMap<String, String>,
     // Plain-text index: "original" → translated
-    text_only:  HashMap<String, String>,
+    text_only:  AHashMap<String, String>,
 }
 
 impl TranslationDb {
@@ -20,8 +20,8 @@ impl TranslationDb {
         lang_from: String, lang_to: String,
         read_only: bool, entries: Vec<DbEntry>,
     ) -> Self {
-        let mut contextual = HashMap::with_capacity(entries.len());
-        let mut text_only  = HashMap::with_capacity(entries.len());
+        let mut contextual = AHashMap::with_capacity(entries.len());
+        let mut text_only  = AHashMap::with_capacity(entries.len());
 
         for e in &entries {
             // Plain-text index: first match wins

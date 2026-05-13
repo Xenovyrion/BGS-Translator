@@ -41,11 +41,6 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Sync debug mode with the backend
-  useEffect(() => {
-    invoke("set_debug_mode_cmd", { enabled: settings.debugMode }).catch(() => {});
-  }, [settings.debugMode]);
-
   return (
     <div
       onClick={onClose}
@@ -208,6 +203,16 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.appearance.alt_rows_on")}  active={settings.alternateRows !== false} onClick={() => onUpdate({ alternateRows: true  })} />
           <PillBtn label={t("settings_modal.appearance.alt_rows_off")} active={settings.alternateRows === false}  onClick={() => onUpdate({ alternateRows: false })} />
+        </div>
+      </Section>
+
+      <Section label={t("settings_modal.appearance.row_hover_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.appearance.row_hover_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn label={t("settings_modal.appearance.row_hover_on")}  active={settings.rowHover !== false} onClick={() => onUpdate({ rowHover: true  })} />
+          <PillBtn label={t("settings_modal.appearance.row_hover_off")} active={settings.rowHover === false}  onClick={() => onUpdate({ rowHover: false })} />
         </div>
       </Section>
 
