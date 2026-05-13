@@ -39,9 +39,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REMPLACER_PAR_VOTRE_CLE_PUBLIQUE_MINISIGN",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxRDU4QTdFNjk2OUU3RjIKUldUeTUybHBmb3JWUWFnUnlZQ3B0dlNIKzNTejlZTTNka1hZc0F0UEk4OGkvaFp6RFh6ZFF6YzkK",
       "endpoints": [
-        "https://github.com/VOTRE_USER/BGSTranslator/releases/latest/download/latest.json"
+        "https://github.com/Xenovyrion/BGS-Translator/releases/latest/download/latest.json"
       ]
     }
   }

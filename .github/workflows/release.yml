@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'BGS Translator ${{ github.ref_name }}'
+          releaseBody: |
+            ## ✨ New features :
+
+            ## ⚡ Improvements / Enhancements :
+
+            ## 🐞 Bug Fixes / Fixes :
+
+            ## ℹ️ Feedback :
+            Please feel free to submit your feedback via [GitHub Issues](https://github.com/Xenovyrion/BGS-Translator/issues) to help improve future versions.
+          releaseDraft: true
+          prerelease: false
+
+      - name: Update README badges
+        run: node scripts/update-badges.cjs
+
+      - name: Commit updated README
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "No badge changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update README badges for ${{ github.ref_name }}"
+
+      - name: Push README changes to default branch
+        shell: bash
+        run: |
+          git push origin HEAD:${{ github.event.repository.default_branch }}
