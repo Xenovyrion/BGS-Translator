@@ -19,10 +19,12 @@
 <p align="center">
 <!-- STACK:START -->
 <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24C8DB?style=for-the-badge&logo=tauri&logoColor=white" />
-<img alt="Rust" src="https://img.shields.io/badge/Rust-stable-000000?style=for-the-badge&logo=rust" />
+<img alt="Rust" src="https://img.shields.io/badge/Rust-stable-000000?style=for-the-badge&logo=rust&logoColor=white" />
+<img alt="C++" src="https://img.shields.io/badge/C++-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" />
 <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
 <img alt="React" src="https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
 <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-3.x-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" />
+<img alt="Vite" src="https://img.shields.io/badge/Vite-8.x-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
 <!-- STACK:END -->
 </p>
 
@@ -38,9 +40,29 @@ Cross-platform desktop application for translating Bethesda game mods (`.esp` / 
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Rust | stable | `rustup.rs` |
-| Node.js | 20+ | `nodejs.org` |
+| Rust | stable | [rustup.rs](https://rustup.rs) |
+| Node.js | 20+ | [nodejs.org](https://nodejs.org) |
 | Tauri CLI | v2 | `cargo install tauri-cli` |
+
+### Spell check (optional — Windows)
+
+The spell check feature requires [Nuspell](https://nuspell.github.io/) via [vcpkg](https://vcpkg.io). If not installed, the app builds and runs normally — spell check commands return a graceful error.
+
+```powershell
+# Install vcpkg (if not already present)
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+
+# Install nuspell (static MD runtime — required for Tauri)
+C:\vcpkg\vcpkg.exe install nuspell:x64-windows-static-md
+
+# Set environment variables (add to your profile for persistence)
+$env:VCPKG_ROOT       = "C:\vcpkg"
+$env:VCPKGRS_TRIPLET  = "x64-windows-static-md"
+$env:VCPKGRS_DYNAMIC  = "0"
+```
+
+> **Linux / macOS**: `sudo apt install libnuspell-dev` / `brew install nuspell` — detected automatically via `pkg-config`.
 
 ---
 
@@ -50,7 +72,7 @@ Cross-platform desktop application for translating Bethesda game mods (`.esp` / 
 BGS-Translator/
 ├── .github/
 │   └── workflows/
-│       └── release.yml               # CI/CD — automated build + release
+│       └── release.yml               # CI/CD — automated build + release (Windows, vcpkg nuspell)
 ├── databases/                        # Bundled translation databases (.bgt)
 │   ├── BDD_Morrowind_EN-FR.bgt
 │   ├── BDD_Oblivion_EN-FR.bgt
@@ -64,7 +86,7 @@ BGS-Translator/
 │   │   │   └── TopBar.tsx            # Window title + controls
 │   │   ├── settings/
 │   │   │   ├── SettingsModal.tsx     # Settings dialog
-│   │   │   └── SettingsPanel.tsx     # Settings content (theme, shortcuts, i18n…)
+│   │   │   └── SettingsPanel.tsx     # Settings content (theme, shortcuts, spell check…)
 │   │   ├── shared/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
 │   │   │   ├── ConvertToBgtModal.tsx      # Format conversion dialog
@@ -78,7 +100,7 @@ BGS-Translator/
 │   │   │   └── ThemeManagerModal.tsx # Theme picker + colour customiser
 │   │   └── translation/
 │   │       ├── BulkActionBar.tsx     # Bulk status change on selected entries
-│   │       ├── EditPanel.tsx         # Right-side entry editor
+│   │       ├── EditPanel.tsx         # Right-side entry editor (incl. spell error overlay)
 │   │       ├── FilterBar.tsx         # Status / record-type filters + search
 │   │       ├── GroupPanel.tsx        # Record-type group view with per-group stats
 │   │       ├── StatusBar.tsx         # Bottom bar (progress, counts, session info)
@@ -96,6 +118,7 @@ BGS-Translator/
 │   ├── themes.ts                     # 13 theme definitions + typography config
 │   └── types.ts                      # Shared TypeScript types
 ├── src-tauri/                        # Rust backend
+│   ├── build.rs                      # Build script — nuspell detection (vcpkg / pkg-config)
 │   ├── src/
 │   │   ├── commands.rs               # Top-level Tauri invoke handlers
 │   │   ├── lib.rs                    # Plugin registration
@@ -121,6 +144,11 @@ BGS-Translator/
 │   │   │   ├── strings_file.rs       # .strings / .dlstrings / .ilstrings loader
 │   │   │   ├── subrecord.rs          # Subrecord iteration
 │   │   │   └── types.rs              # Translatable record/subrecord definitions
+│   │   ├── spellcheck/
+│   │   │   ├── mod.rs                # FFI bindings + safe Spellchecker wrapper
+│   │   │   ├── commands.rs           # Tauri commands (list/download/delete/check/suggest)
+│   │   │   ├── wrapper.cpp           # C++17 shim exposing nuspell via C ABI
+│   │   │   └── wrapper.h             # C header for the shim
 │   │   └── translation/
 │   │       ├── entry.rs              # TranslationEntry + StringSource
 │   │       ├── mod.rs
@@ -139,18 +167,31 @@ BGS-Translator/
 
 ## 3. Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 18 + TypeScript |
-| Backend | Rust (Tauri 2) |
-| Binary parsing | `binrw` — structured derive macros for ESP/ESM records |
-| Compression | `flate2` (zlib — compressed records) · `zstd` (database) |
-| Encoding | `encoding_rs` — Windows-1252 / UTF-8 for legacy plugins |
-| Database format | `bincode` + zstd — custom `.bgt` binary format |
-| Virtualisation | `@tanstack/react-virtual` — windowed rendering for large entry lists |
-| Styling | Tailwind CSS (utility classes) + CSS variables (themes) |
-| i18n | `i18next` + `react-i18next` |
-| Updates | `tauri-plugin-updater` + GitHub Releases |
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Frontend | React 18 + TypeScript 5 | Vite 8 dev server, hot-reload |
+| Backend | Rust stable (Tauri 2) | `serde` / `serde_json`, `tokio` async runtime |
+| C++ interop | C++17 via `cc` crate | Nuspell shim (`wrapper.cpp`) compiled at build time |
+| Binary parsing | `binrw` 0.14 | Derive macros for ESP/ESM record structures |
+| Compression | `flate2` (zlib) · `zstd` 0.13 | Compressed records · database compression |
+| Encoding | `encoding_rs` 0.8 | Windows-1252 → UTF-8 for legacy plugins |
+| Database format | `bincode` 1 + zstd | Custom `.bgt` binary format |
+| HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads — no OpenSSL dependency |
+| Spell check | [Nuspell](https://nuspell.github.io/) 5.x | C ABI wrapper · ICU · 47 languages |
+| Virtualisation | `@tanstack/react-virtual` 3 | Windowed rendering for large entry lists |
+| Styling | Tailwind CSS 3 + CSS variables | 13 built-in themes, full colour customisation |
+| i18n | `i18next` 25 + `react-i18next` 16 | EN / FR, auto-detected from system locale |
+| Updates | `tauri-plugin-updater` 2 | GitHub Releases, one-click install |
+| Logging | `tauri-plugin-log` 2 | File + in-app log panel, runtime debug toggle |
+
+### Build dependencies (Rust)
+
+| Crate | Role |
+|-------|------|
+| `tauri-build` 2 | Code-gen for Tauri capabilities |
+| `cc` 1 | Compile `wrapper.cpp` (C++17 nuspell shim) |
+| `vcpkg` 0.2 | Locate nuspell/ICU on Windows |
+| `pkg-config` 0.3 | Locate nuspell on Linux / macOS |
 
 ---
 
@@ -176,6 +217,15 @@ npm run tauri build
 ```
 
 The installer and executable are output to `src-tauri/target/release/bundle/`.
+
+### Spell check — build behaviour
+
+| Condition | Build result |
+|-----------|-------------|
+| `VCPKG_ROOT` set + nuspell installed (Windows) | Nuspell compiled in — all spell check commands active |
+| `libnuspell-dev` present (Linux) | Same |
+| `nuspell` brew formula present (macOS) | Same |
+| Library not found | Build succeeds with a warning; spell check commands return a descriptive error at runtime |
 
 ---
 
@@ -214,6 +264,17 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Quick tag insertion** — dropdown listing all tags from the original for one-click insertion at the cursor
 - **Configurable shortcuts** — all Edit Panel shortcuts (find, replace, text ops) editable in Settings → Shortcuts
 - **Identical-entry propagation** — changing the translation or status of an entry automatically propagates to all entries that share the same original text and translation, eliminating repetitive work
+- **Spell check overlay** — misspelled words highlighted with a wavy red underline directly in the textarea; click any underlined word to open a suggestions popup; suggestions replace the word in place
+
+### Spell Check
+- Powered by [Nuspell](https://nuspell.github.io/) 5.x (C++ library via Rust FFI)
+- **47 built-in languages** — from Afrikaans to Chinese (Traditional), including all major European languages; dictionaries downloaded on demand from the [LibreOffice dictionary repository](https://github.com/LibreOffice/dictionaries)
+- **Dictionary manager** in Settings → Spell Check: install or remove individual dictionaries
+- **Real-time mode** — spell check runs automatically while typing (debounce configurable: 300 ms – 2 s)
+- **Manual check** — dedicated button in the Edit Panel for on-demand checking
+- **Tokenizer** — skips XML/HTML tags (`<…>`), format placeholders (`%…%`), all-uppercase words (acronyms), and single-character tokens; apostrophes handled correctly
+- Dictionaries stored in the OS app-data directory; never bundled with the app binary
+- Graceful degradation: if Nuspell is not available (build without vcpkg/pkg-config), all commands return a descriptive error — the rest of the app is unaffected
 
 ### Group View
 - Sidebar showing entries grouped by record type
@@ -294,7 +355,27 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ---
 
-## 6. Supported Games
+## 6. Architecture — Spell Check
+
+The spell check system bridges Rust and the C++ Nuspell library through a thin C ABI shim, avoiding the complexity of direct C++ FFI in Rust:
+
+```
+Rust (Tauri commands)
+  └─ FFI via extern "C"
+       └─ wrapper.cpp  (C++17 — compiled by the cc crate at build time)
+            └─ nuspell::Dictionary  (C++ — linked from vcpkg / pkg-config)
+```
+
+The build script (`build.rs`) probes for Nuspell at compile time:
+- **Windows**: uses the `vcpkg` crate (`VCPKG_ROOT` + triplet `x64-windows-static-md`)
+- **Linux / macOS**: uses `pkg-config`
+- If not found, emits a warning and sets no `nuspell_available` cfg — all spell-check code compiles to stubs that return descriptive errors
+
+ICU (International Components for Unicode), a transitive dependency of Nuspell, is linked explicitly on Windows (`icuuc`, `icuin`, `icudt`).
+
+---
+
+## 7. Supported Games
 
 | Game | Plugin format | Localized strings | Status |
 |------|--------------|------------------|--------|
@@ -305,13 +386,14 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ---
 
-## 7. Default Paths
+## 8. Default Paths
 
 | Purpose | Path |
 |---------|------|
 | Export output | `{Documents}/BGS-Translator/Traduction/` |
 | Sessions | `{Documents}/BGS-Translator/sessions/` |
-| Databases | bundled inside the app binary |
+| Databases | Bundled inside the app binary |
+| Spell check dictionaries | `{AppData}/com.bgstranslator/dictionaries/` |
 | Log file | `{AppLog}/bgstranslator.log` (e.g. `%APPDATA%\com.bgstranslator\logs\` on Windows) |
 
 Export and session directories are created automatically on first launch and are cross-platform (`Documents` resolves via the OS API on Windows, macOS and Linux).
