@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { appLogDir } from "@tauri-apps/api/path";
 import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
@@ -152,9 +152,11 @@ function footerBtn(primary: boolean): React.CSSProperties {
 // ── Utility: open a local folder in the OS explorer ──────────────────────────
 async function openFolder(dir: string) {
   if (!dir) return;
-  // file:/// + slashes normalized for Windows and macOS
-  const url = "file:///" + dir.replace(/\\/g, "/").replace(/^\//, "");
-  await openUrl(url).catch(() => {});
+  // openPath is the most reliable cross-platform way to open a folder
+  await openPath(dir).catch(async () => {
+    const url = "file:///" + dir.replace(/\\/g, "/").replace(/^\//, "");
+    await openUrl(url).catch(() => {});
+  });
 }
 
 // ── Appearance tab ────────────────────────────────────────────────────────────
@@ -416,6 +418,11 @@ const LANG_OPTIONS = [
   ["it","Italiano"],["pl","Polski"],["ru","Русский"],["zh","中文"],["ja","日本語"],["ko","한국어"],
 ];
 
+const KNOWN_GAMES = [
+  "Starfield","Skyrim SE","Skyrim","Oblivion","Morrowind",
+  "Fallout 4","Fallout 76","Fallout: New Vegas","Fallout 3","Enderal",
+];
+
 function DatabaseTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
   const [files, setFiles]           = useState<DbFileInfo[]>([]);
@@ -493,9 +500,9 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
             onChange={(e) => onUpdate({ dbFolder: e.target.value })}
             placeholder={defaultDir || t("settings_modal.db.folder_placeholder")}
             style={{
-              flex: 1, padding: "7px 10px", borderRadius: 7, fontSize: 11,
+              flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 11,
               background: "var(--bg-hover)", color: "var(--accent)",
-              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace",
+              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
             }}
           />
           <button onClick={pickDbFolder} title={t("settings_modal.db.folder_pick_title")} style={iconBtn()}>📁</button>
@@ -556,9 +563,9 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                       if (isEditing) { setDefForm(null); return; }
                       setDefForm({ path: f.path, game: f.game || "", srcLang: f.lang_from || "en", dstLang: f.lang_to || "fr" });
                     }}
-                    style={{ ...smallBtnStyle(), fontSize: 11, flexShrink: 0 }}
+                    style={{ ...smallBtnStyle(), fontSize: 11 }}
                   >
-                    {isEditing ? t("settings_modal.db.default_cancel") : t("settings_modal.db.default_set")}
+                    {isEditing ? t("settings_modal.db.default_cancel") : t("settings_modal.db.default_edit")}
                   </button>
                 </div>
 
@@ -570,20 +577,21 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                         <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
                           {t("settings_modal.db.default_game")}
                         </label>
-                        <input
-                          type="text"
+                        <select
                           value={defForm.game}
                           onChange={(e) => setDefForm(f => f ? { ...f, game: e.target.value } : f)}
-                          placeholder="Starfield"
-                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", outline: "none" }}
-                        />
+                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}
+                        >
+                          <option value="">— {t("settings_modal.db.default_game")} —</option>
+                          {KNOWN_GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                         <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
                           {t("settings_modal.db.default_src")}
                         </label>
                         <select value={defForm.srcLang} onChange={(e) => setDefForm(f => f ? { ...f, srcLang: e.target.value } : f)}
-                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)" }}>
+                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
                           {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </div>
@@ -592,7 +600,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                           {t("settings_modal.db.default_dst")}
                         </label>
                         <select value={defForm.dstLang} onChange={(e) => setDefForm(f => f ? { ...f, dstLang: e.target.value } : f)}
-                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)" }}>
+                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
                           {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </div>
@@ -723,9 +731,9 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
             onChange={(e) => onUpdate({ exportFolder: e.target.value })}
             placeholder={defaultExportDir || t("settings_modal.misc.export_folder_placeholder")}
             style={{
-              flex: 1, padding: "7px 10px", borderRadius: 7, fontSize: 11,
+              flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 11,
               background: "var(--bg-hover)", color: "var(--accent)",
-              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace",
+              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
             }}
           />
           <button onClick={pickExportFolder} title={t("settings_modal.misc.export_folder_pick_title")} style={iconBtn()}>📁</button>
@@ -809,10 +817,20 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
   };
 
   const displayLogPath = settings.logFolder || logPath;
-  const openLogs = () => {
-    // If a custom folder is set, open it directly; otherwise derive folder from default log file path
-    const dir = settings.logFolder || logPath.replace(/[/\\][^/\\]+$/, "");
-    openFolder(dir);
+  // Derive the folder that contains the log file
+  const logDir = settings.logFolder || logPath.replace(/[/\\][^/\\]+$/, "");
+
+  const openLogsFolder = () => {
+    if (displayLogPath) {
+      // revealItemInDir selects the file in Explorer; if it fails, fall back to opening the folder
+      revealItemInDir(displayLogPath).catch(() => openFolder(logDir));
+    } else {
+      openFolder(logDir);
+    }
+  };
+
+  const viewLogFile = () => {
+    if (displayLogPath) openPath(displayLogPath).catch(() => {});
   };
 
   const pickLogFolder = async () => {
@@ -882,9 +900,9 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
             onChange={(e) => onUpdate({ logFolder: e.target.value })}
             placeholder={logPath || t("settings_modal.sys.log_placeholder")}
             style={{
-              flex: 1, padding: "6px 10px", borderRadius: 6, fontSize: 10,
+              flex: 1, height: 32, padding: "0 10px", borderRadius: 6, fontSize: 10,
               background: "var(--bg-hover)", color: "var(--accent)",
-              border: "1px solid var(--border)", fontFamily: "monospace", outline: "none",
+              border: "1px solid var(--border)", fontFamily: "monospace", outline: "none", boxSizing: "border-box",
             }}
           />
           <button onClick={pickLogFolder} title={t("settings_modal.sys.log_pick_title")} style={iconBtn()}>📁</button>
@@ -892,7 +910,8 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={openLogs} style={smallBtnStyle()}>{t("settings_modal.sys.log_open_folder")}</button>
+          <button onClick={openLogsFolder} style={smallBtnStyle()}>{t("settings_modal.sys.log_open_folder")}</button>
+          <button onClick={viewLogFile} style={smallBtnStyle()}>{t("settings_modal.sys.log_view_file")}</button>
         </div>
       </Section>
 
@@ -983,17 +1002,20 @@ function btnStyle(bg: string, outline = false): React.CSSProperties {
 
 function smallBtnStyle(): React.CSSProperties {
   return {
-    padding: "7px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500,
+    height: 32, padding: "0 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500,
     background: "var(--bg-hover)", color: "var(--text-1)",
-    border: "1px solid var(--border)",
+    border: "1px solid var(--border)", boxSizing: "border-box",
+    display: "flex", alignItems: "center", flexShrink: 0,
   };
 }
 
 function iconBtn(): React.CSSProperties {
   return {
-    padding: "7px 9px", borderRadius: 6, cursor: "pointer", fontSize: 14,
+    height: 32, width: 32, padding: 0, borderRadius: 6, cursor: "pointer", fontSize: 14,
     background: "var(--bg-hover)", color: "var(--text-1)",
-    border: "1px solid var(--border)", flexShrink: 0, lineHeight: 1,
+    border: "1px solid var(--border)", flexShrink: 0,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    boxSizing: "border-box",
   };
 }
 

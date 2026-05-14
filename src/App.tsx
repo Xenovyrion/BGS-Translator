@@ -716,7 +716,7 @@ export default function App() {
         <ThemeManagerModal
           settings={settings}
           onUpdate={updateSettings}
-          onClose={() => setShowThemeManager(false)}
+          onClose={() => { setShowThemeManager(false); setShowSettings(true); }}
         />
       )}
 
