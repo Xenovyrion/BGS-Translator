@@ -1,11 +1,17 @@
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { THEME_PRESETS } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts } from "../../types";
 import { DEFAULT_SHORTCUTS } from "../../types";
+
+interface DictionaryInfo {
+  lang: string;
+  name: string;
+  installed: boolean;
+}
 
 interface Props {
   settings: AppSettings;
@@ -119,6 +125,9 @@ export default function SettingsPanel({ settings, onUpdate }: Props) {
         </button>
       </Section>
 
+      {/* Vérification orthographique */}
+      <SpellCheckSection settings={settings} onUpdate={onUpdate} />
+
       {/* Raccourcis clavier */}
       <Section label="Raccourcis clavier">
         <ShortcutsEditor
@@ -146,6 +155,175 @@ export default function SettingsPanel({ settings, onUpdate }: Props) {
         </div>
       </Section>
     </div>
+  );
+}
+
+// ── Spell check section ──────────────────────────────────────────────────────
+
+function SpellCheckSection({ settings, onUpdate }: Props) {
+  const { t } = useTranslation();
+  const [dicts, setDicts] = useState<DictionaryInfo[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [showManage, setShowManage] = useState(false);
+
+  const loadDicts = () =>
+    invoke<DictionaryInfo[]>("list_dictionaries_cmd").then(setDicts).catch(() => {});
+
+  useEffect(() => { loadDicts(); }, []);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const download = async (lang: string) => {
+    setDownloading(lang);
+    try {
+      await invoke("download_dictionary_cmd", { lang });
+      showToast(t("spellcheck.download_ok", { lang }));
+      await loadDicts();
+      if (!settings.spellLang) onUpdate({ spellLang: lang });
+    } catch (e) {
+      showToast(t("spellcheck.download_error", { error: String(e) }));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const deleteDic = async (lang: string) => {
+    try {
+      await invoke("delete_dictionary_cmd", { lang });
+      showToast(t("spellcheck.delete_ok", { lang }));
+      await loadDicts();
+      if (settings.spellLang === lang) onUpdate({ spellLang: "" });
+    } catch (e) {
+      showToast(t("spellcheck.download_error", { error: String(e) }));
+    }
+  };
+
+  const installed = dicts.filter(d => d.installed);
+  const available = dicts.filter(d => !d.installed);
+
+  const inputStyle: React.CSSProperties = {
+    padding: "7px 12px", borderRadius: 7, fontSize: 12,
+    background: "var(--bg-hover)", color: "var(--text-1)",
+    border: "1px solid var(--border)", cursor: "pointer",
+    minWidth: 200,
+  };
+  const smallBtnStyle: React.CSSProperties = {
+    padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
+    border: "1px solid var(--border)", background: "var(--bg-hover)", color: "var(--text-2)",
+  };
+
+  return (
+    <Section label={t("spellcheck.section_title")}>
+      {/* Active dictionary */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: "var(--text-2)", minWidth: 130 }}>
+          {t("spellcheck.dictionary_label")}
+        </span>
+        <select
+          value={settings.spellLang}
+          onChange={e => onUpdate({ spellLang: e.target.value })}
+          style={inputStyle}
+        >
+          <option value="">{t("spellcheck.no_dictionary")}</option>
+          {installed.map(d => (
+            <option key={d.lang} value={d.lang}>{d.name} ({d.lang})</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Real-time toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
+          <input
+            type="checkbox"
+            checked={settings.spellRealtime ?? false}
+            onChange={e => onUpdate({ spellRealtime: e.target.checked })}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+          />
+          {t("spellcheck.realtime_label")}
+        </label>
+      </div>
+
+      {/* Debounce slider (only when real-time is on) */}
+      {settings.spellRealtime && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", minWidth: 130 }}>
+            {t("spellcheck.debounce_label")}
+          </span>
+          <input
+            type="range" min={200} max={2000} step={100}
+            value={settings.spellDebounce ?? 600}
+            onChange={e => onUpdate({ spellDebounce: Number(e.target.value) })}
+            style={{ width: 140, accentColor: "var(--accent)" }}
+          />
+          <span style={{ fontSize: 12, color: "var(--text-3)", minWidth: 40 }}>
+            {settings.spellDebounce ?? 600} ms
+          </span>
+        </div>
+      )}
+
+      {/* Manage dictionaries toggle */}
+      <button
+        onClick={() => setShowManage(m => !m)}
+        style={{ ...smallBtnStyle, marginBottom: showManage ? 10 : 0, display: "flex", alignItems: "center", gap: 6 }}
+      >
+        {showManage ? "▾" : "▸"} {t("spellcheck.manage_title")}
+      </button>
+
+      {showManage && (
+        <div style={{ background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+
+          {/* Installed */}
+          {installed.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                {t("spellcheck.manage_installed")}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {installed.map(d => (
+                  <div key={d.lang} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-1)", flex: 1 }}>{d.name} <span style={{ color: "var(--text-3)", fontSize: 11 }}>({d.lang})</span></span>
+                    <button onClick={() => deleteDic(d.lang)} style={{ ...smallBtnStyle, color: "#ef4444", borderColor: "#ef4444" }}>
+                      {t("spellcheck.btn_delete")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Available */}
+          {available.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                {t("spellcheck.manage_available")}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 200, overflowY: "auto" }}>
+                {available.map(d => (
+                  <div key={d.lang} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>{d.name} <span style={{ color: "var(--text-3)", fontSize: 11 }}>({d.lang})</span></span>
+                    <button
+                      onClick={() => download(d.lang)}
+                      disabled={downloading === d.lang}
+                      style={{ ...smallBtnStyle, color: "var(--accent)", borderColor: "var(--accent)", opacity: downloading === d.lang ? 0.5 : 1 }}
+                    >
+                      {downloading === d.lang ? t("spellcheck.downloading") : t("spellcheck.btn_download")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {toast && (
+        <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-2)", background: "var(--bg-hover)", padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)" }}>
+          {toast}
+        </div>
+      )}
+    </Section>
   );
 }
 

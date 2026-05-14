@@ -594,5 +594,30 @@
       "fz_table":       "Taille tableau",
       "fz_mono":        "Taille monospace"
     }
+  },
+  "spellcheck": {
+    "section_title":        "Vérification orthographique",
+    "dictionary_label":     "Dictionnaire actif",
+    "no_dictionary":        "Aucun dictionnaire sélectionné",
+    "realtime_label":       "Vérification en temps réel",
+    "debounce_label":       "Délai (ms)",
+    "manage_title":         "Gérer les dictionnaires",
+    "manage_installed":     "Installés",
+    "manage_available":     "Disponibles",
+    "btn_download":         "Télécharger",
+    "btn_delete":           "Supprimer",
+    "downloading":          "Téléchargement…",
+    "download_ok":          "Dictionnaire {{lang}} installé.",
+    "download_error":       "Erreur : {{error}}",
+    "delete_ok":            "Dictionnaire {{lang}} supprimé.",
+    "btn_check":            "Vérifier l'orthographe",
+    "checking":             "Vérification…",
+    "no_errors":            "Aucune erreur détectée.",
+    "errors_found":         "{{count}} erreur(s) détectée(s).",
+    "suggestions_title":    "Suggestions",
+    "no_suggestions":       "Aucune suggestion.",
+    "apply":                "Appliquer",
+    "ignore":               "Ignorer",
+    "dict_not_installed":   "Le dictionnaire «{{lang}}» n'est pas installé. Installez-le dans les Paramètres."
   }
 }

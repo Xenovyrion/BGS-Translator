@@ -2,6 +2,7 @@ pub mod commands;
 pub mod database;
 pub mod formats;
 pub mod parser;
+pub mod spellcheck;
 pub mod translation;
 pub mod updater;
 
@@ -40,6 +41,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(database::DbState(std::sync::Mutex::new(None)))
+        .manage(spellcheck::commands::SpellState(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        )))
         .invoke_handler(tauri::generate_handler![
             commands::open_plugin_cmd,
             commands::save_session_cmd,
@@ -72,6 +76,11 @@ pub fn run() {
             commands::export_esptranslator_xml_cmd,
             commands::export_session_csv_cmd,
             commands::convert_to_bgt_cmd,
+            spellcheck::commands::list_dictionaries_cmd,
+            spellcheck::commands::download_dictionary_cmd,
+            spellcheck::commands::delete_dictionary_cmd,
+            spellcheck::commands::spellcheck_cmd,
+            spellcheck::commands::get_suggestions_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");

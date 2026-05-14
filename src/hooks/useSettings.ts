@@ -32,6 +32,10 @@ export interface AppSettings {
   logFolder:        string;
   autosaveInterval: number; // minutes; 0 = disabled
   defaultDbs:       Record<string, DefaultDbEntry>; // keyed by game name (lowercase)
+  // Spell check
+  spellLang:      string;   // active dictionary lang code; "" = disabled
+  spellRealtime:  boolean;  // check while typing
+  spellDebounce:  number;   // debounce delay in ms for real-time mode
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -56,6 +60,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   logFolder:        "",
   autosaveInterval: 0,
   defaultDbs:       {},
+  spellLang:     "",
+  spellRealtime: false,
+  spellDebounce: 600,
 };
 
 export function useSettings() {

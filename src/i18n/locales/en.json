@@ -594,5 +594,30 @@
       "fz_table":       "Table size",
       "fz_mono":        "Monospace size"
     }
+  },
+  "spellcheck": {
+    "section_title":        "Spell Check",
+    "dictionary_label":     "Active dictionary",
+    "no_dictionary":        "No dictionary selected",
+    "realtime_label":       "Real-time spell check",
+    "debounce_label":       "Delay (ms)",
+    "manage_title":         "Manage dictionaries",
+    "manage_installed":     "Installed",
+    "manage_available":     "Available",
+    "btn_download":         "Download",
+    "btn_delete":           "Delete",
+    "downloading":          "Downloading…",
+    "download_ok":          "Dictionary {{lang}} installed.",
+    "download_error":       "Error: {{error}}",
+    "delete_ok":            "Dictionary {{lang}} deleted.",
+    "btn_check":            "Check spelling",
+    "checking":             "Checking…",
+    "no_errors":            "No errors found.",
+    "errors_found":         "{{count}} error(s) found.",
+    "suggestions_title":    "Suggestions",
+    "no_suggestions":       "No suggestions.",
+    "apply":                "Apply",
+    "ignore":               "Ignore",
+    "dict_not_installed":   "Dictionary \"{{lang}}\" is not installed. Install it in Settings."
   }
 }

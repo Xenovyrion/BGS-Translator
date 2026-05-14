@@ -14,10 +14,11 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Checkout
+      - name: Checkout (with submodules)
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,6 +36,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      - name: Install nuspell via vcpkg
+        shell: pwsh
+        run: |
+          $vcpkg = "$env:VCPKG_INSTALLATION_ROOT"
+          if (-not $vcpkg) { $vcpkg = "C:\vcpkg" }
+          Write-Host "Using vcpkg at: $vcpkg"
+          & "$vcpkg\vcpkg.exe" install nuspell:x64-windows-static-md
+          # Export env vars for the Rust vcpkg crate
+          "VCPKG_ROOT=$vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VCPKGRS_TRIPLET=x64-windows-static-md" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VCPKGRS_DYNAMIC=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0

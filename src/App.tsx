@@ -703,6 +703,9 @@ export default function App() {
                 onPanelResize={setEditPanelHeight}
                 recordColors={resolvedRecordColors}
                 editShortcuts={settings.editShortcuts}
+                spellLang={settings.spellLang || undefined}
+                spellRealtime={settings.spellRealtime}
+                spellDebounce={settings.spellDebounce}
               />
             )}
 

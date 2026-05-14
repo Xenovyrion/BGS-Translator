@@ -1,0 +1,3 @@
+[submodule "src-tauri/nuspell"]
+	path = src-tauri/nuspell
+	url = https://github.com/nuspell/nuspell.git

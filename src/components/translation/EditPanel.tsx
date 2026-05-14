@@ -1,9 +1,25 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "../../hooks/useLayout";
 import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef } from "../../types";
 import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
+
+interface SpellError {
+  word: string;
+  char_start: number;
+  char_len: number;
+}
+
+interface SpellPopup {
+  word: string;
+  suggestions: string[];
+  charStart: number;
+  charLen: number;
+  x: number;
+  y: number;
+}
 
 export interface EditPanelHandle { focus: () => void }
 
@@ -17,6 +33,9 @@ interface Props {
   onPanelResize:  (delta: number) => void;
   recordColors:   Record<string, string>;
   editShortcuts?: EditPanelShortcuts;
+  spellLang?:     string;
+  spellRealtime?: boolean;
+  spellDebounce?: number;
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -48,7 +67,7 @@ function SearchIcon() {
 }
 
 // ── Text-segment utilities ─────────────────────────────────────────────────
-type Segment = { text: string; isTag: boolean; isMatch: boolean; isCurrent: boolean };
+type Segment = { text: string; isTag: boolean; isMatch: boolean; isCurrent: boolean; isSpellError: boolean };
 
 function findAllOccurrences(text: string, query: string, caseSensitive: boolean): Array<{ start: number; end: number }> {
   if (!query) return [];
@@ -65,8 +84,12 @@ function findAllOccurrences(text: string, query: string, caseSensitive: boolean)
   return out;
 }
 
-function buildSegments(text: string, matches: Array<{ start: number; end: number; isCurrent: boolean }>): Segment[] {
-  type Evt = { pos: number; open: boolean; kind: "tag" | "match" | "current" };
+function buildSegments(
+  text: string,
+  matches: Array<{ start: number; end: number; isCurrent: boolean }>,
+  spellErrors: SpellError[] = [],
+): Segment[] {
+  type Evt = { pos: number; open: boolean; kind: "tag" | "match" | "current" | "spell" };
   const evts: Evt[] = [];
   for (const m of text.matchAll(/<[^>]*>/g)) {
     evts.push({ pos: m.index!, open: true, kind: "tag" });
@@ -77,17 +100,22 @@ function buildSegments(text: string, matches: Array<{ start: number; end: number
     evts.push({ pos: start, open: true, kind });
     evts.push({ pos: end, open: false, kind });
   }
+  for (const { char_start, char_len } of spellErrors) {
+    evts.push({ pos: char_start, open: true, kind: "spell" });
+    evts.push({ pos: char_start + char_len, open: false, kind: "spell" });
+  }
   evts.sort((a, b) => a.pos - b.pos || (a.open ? 1 : -1));
   const segs: Segment[] = [];
-  let pos = 0, inTag = false, inMatch = false, inCurrent = false;
+  let pos = 0, inTag = false, inMatch = false, inCurrent = false, inSpell = false;
   for (const evt of evts) {
-    if (evt.pos > pos) segs.push({ text: text.slice(pos, evt.pos), isTag: inTag, isMatch: inMatch, isCurrent: inCurrent });
+    if (evt.pos > pos) segs.push({ text: text.slice(pos, evt.pos), isTag: inTag, isMatch: inMatch, isCurrent: inCurrent, isSpellError: inSpell });
     pos = evt.pos;
     if (evt.kind === "tag")     inTag     = evt.open;
     if (evt.kind === "match")   inMatch   = evt.open;
     if (evt.kind === "current") inCurrent = evt.open;
+    if (evt.kind === "spell")   inSpell   = evt.open;
   }
-  if (pos < text.length) segs.push({ text: text.slice(pos), isTag: inTag, isMatch: inMatch, isCurrent: inCurrent });
+  if (pos < text.length) segs.push({ text: text.slice(pos), isTag: inTag, isMatch: inMatch, isCurrent: inCurrent, isSpellError: inSpell });
   return segs;
 }
 
@@ -95,9 +123,10 @@ function SegmentedText({ segments }: { segments: Segment[] }) {
   return (
     <>
       {segments.map((seg, i) => {
-        if (seg.isCurrent) return <mark key={i} style={{ background: "var(--accent)", color: "#fff", borderRadius: 2 }}>{seg.text}</mark>;
-        if (seg.isMatch)   return <mark key={i} style={{ background: "rgba(253,224,71,0.4)", color: "inherit", borderRadius: 2 }}>{seg.text}</mark>;
-        if (seg.isTag)     return <span key={i} style={{ color: "var(--color-tag)" }}>{seg.text}</span>;
+        if (seg.isCurrent)    return <mark key={i} style={{ background: "var(--accent)", color: "#fff", borderRadius: 2 }}>{seg.text}</mark>;
+        if (seg.isMatch)      return <mark key={i} style={{ background: "rgba(253,224,71,0.4)", color: "inherit", borderRadius: 2 }}>{seg.text}</mark>;
+        if (seg.isSpellError) return <span key={i} style={{ textDecoration: "underline wavy #ef4444", textDecorationThickness: "1.5px", textUnderlineOffset: "2px" }}>{seg.text}</span>;
+        if (seg.isTag)        return <span key={i} style={{ color: "var(--color-tag)" }}>{seg.text}</span>;
         return <span key={i}>{seg.text}</span>;
       })}
     </>
@@ -146,7 +175,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600 },
   ref,
 ) {
   const { t } = useTranslation();
@@ -170,6 +199,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const [findCase,       setFindCase]       = useState(false);
   const [matchIdx,       setMatchIdx]       = useState(0);
   const [opsOpen,        setOpsOpen]        = useState(false);
+  const [spellErrors,    setSpellErrors]    = useState<SpellError[]>([]);
+  const [spellChecking,  setSpellChecking]  = useState(false);
+  const [spellPopup,     setSpellPopup]     = useState<SpellPopup | null>(null);
+  const spellPopupRef                       = useRef<HTMLDivElement>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
@@ -200,12 +233,12 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const currentMatch = matchCount > 0 ? allMatches[clampedIdx] : null;
 
   const translOverlaySegs = useMemo(() => {
-    if (!findQuery) return null;
+    if (!findQuery && !spellErrors.length) return null;
     const matches = allMatches
       .filter(m => m.col === "translation")
       .map(m => ({ start: m.start, end: m.end, isCurrent: currentMatch?.col === "translation" && m.start === currentMatch.start }));
-    return buildSegments(entry.translated || "", matches);
-  }, [findQuery, allMatches, currentMatch, entry.translated]);
+    return buildSegments(entry.translated || "", matches, spellErrors);
+  }, [findQuery, allMatches, currentMatch, entry.translated, spellErrors]);
 
   // ── Effects ─────────────────────────────────────────────────────────────
   useEffect(() => { setMatchIdx(0); }, [findQuery, findCase, entry._idx]);
@@ -238,6 +271,34 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [opsOpen]);
+
+  // Close spell popup when clicking outside of it
+  useEffect(() => {
+    if (!spellPopup) return;
+    const close = (e: MouseEvent) => {
+      if (spellPopupRef.current && !spellPopupRef.current.contains(e.target as Node)) setSpellPopup(null);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [spellPopup]);
+
+  // Clear spell errors when entry changes
+  useEffect(() => {
+    setSpellErrors([]);
+    setSpellPopup(null);
+  }, [entry._idx]);
+
+  // Real-time spell check with debounce
+  useEffect(() => {
+    if (!spellRealtime || !spellLang || !entry.translated) return;
+    const timer = setTimeout(async () => {
+      try {
+        const errors = await invoke<SpellError[]>("spellcheck_cmd", { lang: spellLang, text: entry.translated });
+        setSpellErrors(errors);
+      } catch { /* dictionary may not be loaded yet */ }
+    }, spellDebounce);
+    return () => clearTimeout(timer);
+  }, [entry.translated, spellRealtime, spellLang, spellDebounce]);
 
   // ── Callbacks ────────────────────────────────────────────────────────────
   const syncScroll = useCallback(() => {
@@ -336,6 +397,41 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     }
     onTranslate(entry._idx ?? 0, text);
   }, [allMatches, replaceQuery, entry.translated, entry._idx, onTranslate]);
+
+  const runSpellCheck = useCallback(async () => {
+    if (!spellLang) return;
+    setSpellChecking(true);
+    setSpellPopup(null);
+    try {
+      const errors = await invoke<SpellError[]>("spellcheck_cmd", { lang: spellLang, text: entry.translated ?? "" });
+      setSpellErrors(errors);
+    } catch (e) {
+      console.warn("Spell check failed:", e);
+    } finally {
+      setSpellChecking(false);
+    }
+  }, [spellLang, entry.translated]);
+
+  const handleTextareaClick = useCallback(async (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (!spellErrors.length || !spellLang) return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const caretPos = ta.selectionStart;
+    const error = spellErrors.find(err => caretPos >= err.char_start && caretPos <= err.char_start + err.char_len);
+    if (!error) { setSpellPopup(null); return; }
+    try {
+      const suggestions = await invoke<string[]>("get_suggestions_cmd", { lang: spellLang, word: error.word });
+      const rect = ta.getBoundingClientRect();
+      setSpellPopup({ word: error.word, suggestions, charStart: error.char_start, charLen: error.char_len, x: e.clientX, y: rect.top - 4 });
+    } catch {}
+  }, [spellErrors, spellLang]);
+
+  const applySpellSuggestion = useCallback((suggestion: string, charStart: number, charLen: number) => {
+    const text = entry.translated ?? "";
+    onTranslate(entry._idx ?? 0, text.slice(0, charStart) + suggestion + text.slice(charStart + charLen));
+    setSpellErrors(prev => prev.filter(e => e.char_start !== charStart));
+    setSpellPopup(null);
+  }, [entry.translated, entry._idx, onTranslate]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onTranslate(entry._idx ?? 0, e.target.value);
@@ -513,8 +609,21 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             {missingTags.length > 0 && (
               <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "#f59e0b", cursor: "help", flexShrink: 0 }}>⚠ {missingTags.length}</span>
             )}
+            {/* Spell check button */}
+            {spellLang && (
+              <ToolBtn
+                style={{ marginLeft: "auto" }}
+                onClick={runSpellCheck}
+                disabled={spellChecking}
+                active={spellErrors.length > 0}
+                title={t("spellcheck.btn_check")}
+              >
+                {spellChecking ? "…" : `✓ ${spellErrors.length > 0 ? spellErrors.length : ""}`}
+                {!spellChecking && <span style={{ marginLeft: 2, fontSize: 10 }}>abc</span>}
+              </ToolBtn>
+            )}
             {/* Tools dropdown */}
-            <div ref={opsRef} style={{ position: "relative", marginLeft: "auto" }}>
+            <div ref={opsRef} style={{ position: "relative", marginLeft: spellLang ? undefined : "auto" }}>
               <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}>⚙ {t("edit.ops_btn")}</ToolBtn>
               {opsOpen && (
                 <div role="menu" style={{ position: "absolute", top: `calc(100% + 3px)`, right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 240, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
@@ -563,6 +672,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 onScroll={syncScroll}
+                onClick={handleTextareaClick}
                 placeholder={t("edit.placeholder")}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", resize: "none", padding: `${TA_PAD_V}px ${TA_PAD_H}px`, background: "var(--bg-hover)", color: "transparent", caretColor: "var(--text-1)", border: "1px solid var(--border)", borderRadius: 6, fontSize: TEXT_FZ, fontFamily: TEXT_FONT, lineHeight: TEXT_LH, outline: "none", boxSizing: "border-box" }}
               />
@@ -570,6 +680,50 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 {translOverlaySegs ? <SegmentedText segments={translOverlaySegs} /> : <TaggedText text={entry.translated || ""} />}
                 {" "}
               </div>
+
+              {/* Spell suggestions popup */}
+              {spellPopup && (
+                <div
+                  ref={spellPopupRef}
+                  style={{
+                    position: "fixed", zIndex: 500,
+                    left: Math.min(spellPopup.x, window.innerWidth - 220),
+                    top: spellPopup.y - 8,
+                    transform: "translateY(-100%)",
+                    background: "var(--bg-card)", border: "1px solid var(--border)",
+                    borderRadius: 8, padding: "6px 0", minWidth: 180,
+                    boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "2px 12px 6px" }}>
+                    «{spellPopup.word}» — {t("spellcheck.suggestions_title")}
+                  </div>
+                  {spellPopup.suggestions.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "var(--text-3)", padding: "4px 12px" }}>{t("spellcheck.no_suggestions")}</div>
+                  ) : (
+                    spellPopup.suggestions.slice(0, 8).map((s, i) => (
+                      <div
+                        key={i}
+                        onClick={() => applySpellSuggestion(s, spellPopup.charStart, spellPopup.charLen)}
+                        style={{ padding: "5px 12px", fontSize: 13, cursor: "pointer", color: "var(--text-1)" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                      >
+                        {s}
+                      </div>
+                    ))
+                  )}
+                  <div style={{ borderTop: "1px solid var(--border)", margin: "4px 0" }} />
+                  <div
+                    onClick={() => { setSpellErrors(prev => prev.filter(e => e.char_start !== spellPopup.charStart)); setSpellPopup(null); }}
+                    style={{ padding: "4px 12px", fontSize: 11, cursor: "pointer", color: "var(--text-3)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {t("spellcheck.ignore")}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

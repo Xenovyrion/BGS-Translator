@@ -47,6 +47,9 @@ chrono  = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 log       = "0.4"
 
+# Spell check — HTTP dictionary downloads (no OpenSSL, pure Rust TLS)
+reqwest = { version = "0.12", features = ["rustls-tls", "stream"], default-features = false }
+
 [profile.release]
 panic         = "abort"
 codegen-units = 1
@@ -56,3 +59,10 @@ strip         = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+cc          = "1"
+
+[target.'cfg(windows)'.build-dependencies]
+vcpkg = "0.2"
+
+[target.'cfg(not(windows))'.build-dependencies]
+pkg-config = "0.3"
