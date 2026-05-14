@@ -15,11 +15,13 @@ extern "C" {
 NuspellDict* nuspell_load(const char* aff_path)
 {
     if (!aff_path) return nullptr;
+    NuspellDict* nd = nullptr;
     try {
-        auto path = std::filesystem::u8path(aff_path);
-        auto d = nuspell::Dictionary::load_from_aff_dic(path);
-        return new NuspellDict{std::move(d)};
+        nd = new NuspellDict();
+        nd->dict.load_aff_dic(std::filesystem::u8path(aff_path));
+        return nd;
     } catch (...) {
+        delete nd;
         return nullptr;
     }
 }
