@@ -14,7 +14,8 @@ import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from 
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
 
-import MenuBar     from "./components/layout/MenuBar";
+import MenuBar          from "./components/layout/MenuBar";
+import ConvertToBgtModal from "./components/shared/ConvertToBgtModal";
 import ToolBar     from "./components/layout/ToolBar";
 import FilterBar   from "./components/translation/FilterBar";
 import GroupPanel  from "./components/translation/GroupPanel";
@@ -82,7 +83,7 @@ export default function App() {
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
     openPlugin, loadSession,
-    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations,
+    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
     selectedCount,
     columnFilters, setColumnFilter,
     dbApplyResult, clearDbApplyResult,
@@ -135,6 +136,8 @@ export default function App() {
   const [appVersion,         setAppVersion]         = useState("0.1.0");
   const [lastAutosave,       setLastAutosave]       = useState<Date | null>(null);
   const [notification,       setNotification]       = useState<Notification | null>(null);
+  // null = modal closed, string = source file path shown in the ConvertToBgt modal
+  const [convertBgtSource,   setConvertBgtSource]   = useState<string | null>(null);
 
   const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
     setNotification({ message, type, detail, key: Date.now(), duration });
@@ -278,6 +281,141 @@ export default function App() {
       notify(`⚠ ${t("import.error_title")}`, "error", String(e), 10000);
     }
   }, [pluginInfo, applyImportedTranslations, notify, t]);
+
+  // ── Format import handler (XML / CSV) ────────────────────────────────────
+
+  const handleImportFormat = useCallback(async (title: string) => {
+    if (!pluginInfo) return;
+    const selected = await open({
+      filters: [{ name: "XML / CSV", extensions: ["xml", "csv", "tsv"] }],
+      title,
+      multiple: false,
+    });
+    if (!selected || typeof selected !== "string") return;
+    try {
+      const imported = await invoke<Array<{ original: string; translated: string }>>(
+        "import_format_cmd", { path: selected },
+      );
+      const count = applyTextBasedImport(imported);
+      if (count > 0) {
+        notify(
+          `✓ ${t("format.import_success", { count: count.toLocaleString() })}`,
+          "success",
+          undefined,
+          5000,
+        );
+      } else {
+        notify(
+          `ℹ ${t("format.import_none")}`,
+          "success",
+          t("format.import_none_detail"),
+          5000,
+        );
+      }
+    } catch (e) {
+      notify(`⚠ ${t("format.import_error")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, applyTextBasedImport, notify, t]);
+
+  // ── Format export handlers ────────────────────────────────────────────────
+
+  const handleExportXtXml = useCallback(async () => {
+    if (!pluginInfo) return;
+    const chosen = await save({
+      filters: [{ name: "xTranslator XML", extensions: ["xml"] }],
+      defaultPath: (pluginInfo.plugin_name ?? "export") + "_xt.xml",
+    });
+    if (!chosen) return;
+    try {
+      const count = await invoke<number>("export_xtranslator_xml_cmd", {
+        path:       chosen,
+        entries,
+        pluginName: pluginInfo.plugin_name ?? "",
+        sourceLang: "English",
+        destLang:   settings.targetLanguage || "French",
+      });
+      notify(`✓ ${t("format.success", { count })}`, "success", undefined, 4000);
+    } catch (e) {
+      notify(`⚠ ${t("format.export_error")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, entries, settings.targetLanguage, notify, t]);
+
+  const handleExportEtXml = useCallback(async () => {
+    if (!pluginInfo) return;
+    const chosen = await save({
+      filters: [{ name: "ESP-ESM Translator XML", extensions: ["xml"] }],
+      defaultPath: (pluginInfo.plugin_name ?? "export") + "_et.xml",
+    });
+    if (!chosen) return;
+    try {
+      const count = await invoke<number>("export_esptranslator_xml_cmd", {
+        path:       chosen,
+        entries,
+        pluginName: pluginInfo.plugin_name ?? "",
+      });
+      notify(`✓ ${t("format.success", { count })}`, "success", undefined, 4000);
+    } catch (e) {
+      notify(`⚠ ${t("format.export_error")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, entries, notify, t]);
+
+  const handleExportCsv = useCallback(async () => {
+    if (!pluginInfo) return;
+    const chosen = await save({
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+      defaultPath: (pluginInfo.plugin_name ?? "export") + ".csv",
+    });
+    if (!chosen) return;
+    try {
+      const count = await invoke<number>("export_session_csv_cmd", { path: chosen, entries });
+      notify(`✓ ${t("format.success", { count })}`, "success", undefined, 4000);
+    } catch (e) {
+      notify(`⚠ ${t("format.export_error")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, entries, notify, t]);
+
+  // ── Convert to .bgt ──────────────────────────────────────────────────────
+
+  const handleConvertToBgt = useCallback(async () => {
+    const selected = await open({
+      filters: [{ name: "XML / CSV / EET", extensions: ["xml", "csv", "tsv", "eet"] }],
+      title: t("format.convert_title"),
+      multiple: false,
+    });
+    if (!selected || typeof selected !== "string") return;
+    setConvertBgtSource(selected);
+  }, [t]);
+
+  const handleConvertConfirm = useCallback(async (opts: {
+    dbName: string; game: string; langFrom: string; langTo: string;
+  }) => {
+    if (!convertBgtSource) return;
+    const sourcePath = convertBgtSource;
+    setConvertBgtSource(null);
+
+    // Build output path next to source file with .bgt extension
+    const folder = sourcePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+    const outputPath = (folder ? folder + "/" : "") + opts.dbName + ".bgt";
+
+    try {
+      const count = await invoke<number>("convert_to_bgt_cmd", {
+        sourcePath,
+        outputPath,
+        dbName:   opts.dbName,
+        game:     opts.game,
+        langFrom: opts.langFrom,
+        langTo:   opts.langTo,
+      });
+      notify(
+        `✓ ${t("convert_bgt.success", { count, name: opts.dbName })}`,
+        "success",
+        undefined,
+        6000,
+      );
+    } catch (e) {
+      notify(`⚠ ${t("convert_bgt.error", { error: String(e) })}`, "error", String(e), 10000);
+    }
+  }, [convertBgtSource, notify, t]);
 
   const handleExport = useCallback(async () => {
     if (!pluginInfo) return;
@@ -431,6 +569,13 @@ export default function App() {
         onToggleAlternateRows={() => updateSettings({ alternateRows: !settings.alternateRows })}
         showColumnFilters={showColumnFilters}
         onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
+        onImportXtXml={pluginInfo ? () => handleImportFormat(t("format.import_xt_title")) : undefined}
+        onImportEtXml={pluginInfo ? () => handleImportFormat(t("format.import_et_title")) : undefined}
+        onImportCsv={pluginInfo   ? () => handleImportFormat(t("format.import_csv_title")) : undefined}
+        onExportXtXml={pluginInfo ? handleExportXtXml : undefined}
+        onExportEtXml={pluginInfo ? handleExportEtXml : undefined}
+        onExportCsv={pluginInfo   ? handleExportCsv   : undefined}
+        onConvertToBgt={handleConvertToBgt}
       />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
@@ -589,6 +734,13 @@ export default function App() {
           iconSet={activeIconSet}
         />
       )}
+
+      <ConvertToBgtModal
+        isOpen={!!convertBgtSource}
+        sourceFile={convertBgtSource ?? ""}
+        onClose={() => setConvertBgtSource(null)}
+        onConfirm={handleConvertConfirm}
+      />
     </div>
   );
 }

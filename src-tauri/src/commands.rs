@@ -1,6 +1,8 @@
 use serde::Serialize;
 use tauri::Emitter;
 
+use crate::formats;
+use crate::database::{format::save_bgt, store::TranslationDb, types::DbEntry};
 use crate::parser::open_file;
 use crate::translation::{
     entry::TranslationEntry,
@@ -148,4 +150,155 @@ pub async fn export_plugin_cmd(
         log::error!("[cmd] export_plugin failed: {:?}", result);
     }
     result
+}
+
+/// Auto-detect format from file extension / content and return imported entries
+/// for session use (text-based matching on the frontend).
+///
+/// - .xml → peek content for "SSTXMLRessources" → xtranslator_xml, else esptranslator_xml
+/// - .csv / .tsv → session_csv
+#[tauri::command]
+pub async fn import_format_cmd(path: String) -> Result<Vec<formats::ImportedEntry>, String> {
+    log::info!("[cmd] import_format: {}", path);
+    let p = std::path::Path::new(&path);
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+    let result = match ext.as_str() {
+        "xml" => {
+            // Peek first 512 bytes to decide between xtranslator and esptranslator formats
+            let snippet = std::fs::read_to_string(p)
+                .map(|s| s.chars().take(512).collect::<String>())
+                .unwrap_or_default();
+            if snippet.contains("SSTXMLRessources") {
+                formats::xtranslator_xml::import(p)
+            } else {
+                formats::esptranslator_xml::import(p)
+            }
+        }
+        "csv" | "tsv" => formats::session_csv::import(p),
+        _ => Err(format!("Unsupported format for import: .{}", ext)),
+    };
+
+    match &result {
+        Ok(entries) => log::info!("[cmd] import_format: {} entries loaded", entries.len()),
+        Err(e)      => log::error!("[cmd] import_format failed: {}", e),
+    }
+    result
+}
+
+/// Export session entries as xTranslator XML.
+#[tauri::command]
+pub async fn export_xtranslator_xml_cmd(
+    path:        String,
+    entries:     Vec<TranslationEntry>,
+    plugin_name: String,
+    source_lang: String,
+    dest_lang:   String,
+) -> Result<usize, String> {
+    log::info!("[cmd] export_xtranslator_xml: {} ({} entries)", path, entries.len());
+    let count = formats::xtranslator_xml::export(
+        std::path::Path::new(&path),
+        &entries,
+        &plugin_name,
+        &source_lang,
+        &dest_lang,
+    )?;
+    log::info!("[cmd] export_xtranslator_xml: {} entries written", count);
+    Ok(count)
+}
+
+/// Export session entries as ESP-ESM Translator XML.
+#[tauri::command]
+pub async fn export_esptranslator_xml_cmd(
+    path:        String,
+    entries:     Vec<TranslationEntry>,
+    plugin_name: String,
+) -> Result<usize, String> {
+    log::info!("[cmd] export_esptranslator_xml: {} ({} entries)", path, entries.len());
+    let count = formats::esptranslator_xml::export(
+        std::path::Path::new(&path),
+        &entries,
+        &plugin_name,
+    )?;
+    log::info!("[cmd] export_esptranslator_xml: {} entries written", count);
+    Ok(count)
+}
+
+/// Export session entries as CSV.
+#[tauri::command]
+pub async fn export_session_csv_cmd(
+    path:    String,
+    entries: Vec<TranslationEntry>,
+) -> Result<usize, String> {
+    log::info!("[cmd] export_session_csv: {} ({} entries)", path, entries.len());
+    let count = formats::session_csv::export(std::path::Path::new(&path), &entries)?;
+    log::info!("[cmd] export_session_csv: {} entries written", count);
+    Ok(count)
+}
+
+/// Convert any supported external format to a .bgt database file.
+///
+/// Supported sources: .xml (auto-detected), .csv, .tsv, .eet
+#[tauri::command]
+pub async fn convert_to_bgt_cmd(
+    source_path: String,
+    output_path: String,
+    db_name:     String,
+    game:        String,
+    lang_from:   String,
+    lang_to:     String,
+) -> Result<usize, String> {
+    log::info!("[cmd] convert_to_bgt: {} → {}", source_path, output_path);
+    let src = std::path::Path::new(&source_path);
+    let dst = std::path::Path::new(&output_path);
+
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+    let db_entries: Vec<DbEntry> = match ext.as_str() {
+        "xml" => {
+            let snippet = std::fs::read_to_string(src)
+                .map(|s| s.chars().take(512).collect::<String>())
+                .unwrap_or_default();
+            let imported = if snippet.contains("SSTXMLRessources") {
+                formats::xtranslator_xml::import(src)?
+            } else {
+                formats::esptranslator_xml::import(src)?
+            };
+            imported.into_iter().map(|e| DbEntry {
+                original:    e.original,
+                translated:  e.translated,
+                record_type: e.record_type,
+                sub_type:    e.sub_type,
+                editor_id:   e.editor_id,
+            }).collect()
+        }
+        "csv" | "tsv" => {
+            let imported = formats::session_csv::import(src)?;
+            imported.into_iter().map(|e| DbEntry {
+                original:    e.original,
+                translated:  e.translated,
+                record_type: e.record_type,
+                sub_type:    e.sub_type,
+                editor_id:   e.editor_id,
+            }).collect()
+        }
+        "eet" => {
+            let (_game_name, entries) = crate::database::format::load_eet(src)?;
+            entries
+        }
+        _ => return Err(format!("Unsupported format for conversion: .{}", ext)),
+    };
+
+    let count = db_entries.len();
+    let db = TranslationDb::from_entries(db_name, game, lang_from, lang_to, false, db_entries);
+
+    if let Some(parent) = dst.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+    save_bgt(&db, dst)?;
+
+    log::info!("[cmd] convert_to_bgt: {} entries saved to '{}'", count, output_path);
+    Ok(count)
 }

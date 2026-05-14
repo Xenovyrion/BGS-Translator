@@ -38,6 +38,9 @@ bincode = "1"
 zstd    = "0.13"
 ahash   = "0.8"
 
+# XML parsing
+quick-xml = "0.36"
+
 # Utilitaires
 uuid    = { version = "1", features = ["v4"] }
 chrono  = { version = "0.4", features = ["serde"] }

@@ -315,6 +315,40 @@ export function usePlugin({
     return count;
   }, []);
 
+  // ── Text-based import (XML / CSV) ────────────────────────────────────────
+  //
+  // Builds a map original→translated from the imported entries and applies
+  // them to the current session. Unlike applyImportedTranslations, this uses
+  // plain-text matching rather than positional matching and is intended for
+  // third-party formats (xTranslator XML, ESP-ESM Translator XML, CSV).
+  //
+  // Returns the number of entries that were actually updated.
+
+  const applyTextBasedImport = useCallback((
+    imports: Array<{ original: string; translated: string }>,
+    overwrite = false,
+  ): number => {
+    const map = new Map<string, string>();
+    for (const e of imports) {
+      if (e.original && e.translated) map.set(e.original, e.translated);
+    }
+    let count = 0;
+    setEntries((prev) => {
+      let c = 0;
+      const next = prev.map((e) => {
+        if (!overwrite && (e.status === "pending" || e.status === "ignored")) return e;
+        const tr = map.get(e.original);
+        if (!tr) return e;
+        if (!overwrite && e.status === "validated" && e.translated === tr) return e;
+        c++;
+        return { ...e, translated: tr, status: "validated" as EntryStatus };
+      });
+      count = c;
+      return next;
+    });
+    return count;
+  }, []);
+
   // ── Bulk operations on the selection ─────────────────────────────────────
 
   const bulkSetStatus = useCallback((status: EntryStatus) => {
@@ -484,7 +518,7 @@ export function usePlugin({
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount, progressPercent,
     openPlugin, loadSession,
-    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations,
+    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
     selectedCount: selectedKeys.size,
     columnFilters, setColumnFilter,
     dbApplyResult, clearDbApplyResult: () => setDbApplyResult(null),

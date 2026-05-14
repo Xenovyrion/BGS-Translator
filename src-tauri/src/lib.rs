@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod database;
+pub mod formats;
 pub mod parser;
 pub mod translation;
 pub mod updater;
@@ -61,6 +62,11 @@ pub fn run() {
             database::commands::set_debug_mode_cmd,
             updater::check_update,
             updater::install_update,
+            commands::import_format_cmd,
+            commands::export_xtranslator_xml_cmd,
+            commands::export_esptranslator_xml_cmd,
+            commands::export_session_csv_cmd,
+            commands::convert_to_bgt_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");

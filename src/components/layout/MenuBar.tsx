@@ -4,12 +4,13 @@ import { useTranslation } from "react-i18next";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface MenuItemDef {
-  label?:     string;
-  shortcut?:  string;
-  onClick?:   () => void;
-  disabled?:  boolean;
+  label?:    string;
+  shortcut?: string;
+  onClick?:  () => void;
+  disabled?: boolean;
   separator?: true;
-  checked?:   boolean;
+  checked?:  boolean;
+  submenu?:  MenuItemDef[];
 }
 
 interface MenuDef {
@@ -33,6 +34,14 @@ interface Props {
   onToggleAlternateRows: () => void;
   showColumnFilters:     boolean;
   onToggleColumnFilters: () => void;
+  // Format import/export
+  onImportXtXml?:     () => void;
+  onImportEtXml?:     () => void;
+  onImportCsv?:       () => void;
+  onExportXtXml?:     () => void;
+  onExportEtXml?:     () => void;
+  onExportCsv?:       () => void;
+  onConvertToBgt?:    () => void;
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -42,6 +51,9 @@ export default function MenuBar({
   onOpenPlugin, onOpenSession, onSave, onImport, onExport, onSettings, onSettingsDb, onChangelog,
   alternateRows, onToggleAlternateRows,
   showColumnFilters, onToggleColumnFilters,
+  onImportXtXml, onImportEtXml, onImportCsv,
+  onExportXtXml, onExportEtXml, onExportCsv,
+  onConvertToBgt,
 }: Props) {
   const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -61,13 +73,33 @@ export default function MenuBar({
     {
       id: "fichier", label: t("menu.file"),
       items: [
-        { label: t("menu.file_open"),         shortcut: "Ctrl+O", onClick: () => { close(); onOpenPlugin(); } },
-        { label: t("menu.file_open_session"),                      onClick: () => { close(); onOpenSession(); } },
+        { label: t("menu.file_open"),        shortcut: "Ctrl+O", onClick: () => { close(); onOpenPlugin(); } },
+        { label: t("menu.file_open_session"),                     onClick: () => { close(); onOpenSession(); } },
         { separator: true },
-        { label: t("menu.file_save"),         shortcut: "Ctrl+S", onClick: onSave   ? () => { close(); onSave();   } : undefined, disabled: !pluginLoaded || loading },
+        { label: t("menu.file_save"), shortcut: "Ctrl+S", onClick: onSave ? () => { close(); onSave!(); } : undefined, disabled: !pluginLoaded || loading },
         { separator: true },
-        { label: t("menu.file_import"),       shortcut: "Ctrl+I", onClick: onImport ? () => { close(); onImport(); } : undefined, disabled: !pluginLoaded || loading },
-        { label: t("menu.file_generate"),      shortcut: "Ctrl+E", onClick: onExport ? () => { close(); onExport(); } : undefined, disabled: !pluginLoaded || loading },
+        {
+          label: t("menu.file_import_section"),
+          disabled: !pluginLoaded || loading,
+          submenu: [
+            { label: t("menu.file_import_plugin"), shortcut: "Ctrl+I", onClick: onImport ? () => { close(); onImport!(); } : undefined, disabled: !pluginLoaded || loading },
+            { separator: true },
+            { label: t("menu.file_import_xml_xt"),  onClick: onImportXtXml ? () => { close(); onImportXtXml!(); } : undefined, disabled: !pluginLoaded || loading },
+            { label: t("menu.file_import_xml_et"),  onClick: onImportEtXml ? () => { close(); onImportEtXml!(); } : undefined, disabled: !pluginLoaded || loading },
+            { label: t("menu.file_import_csv"),     onClick: onImportCsv   ? () => { close(); onImportCsv!();   } : undefined, disabled: !pluginLoaded || loading },
+          ],
+        },
+        {
+          label: t("menu.file_export_section"),
+          disabled: !pluginLoaded || loading,
+          submenu: [
+            { label: t("menu.file_generate"), shortcut: "Ctrl+E", onClick: onExport ? () => { close(); onExport!(); } : undefined, disabled: !pluginLoaded || loading },
+            { separator: true },
+            { label: t("menu.file_export_xt_xml"), onClick: onExportXtXml ? () => { close(); onExportXtXml!(); } : undefined, disabled: !pluginLoaded || loading },
+            { label: t("menu.file_export_et_xml"), onClick: onExportEtXml ? () => { close(); onExportEtXml!(); } : undefined, disabled: !pluginLoaded || loading },
+            { label: t("menu.file_export_csv"),    onClick: onExportCsv   ? () => { close(); onExportCsv!();   } : undefined, disabled: !pluginLoaded || loading },
+          ],
+        },
         { separator: true },
         { label: t("menu.file_quit"), onClick: close },
       ],
@@ -85,6 +117,15 @@ export default function MenuBar({
         { label: t("menu.db_manage"), onClick: () => { close(); onSettingsDb(); } },
         { separator: true },
         { label: t("menu.db_apply"), disabled: true },
+        { separator: true },
+        {
+          label: t("menu.db_convert_section"),
+          submenu: [
+            { label: t("menu.db_convert_xml"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
+            { label: t("menu.db_convert_csv"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
+            { label: t("menu.db_convert_eet"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
+          ],
+        },
       ],
     },
     {
@@ -194,6 +235,17 @@ function MenuEntry({
             if (item.separator) {
               return <div key={i} style={{ height: 1, background: "var(--border)", margin: "3px 6px" }} />;
             }
+            if (item.submenu) {
+              return (
+                <SubmenuItem
+                  key={i}
+                  item={item}
+                  isHovered={hoveredIdx === i}
+                  onMouseEnter={() => setHoveredIdx(i)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                />
+              );
+            }
             const hovered = hoveredIdx === i;
             return (
               <button
@@ -220,6 +272,85 @@ function MenuEntry({
                 <span style={{ flex: 1 }}>{item.label}</span>
                 {item.shortcut && (
                   <span style={{ fontSize: 10, opacity: 0.55, flexShrink: 0 }}>{item.shortcut}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Submenu item with flyout ──────────────────────────────────────────────────
+
+function SubmenuItem({
+  item, isHovered, onMouseEnter, onMouseLeave,
+}: {
+  item: MenuItemDef;
+  isHovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const [subHoveredIdx, setSubHoveredIdx] = useState<number | null>(null);
+
+  return (
+    <div
+      style={{ position: "relative" }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <button
+        disabled={item.disabled}
+        style={{
+          display: "flex", alignItems: "center",
+          width: "100%", padding: "5px 18px 5px 28px",
+          background: isHovered ? "var(--accent)" : "none",
+          border: "none", cursor: item.disabled ? "default" : "pointer",
+          color: item.disabled ? "var(--menubar-text, #8899aa)" : isHovered ? "#fff" : "var(--text-2)",
+          fontSize: 12, textAlign: "left", gap: 8,
+        }}
+      >
+        <span style={{ flex: 1 }}>{item.label}</span>
+        <span style={{ fontSize: 10, opacity: 0.7, flexShrink: 0 }}>▶</span>
+      </button>
+
+      {isHovered && !item.disabled && item.submenu && (
+        <div style={{
+          position: "absolute", top: 0, left: "100%",
+          background: "var(--bg-menubar)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: "0 4px 4px 4px",
+          minWidth: 230,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.6)",
+          padding: "3px 0",
+          zIndex: 1000,
+        }}>
+          {item.submenu.map((sub, j) => {
+            if (sub.separator) {
+              return <div key={j} style={{ height: 1, background: "var(--border)", margin: "3px 6px" }} />;
+            }
+            const subHovered = subHoveredIdx === j;
+            return (
+              <button
+                key={j}
+                onClick={sub.disabled ? undefined : sub.onClick}
+                disabled={sub.disabled}
+                onMouseEnter={() => !sub.disabled && setSubHoveredIdx(j)}
+                onMouseLeave={() => setSubHoveredIdx(null)}
+                style={{
+                  display: "flex", alignItems: "center",
+                  width: "100%", padding: "5px 18px 5px 28px",
+                  background: subHovered ? "var(--accent)" : "none",
+                  border: "none", cursor: sub.disabled ? "default" : "pointer",
+                  color: sub.disabled ? "var(--menubar-text, #8899aa)" : subHovered ? "#fff" : "var(--text-2)",
+                  fontSize: 12, textAlign: "left", gap: 8,
+                  position: "relative",
+                }}
+              >
+                <span style={{ flex: 1 }}>{sub.label}</span>
+                {sub.shortcut && (
+                  <span style={{ fontSize: 10, opacity: 0.55, flexShrink: 0 }}>{sub.shortcut}</span>
                 )}
               </button>
             );

@@ -81,7 +81,20 @@
     "tools_settings":     "Paramètres…",
     "help":               "Aide",
     "help_changelog":     "Notes de version",
-    "help_about":         "À propos de BGS Translator"
+    "help_about":         "À propos de BGS Translator",
+    "file_import_section":    "Importer traductions",
+    "file_import_plugin":     "Depuis plugin .esp/.esm…",
+    "file_import_xml_xt":     "Depuis XML xTranslator…",
+    "file_import_xml_et":     "Depuis XML ESP-ESM Translator…",
+    "file_import_csv":        "Depuis CSV…",
+    "file_export_section":    "Exporter traductions",
+    "file_export_xt_xml":     "XML xTranslator…",
+    "file_export_et_xml":     "XML ESP-ESM Translator…",
+    "file_export_csv":        "CSV…",
+    "db_convert_section":     "Convertir en .bgt",
+    "db_convert_xml":         "Depuis XML (auto-détection)…",
+    "db_convert_csv":         "Depuis CSV…",
+    "db_convert_eet":         "Depuis .eet (ESP-ESM Translator)…"
   },
   "toolbar": {
     "open_file":         "Ouvrir un fichier (Ctrl+O)",
@@ -405,6 +418,33 @@
     "none_found":        "Aucune traduction importée",
     "none_found_detail": "Le fichier de référence ne contient aucune entrée différente du fichier source (ou toutes étaient déjà traduites).",
     "error_title":       "Erreur d'import"
+  },
+  "format": {
+    "import_xt_title":   "Importer depuis xTranslator XML",
+    "import_et_title":   "Importer depuis ESP-ESM Translator XML",
+    "import_csv_title":  "Importer depuis CSV",
+    "export_xt_title":   "Exporter en xTranslator XML",
+    "export_et_title":   "Exporter en ESP-ESM Translator XML",
+    "export_csv_title":  "Exporter en CSV",
+    "convert_title":     "Sélectionner le fichier à convertir",
+    "success":           "{{count}} entrées exportées",
+    "import_success":    "{{count}} entrées importées et validées",
+    "import_none":       "Aucune traduction importée",
+    "import_none_detail":"Le fichier ne contient aucune traduction applicable.",
+    "import_error":      "Erreur d'import",
+    "export_error":      "Erreur d'export"
+  },
+  "convert_bgt": {
+    "title":      "Convertir en base de données .bgt",
+    "source":     "Fichier source",
+    "db_name":    "Nom de la base",
+    "game":       "Jeu",
+    "lang_from":  "Langue source",
+    "lang_to":    "Langue cible",
+    "convert":    "Convertir",
+    "cancel":     "Annuler",
+    "success":    "{{count}} entrées converties en {{name}}.bgt",
+    "error":      "Erreur de conversion : {{error}}"
   },
   "theme": {
     "name": {
