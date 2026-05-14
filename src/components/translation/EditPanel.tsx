@@ -421,8 +421,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     if (!error) { setSpellPopup(null); return; }
     try {
       const suggestions = await invoke<string[]>("get_suggestions_cmd", { lang: spellLang, word: error.word });
-      const rect = ta.getBoundingClientRect();
-      setSpellPopup({ word: error.word, suggestions, charStart: error.char_start, charLen: error.char_len, x: e.clientX, y: rect.top - 4 });
+      const POPUP_H = 300;
+      const flipUp = e.clientY + POPUP_H > window.innerHeight;
+      const y = flipUp ? e.clientY - POPUP_H : e.clientY + 6;
+      setSpellPopup({ word: error.word, suggestions, charStart: error.char_start, charLen: error.char_len, x: e.clientX, y });
     } catch {}
   }, [spellErrors, spellLang]);
 
@@ -688,8 +690,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                   style={{
                     position: "fixed", zIndex: 500,
                     left: Math.min(spellPopup.x, window.innerWidth - 220),
-                    top: spellPopup.y - 8,
-                    transform: "translateY(-100%)",
+                    top: spellPopup.y,
                     background: "var(--bg-card)", border: "1px solid var(--border)",
                     borderRadius: 8, padding: "6px 0", minWidth: 180,
                     boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
