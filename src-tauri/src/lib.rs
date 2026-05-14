@@ -24,10 +24,12 @@ pub fn run() {
         )
         .setup(|app| {
             // Ensure the log directory exists before the first message is written.
-            // tauri_plugin_log creates the file on the first log::xxx!() call,
-            // so we emit a startup message here before any user action.
             if let Ok(log_dir) = app.path().app_log_dir() {
                 let _ = std::fs::create_dir_all(&log_dir);
+                // Remove legacy "BGS Translator.log" created by older builds
+                // (before the file_name was explicitly set to "bgstranslator").
+                let legacy = log_dir.join("BGS Translator.log");
+                if legacy.exists() { let _ = std::fs::remove_file(&legacy); }
             }
             log::info!("BGS Translator started — log file initialized");
             log::debug!("[system] Log dir: {:?}", app.path().app_log_dir());
@@ -62,6 +64,9 @@ pub fn run() {
             database::commands::set_debug_mode_cmd,
             updater::check_update,
             updater::install_update,
+            commands::get_log_path_cmd,
+            commands::open_log_file_cmd,
+            commands::open_log_dir_cmd,
             commands::import_format_cmd,
             commands::export_xtranslator_xml_cmd,
             commands::export_esptranslator_xml_cmd,

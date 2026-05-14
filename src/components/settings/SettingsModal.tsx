@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openUrl, openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { appLogDir } from "@tauri-apps/api/path";
+import { openUrl, openPath } from "@tauri-apps/plugin-opener";
 import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
@@ -794,14 +793,10 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
   const [resetConfirm, setResetConfirm] = useState(false);
 
   useEffect(() => {
-    appLogDir()
-      .then((dir) => {
-        // Normalize path separator and ensure a trailing separator
-        const normalized = dir.replace(/\\/g, "/").replace(/\/?$/, "/");
-        setLogPath(normalized + "bgstranslator.log");
-      })
-      // Expected path on Windows if the API fails (should not happen)
-      .catch(() => setLogPath("%APPDATA%\\io.github.bgstranslator\\logs\\bgstranslator.log"));
+    // Use the Rust command to get the canonical log path (avoids cross-platform path issues)
+    invoke<string>("get_log_path_cmd")
+      .then(setLogPath)
+      .catch(() => setLogPath(""));
   }, []);
 
   const checkUpdate = async () => {
@@ -816,22 +811,11 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
     } catch (e) { setUpdateStatus(String(e)); }
   };
 
-  const displayLogPath = settings.logFolder || logPath;
-  // Derive the folder that contains the log file
-  const logDir = settings.logFolder || logPath.replace(/[/\\][^/\\]+$/, "");
+  const displayLogPath = logPath;
 
-  const openLogsFolder = () => {
-    if (displayLogPath) {
-      // revealItemInDir selects the file in Explorer; if it fails, fall back to opening the folder
-      revealItemInDir(displayLogPath).catch(() => openFolder(logDir));
-    } else {
-      openFolder(logDir);
-    }
-  };
-
-  const viewLogFile = () => {
-    if (displayLogPath) openPath(displayLogPath).catch(() => {});
-  };
+  // Rust-side open — bypass plugin-opener path encoding issues
+  const openLogsFolder = () => invoke("open_log_dir_cmd").catch(() => {});
+  const viewLogFile    = () => invoke("open_log_file_cmd").catch(() => {});
 
   const pickLogFolder = async () => {
     try {

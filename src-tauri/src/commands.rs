@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::formats;
 use crate::database::{format::save_bgt, store::TranslationDb, types::DbEntry};
@@ -302,4 +302,71 @@ pub async fn convert_to_bgt_cmd(
 
     log::info!("[cmd] convert_to_bgt: {} entries saved to '{}'", count, output_path);
     Ok(count)
+}
+
+// ── Log file helpers ──────────────────────────────────────────────────────────
+
+fn open_with_os(path: &std::path::Path) -> Result<(), String> {
+    let path_str = path.to_string_lossy().into_owned();
+    #[cfg(windows)]
+    {
+        // powershell Start-Process is more reliable than cmd /c start for paths with special chars
+        std::process::Command::new("powershell")
+            .args(["-WindowStyle", "Hidden", "-Command",
+                   &format!("Start-Process '{}'", path_str.replace('\'', "''"))])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(path).spawn().map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(path).spawn().map_err(|e| e.to_string())?;
+    }
+    let _ = path_str; // suppress unused warning on non-windows builds
+    Ok(())
+}
+
+fn open_dir_in_explorer(dir: &std::path::Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg(dir)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(dir).spawn().map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(dir).spawn().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Returns the canonical path of the log file used by this app instance.
+#[tauri::command]
+pub async fn get_log_path_cmd(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("bgstranslator.log").to_string_lossy().into_owned())
+}
+
+/// Opens the log file in the OS default text editor.
+#[tauri::command]
+pub async fn open_log_file_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    let log_file = app.path().app_log_dir()
+        .map_err(|e| e.to_string())?
+        .join("bgstranslator.log");
+    open_with_os(&log_file)
+}
+
+/// Opens the log directory in the file manager.
+#[tauri::command]
+pub async fn open_log_dir_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    open_dir_in_explorer(&dir)
 }
