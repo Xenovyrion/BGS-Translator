@@ -65,6 +65,7 @@
     "file_generate":      "Générer fichier traduit…",
     "file_quit":          "Quitter",
     "edit":               "Édition",
+    "edit_global_find":   "Rechercher et remplacer…",
     "edit_select_all":    "Sélectionner tout",
     "edit_deselect_all":  "Tout désélectionner",
     "database":           "Base de données",
@@ -162,6 +163,36 @@
     "missing_tags":       "Balises manquantes dans la traduction :",
     "toggle_replace":     "Activer / désactiver le remplacement"
   },
+  "global_search": {
+    "title":             "Rechercher et remplacer",
+    "search_label":      "Chercher",
+    "replace_label":     "Remplacer par",
+    "search_placeholder":"Texte à rechercher…",
+    "replace_placeholder":"Texte de remplacement…",
+    "scope_label":       "Rechercher dans",
+    "scope_original":    "Original",
+    "scope_translated":  "Traduit",
+    "scope_both":        "Les deux",
+    "opt_case":          "Respecter la casse",
+    "opt_word":          "Mot entier",
+    "opt_regex":         "Expression régulière",
+    "opt_visible":       "Entrées visibles ({{count}})",
+    "search_placeholder_regex": "Regex à rechercher…",
+    "replace_placeholder_regex":"Remplacement (ex. $1 pour les groupes)…",
+    "regex_error":       "Expression invalide",
+    "empty_hint":        "Saisissez un texte pour lancer la recherche…",
+    "no_results":        "Aucun résultat",
+    "results_header":    "{{count}} occurrence(s) dans {{entries}} entrée(s)",
+    "field_original":    "Original",
+    "field_translated":  "Traduit",
+    "btn_navigate":      "Naviguer",
+    "btn_navigate_title":"Naviguer vers cette entrée",
+    "btn_replace":       "Remplacer",
+    "btn_replace_all":   "Remplacer tout ({{count}})",
+    "replaced_toast":    "{{count}} remplacement(s) effectué(s)",
+    "read_only":         "Le texte original ne peut pas être modifié",
+    "no_selection":      "Sélectionnez un résultat d'abord"
+  },
   "group": {
     "progress": "Progression",
     "all":      "Tout"
@@ -249,7 +280,8 @@
       "prev_entry":        "Entrée précédente",
       "copy_original":     "Copier le texte original",
       "paste_translation": "Coller dans la traduction",
-      "validate_entry":    "Valider l'entrée"
+      "validate_entry":    "Valider l'entrée",
+      "global_find":       "Rechercher et remplacer (global)"
     },
     "edit_shortcuts": {
       "section":      "Volet d'édition (textarea actif)",

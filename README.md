@@ -66,12 +66,14 @@ BGS-Translator/
 │   │   │   ├── SettingsModal.tsx     # Settings dialog
 │   │   │   └── SettingsPanel.tsx     # Settings content (theme, shortcuts, i18n…)
 │   │   ├── shared/
-│   │   │   ├── ChangelogModal.tsx    # Release notes dialog
-│   │   │   ├── LogPanel.tsx          # Activity / debug log panel
-│   │   │   ├── NotificationBanner.tsx# Inline success/error notification bar
-│   │   │   ├── SessionPickerModal.tsx# Session selection dialog
-│   │   │   ├── UpdateBanner.tsx      # Non-intrusive update notification
-│   │   │   └── UpdateModal.tsx       # Full update dialog (release notes + install)
+│   │   │   ├── ChangelogModal.tsx         # Release notes dialog
+│   │   │   ├── ConvertToBgtModal.tsx      # Format conversion dialog
+│   │   │   ├── GlobalFindReplaceModal.tsx # Floating global find & replace window
+│   │   │   ├── LogPanel.tsx               # Activity / debug log panel
+│   │   │   ├── NotificationBanner.tsx     # Inline success/error notification bar
+│   │   │   ├── SessionPickerModal.tsx     # Session selection dialog
+│   │   │   ├── UpdateBanner.tsx           # Non-intrusive update notification
+│   │   │   └── UpdateModal.tsx            # Full update dialog (release notes + install)
 │   │   ├── themes/
 │   │   │   └── ThemeManagerModal.tsx # Theme picker + colour customiser
 │   │   └── translation/
@@ -206,6 +208,11 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Copy to clipboard** — one-click copy button on each column (original and translated) with 1.5 s visual confirmation
 - Original text is selectable but read-only
 - Status change from the edit panel
+- **Find / Replace bar** — in-panel search with match highlighting and case-sensitive toggle (`Ctrl+F` / `Ctrl+H`); match counter and keyboard navigation between occurrences
+- **Text operations** — Trim whitespace, UPPERCASE, lowercase, Remove tags; all operations are selection-aware (operate on selected text only when a selection exists)
+- **Tag diff warning** — badge showing tags present in the original but missing from the translation
+- **Quick tag insertion** — dropdown listing all tags from the original for one-click insertion at the cursor
+- **Configurable shortcuts** — all Edit Panel shortcuts (find, replace, text ops) editable in Settings → Shortcuts
 - **Identical-entry propagation** — changing the translation or status of an entry automatically propagates to all entries that share the same original text and translation, eliminating repetitive work
 
 ### Group View
@@ -257,9 +264,23 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Record-type colour coding (customisable per type)
 - Interface language: English, French (auto-detected from system locale)
 
+### Global Find & Replace
+- Floating, draggable window (stays open while working — no backdrop blocking the table)
+- Opens via **Edit → Find & Replace…** or the configurable keyboard shortcut (`Ctrl+Shift+H` by default)
+- **Search scope** — Original only / Translated only / Both columns
+- **Options**: Case sensitive · Whole word (default on) · Regular expression mode · Visible entries only
+- **Regex mode** — use full JavaScript regex syntax; supports capture groups in the replacement (`$1`, `$2`…); invalid patterns highlighted in red
+- **Visible entries only** — limits the search pool to entries currently visible in the table (respects active status filter and group selection)
+- Results list with contextual snippet (highlighted match) and field badge (Original / Translated)
+- Double-click a result to navigate to the entry in the table
+- **Navigate** — selects the entry in the table without closing the window
+- **Replace** — replaces the match in the selected result's translated field
+- **Replace all (N)** — replaces in all matching translated entries, with toast confirmation
+
 ### Keyboard Shortcuts
-- Configurable shortcuts for: next/previous entry, copy original, paste translation, validate entry
-- Defaults: `↓` / `↑` to navigate, `Ctrl+Enter` to validate, `Ctrl+G` to generate, `Ctrl+I` to import
+- Configurable shortcuts for: next/previous entry, copy original, paste translation, validate entry, global find & replace
+- Defaults: `↓` / `↑` to navigate, `Ctrl+Enter` to validate, `Ctrl+G` to generate, `Ctrl+I` to import, `Ctrl+Shift+H` for global find & replace
+- Browser built-in shortcuts (`Ctrl+F`, right-click context menu) are suppressed — all interactions go through the application
 
 ### Log Panel
 - In-app activity log for parser events, database operations, and errors

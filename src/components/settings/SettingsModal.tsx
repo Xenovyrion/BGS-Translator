@@ -371,6 +371,7 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
     copyOriginal:     t("settings_modal.shortcuts.copy_original"),
     pasteTranslation: t("settings_modal.shortcuts.paste_translation"),
     validateEntry:    t("settings_modal.shortcuts.validate_entry"),
+    globalFind:       t("settings_modal.shortcuts.global_find"),
   };
 
   const editShortcutLabels: Record<keyof EditPanelShortcuts, string> = {

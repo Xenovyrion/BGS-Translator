@@ -42,6 +42,8 @@ interface Props {
   onExportEtXml?:     () => void;
   onExportCsv?:       () => void;
   onConvertToBgt?:    () => void;
+  onGlobalFind?:      () => void;
+  globalFindShortcut?: string;
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ export default function MenuBar({
   onImportXtXml, onImportEtXml, onImportCsv,
   onExportXtXml, onExportEtXml, onExportCsv,
   onConvertToBgt,
+  onGlobalFind, globalFindShortcut,
 }: Props) {
   const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -107,6 +110,8 @@ export default function MenuBar({
     {
       id: "edition", label: t("menu.edit"),
       items: [
+        { label: t("menu.edit_global_find"), shortcut: globalFindShortcut, onClick: onGlobalFind ? () => { close(); onGlobalFind!(); } : undefined, disabled: !pluginLoaded || loading },
+        { separator: true },
         { label: t("menu.edit_select_all"),   shortcut: "Ctrl+A", disabled: true },
         { label: t("menu.edit_deselect_all"), disabled: true },
       ],

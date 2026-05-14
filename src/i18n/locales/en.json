@@ -65,6 +65,7 @@
     "file_generate":      "Generate translated file…",
     "file_quit":          "Quit",
     "edit":               "Edit",
+    "edit_global_find":   "Find & Replace…",
     "edit_select_all":    "Select all",
     "edit_deselect_all":  "Deselect all",
     "database":           "Database",
@@ -162,6 +163,36 @@
     "missing_tags":       "Tags missing from translation:",
     "toggle_replace":     "Toggle find & replace"
   },
+  "global_search": {
+    "title":             "Find & Replace",
+    "search_label":      "Find",
+    "replace_label":     "Replace with",
+    "search_placeholder":"Text to search…",
+    "replace_placeholder":"Replacement text…",
+    "scope_label":       "Search in",
+    "scope_original":    "Original",
+    "scope_translated":  "Translated",
+    "scope_both":        "Both",
+    "opt_case":          "Case sensitive",
+    "opt_word":          "Whole word",
+    "opt_regex":         "Regular expression",
+    "opt_visible":       "Visible entries ({{count}})",
+    "search_placeholder_regex": "Regex pattern…",
+    "replace_placeholder_regex":"Replacement (e.g. $1 for groups)…",
+    "regex_error":       "Invalid pattern",
+    "empty_hint":        "Type text to start searching…",
+    "no_results":        "No results",
+    "results_header":    "{{count}} occurrence(s) in {{entries}} entry/entries",
+    "field_original":    "Original",
+    "field_translated":  "Translated",
+    "btn_navigate":      "Navigate",
+    "btn_navigate_title":"Navigate to this entry",
+    "btn_replace":       "Replace",
+    "btn_replace_all":   "Replace all ({{count}})",
+    "replaced_toast":    "{{count}} replacement(s) made",
+    "read_only":         "Original text cannot be edited",
+    "no_selection":      "Select a result first"
+  },
   "group": {
     "progress": "Progress",
     "all":      "All"
@@ -249,7 +280,8 @@
       "prev_entry":        "Previous entry",
       "copy_original":     "Copy original text",
       "paste_translation": "Paste into translation",
-      "validate_entry":    "Validate entry"
+      "validate_entry":    "Validate entry",
+      "global_find":       "Global find & replace"
     },
     "edit_shortcuts": {
       "section":      "Edit panel (textarea focused)",

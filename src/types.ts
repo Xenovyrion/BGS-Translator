@@ -102,6 +102,7 @@ export interface KeyboardShortcuts {
   copyOriginal:     ShortcutDef;  // copy original text
   pasteTranslation: ShortcutDef;  // paste into translation
   validateEntry:    ShortcutDef;  // validate entry
+  globalFind:       ShortcutDef;  // open global find & replace modal
 }
 
 export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
@@ -110,6 +111,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
   copyOriginal:     { key: "c", ctrl: true },
   pasteTranslation: { key: "v", ctrl: true },
   validateEntry:    { key: "Enter", ctrl: true },
+  globalFind:       { key: "h", ctrl: true, shift: true },
 };
 
 // ── Edit-panel shortcuts (fired while the translation textarea is focused) ────

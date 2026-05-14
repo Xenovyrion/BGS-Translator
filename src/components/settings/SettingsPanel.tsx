@@ -168,6 +168,7 @@ const SHORTCUT_LABELS: Record<keyof KeyboardShortcuts, string> = {
   copyOriginal:     "Copier le texte original",
   pasteTranslation: "Coller dans la traduction",
   validateEntry:    "Valider l'entrée",
+  globalFind:       "Rechercher et remplacer (global)",
 };
 
 function formatShortcut(s: ShortcutDef): string {

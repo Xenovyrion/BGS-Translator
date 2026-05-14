@@ -9,13 +9,14 @@ import "./i18n";
 import { useSettings } from "./hooks/useSettings";
 import { usePlugin } from "./hooks/usePlugin";
 import { useLayout } from "./hooks/useLayout";
-import { DEFAULT_SHORTCUTS } from "./types";
+import { DEFAULT_SHORTCUTS, formatShortcut } from "./types";
 import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
 
 import MenuBar          from "./components/layout/MenuBar";
 import ConvertToBgtModal from "./components/shared/ConvertToBgtModal";
+import GlobalFindReplaceModal from "./components/shared/GlobalFindReplaceModal";
 import ToolBar     from "./components/layout/ToolBar";
 import FilterBar   from "./components/translation/FilterBar";
 import GroupPanel  from "./components/translation/GroupPanel";
@@ -33,8 +34,8 @@ import type { Notification } from "./components/shared/NotificationBanner";
 
 interface UpdateInfo { version: string; notes?: string }
 
-function matchShortcut(e: React.KeyboardEvent, sc: ShortcutDef): boolean {
-  if (e.key !== sc.key) return false;
+function matchShortcut(e: React.KeyboardEvent | KeyboardEvent, sc: ShortcutDef): boolean {
+  if (e.key.toLowerCase() !== sc.key.toLowerCase()) return false;
   if (!!sc.ctrl  !== (e.ctrlKey || e.metaKey)) return false;
   if (!!sc.alt   !== e.altKey) return false;
   if (!!sc.shift !== e.shiftKey) return false;
@@ -126,6 +127,7 @@ export default function App() {
     invoke("ensure_dir_cmd", { path: settings.exportFolder }).catch(() => {});
   }, [settings.exportFolder]);
 
+  const [showGlobalFind,     setShowGlobalFind]     = useState(false);
   const [showSettings,       setShowSettings]       = useState(false);
   const [showThemeManager,   setShowThemeManager]   = useState(false);
   const [showUpdateModal,    setShowUpdateModal]     = useState(false);
@@ -147,6 +149,20 @@ export default function App() {
 
   const editPanelRef = useRef<EditPanelHandle>(null);
   const tableRef     = useRef<HTMLDivElement>(null);
+
+  /* Disable browser context menu and built-in Ctrl+F find bar */
+  useEffect(() => {
+    const noCtxMenu = (e: MouseEvent)    => e.preventDefault();
+    const noFind    = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) e.preventDefault();
+    };
+    document.addEventListener("contextmenu", noCtxMenu);
+    window.addEventListener("keydown", noFind, { capture: true });
+    return () => {
+      document.removeEventListener("contextmenu", noCtxMenu);
+      window.removeEventListener("keydown", noFind, { capture: true });
+    };
+  }, []);
 
   /* App version + update check on startup */
   useEffect(() => {
@@ -553,10 +569,15 @@ export default function App() {
       if (ctrl && e.key === "i" && pluginInfo) { e.preventDefault(); handleImportTranslations(); }
       if (ctrl && e.key === "e" && pluginInfo) { e.preventDefault(); handleExport(); }
       if (ctrl && e.key === ",") { e.preventDefault(); setShowSettings(true); }
+      // Global find & replace — uses configurable shortcut
+      if (pluginInfo && matchShortcut(e, sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)) {
+        e.preventDefault();
+        setShowGlobalFind(true);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo]);
+  }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo, sc.globalFind]);
 
   /* ── Render ──────────────────────────────────────────────────────────────── */
 
@@ -586,6 +607,8 @@ export default function App() {
         onExportEtXml={pluginInfo ? handleExportEtXml : undefined}
         onExportCsv={pluginInfo   ? handleExportCsv   : undefined}
         onConvertToBgt={handleConvertToBgt}
+        onGlobalFind={pluginInfo ? () => setShowGlobalFind(true) : undefined}
+        globalFindShortcut={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
       />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
@@ -753,6 +776,17 @@ export default function App() {
         onClose={() => setConvertBgtSource(null)}
         onConfirm={handleConvertConfirm}
       />
+
+      {showGlobalFind && pluginInfo && (
+        <GlobalFindReplaceModal
+          entries={entries}
+          displayEntries={displayEntries}
+          onClose={() => setShowGlobalFind(false)}
+          onUpdateTranslation={updateTranslation}
+          onNavigate={(entry) => { setSelectedEntry(entry); }}
+          shortcutLabel={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
+        />
+      )}
     </div>
   );
 }
