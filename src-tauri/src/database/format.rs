@@ -337,7 +337,7 @@ pub fn peek_bgt_info(path: &std::path::Path) -> Option<BgtPeek> {
     // so the vast majority of compressed entries are never decompressed.
     let decoder = zstd::Decoder::new(reader).ok()?;
     #[derive(Deserialize)]
-    struct BgtHeader { name: String, game: String, lang_from: String, lang_to: String }
+    struct BgtHeader { _name: String, game: String, lang_from: String, lang_to: String }
     let h: BgtHeader = bincode::deserialize_from(decoder).ok()?;
     Some(BgtPeek { game: h.game, lang_from: h.lang_from, lang_to: h.lang_to })
 }
