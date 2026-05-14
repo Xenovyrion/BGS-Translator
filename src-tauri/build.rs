@@ -32,6 +32,8 @@ fn build_nuspell_wrapper() {
         Some(include_paths) => {
             let mut build = cc::Build::new();
             build.cpp(true).std("c++17");
+            // MSVC requires /EHsc to enable C++ exception handling in try/catch blocks
+            build.flag_if_supported("/EHsc");
             for path in &include_paths {
                 build.include(path);
             }

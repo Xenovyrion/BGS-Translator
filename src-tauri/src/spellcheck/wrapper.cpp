@@ -1,5 +1,6 @@
 #include "wrapper.h"
 #include <nuspell/dictionary.hxx>
+#include <filesystem>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -15,7 +16,8 @@ NuspellDict* nuspell_load(const char* aff_path)
 {
     if (!aff_path) return nullptr;
     try {
-        auto d = nuspell::Dictionary::load_from_aff_dic(aff_path);
+        auto path = std::filesystem::u8path(aff_path);
+        auto d = nuspell::Dictionary::load_from_aff_dic(path);
         return new NuspellDict{std::move(d)};
     } catch (...) {
         return nullptr;
