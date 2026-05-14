@@ -591,17 +591,33 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
       <Section label={
         <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
           <span style={{ flex: 1 }}>{t("spellcheck.manage_available")}</span>
-          <input
-            type="text"
-            value={dictSearch}
-            onChange={e => { setDictSearch(e.target.value); setShowAll(false); }}
-            placeholder={t("spellcheck.search_placeholder")}
-            style={{
-              height: 26, padding: "0 10px", borderRadius: 6, fontSize: 11,
-              background: "var(--bg-hover)", color: "var(--text-1)",
-              border: "1px solid var(--border)", outline: "none", width: 160,
-            }}
-          />
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <input
+              type="text"
+              value={dictSearch}
+              onChange={e => { setDictSearch(e.target.value); setShowAll(false); }}
+              placeholder={t("spellcheck.search_placeholder")}
+              style={{
+                height: 26, padding: dictSearch ? "0 24px 0 10px" : "0 10px",
+                borderRadius: 6, fontSize: 11,
+                background: "var(--bg-hover)", color: "var(--text-1)",
+                border: "1px solid var(--border)", outline: "none", width: 160,
+              }}
+            />
+            {dictSearch && (
+              <button
+                onClick={() => { setDictSearch(""); setShowAll(false); }}
+                style={{
+                  position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "var(--text-3)", fontSize: 14, lineHeight: 1, padding: 0,
+                }}
+                title="Effacer"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       }>
         {filteredAvailable.length === 0 ? (
@@ -635,7 +651,7 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
             </div>
           ))}
         </div>
-        {available.length > 10 && (
+        {!dictSearch.trim() && filteredAvailable.length > 10 && (
           <button
             onClick={() => setShowAll(v => !v)}
             style={{
@@ -645,7 +661,7 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
           >
             {showAll
               ? t("spellcheck.show_less")
-              : t("spellcheck.show_more", { count: available.length - 10 })}
+              : t("spellcheck.show_more", { count: filteredAvailable.length - 10 })}
           </button>
         )}
       </Section>
