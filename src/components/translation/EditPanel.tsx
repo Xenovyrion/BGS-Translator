@@ -28,18 +28,13 @@ function CopyIcon() {
   );
 }
 
-const GUTTER_WIDTH = 30;
-
-const gutterItemStyle: React.CSSProperties = {
-  fontSize: "var(--fz-table, 12px)",
-  fontFamily: "monospace",
-  lineHeight: 1.6,
-  color: "var(--text-3)",
-  userSelect: "none",
-  opacity: 0.5,
-  textAlign: "right",
-  paddingRight: 6,
-};
+const GUTTER_W   = 32;
+const TEXT_FZ    = "var(--fz-table, 12px)";
+const TEXT_LH    = 1.6;
+const TEXT_FONT  = "var(--font-content, system-ui, sans-serif)";
+// Must match the textarea padding so gutter numbers align with text rows
+const TA_PAD_V   = 5;
+const TA_PAD_H   = 7;
 
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors },
@@ -67,10 +62,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
 
   const origLines   = entry.original.split("\n");
   const translLines = (entry.translated ?? "").split("\n");
-  const origChars   = entry.original.length;
-  const translChars = (entry.translated ?? "").length;
   const origMulti   = origLines.length > 1;
   const translMulti = translLines.length > 1;
+
+  const fmtCount = (n: number) => n.toLocaleString();
 
   const copyText = useCallback((text: string, side: "original" | "translation") => {
     navigator.clipboard.writeText(text).then(() => {
@@ -110,34 +105,54 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     if (e.key === "ArrowUp" || e.key === "ArrowDown") e.stopPropagation();
   }, [entry._idx, onSetStatus, onFocusTable]);
 
+  // ── Shared styles ──────────────────────────────────────────────────────────
   const colHeaderStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", gap: 6,
-    marginBottom: 3, flexShrink: 0,
+    marginBottom: 4, flexShrink: 0,
+    padding: "2px 0",
   };
   const labelStyle: React.CSSProperties = {
-    fontSize: 10, color: "var(--text-3)",
-    textTransform: "uppercase", letterSpacing: "0.06em",
+    fontSize: 11, color: "var(--text-1)", fontWeight: 600,
+    textTransform: "uppercase", letterSpacing: "0.07em",
+  };
+  const dotStyle: React.CSSProperties = {
+    fontSize: 11, color: "var(--text-3)", opacity: 0.5,
   };
   const metaStyle: React.CSSProperties = {
-    fontSize: 10, color: "var(--text-3)", opacity: 0.65,
+    fontSize: 11, color: "var(--text-2)",
   };
   const copyBtnStyle: React.CSSProperties = {
-    marginLeft: "auto", height: 18, padding: "0 5px",
-    border: "1px solid var(--border)", borderRadius: 3,
-    cursor: "pointer", background: "transparent",
-    color: "var(--text-3)", fontSize: 10,
-    display: "flex", alignItems: "center", gap: 3,
+    marginLeft: "auto", height: 20, padding: "0 7px",
+    border: "1px solid var(--border)", borderRadius: 4,
+    cursor: "pointer", background: "var(--bg-hover)",
+    color: "var(--text-2)", fontSize: 11,
+    display: "flex", alignItems: "center", gap: 4,
     flexShrink: 0, transition: "color 0.12s, border-color 0.12s",
+  };
+  const gutterNumStyle: React.CSSProperties = {
+    width: GUTTER_W, flexShrink: 0,
+    fontSize: TEXT_FZ, fontFamily: "monospace",
+    lineHeight: TEXT_LH,
+    color: "var(--text-3)", opacity: 0.45,
+    userSelect: "none", textAlign: "right",
+    paddingRight: 7,
+    // ensure empty lines still occupy one line-height
+    minHeight: "1.6em",
+  };
+  const textLineStyle: React.CSSProperties = {
+    flex: 1,
+    fontSize: TEXT_FZ, fontFamily: TEXT_FONT,
+    color: "var(--text-2)", lineHeight: TEXT_LH,
+    whiteSpace: "pre-wrap", wordBreak: "break-word",
+    minHeight: "1.6em",
+    userSelect: "text",
   };
 
   return (
     <div style={{
-      height: panelHeight,
-      flexShrink: 0,
+      height: panelHeight, flexShrink: 0,
       background: "var(--bg-edit-panel, var(--bg-card))",
-      display: "flex",
-      flexDirection: "column",
-      overflow: "hidden",
+      display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
 
       {/* ── Resize handle ─────────────────────────────────────────────── */}
@@ -158,8 +173,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
       <div style={{
         display: "flex", alignItems: "center", gap: 8, padding: "4px 10px",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-hover)",
-        flexShrink: 0,
+        background: "var(--bg-hover)", flexShrink: 0,
       }}>
         <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-3)" }}>
           [<span style={{ color: recordColor, fontWeight: 700 }}>{entry.record_type}</span>] {formIdHex}
@@ -172,7 +186,6 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
         <span style={{ fontSize: 10, color: "var(--text-3)", background: "var(--bg-primary)", padding: "1px 6px", borderRadius: 3, flexShrink: 0 }}>
           {entry.sub_type}
         </span>
-
         <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>
           {t("edit.status_label")}
         </span>
@@ -180,41 +193,29 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           {STATUS_CONFIG.map(({ status, label, color }) => {
             const active = entry.status === status;
             return (
-              <button
-                key={status}
-                onClick={() => onSetStatus(entry._idx ?? 0, status)}
-                style={{
-                  height: 24, padding: "0 8px", borderRadius: 4, cursor: "pointer",
-                  fontSize: 11, fontWeight: active ? 700 : 400,
-                  background: active ? color : "transparent",
-                  color: active ? "#fff" : color,
-                  border: `1px solid ${color}`,
-                  opacity: active ? 1 : 0.6,
-                  transition: "opacity 0.12s, background 0.12s",
-                  boxSizing: "border-box",
-                }}
-              >
-                {label}
-              </button>
+              <button key={status} onClick={() => onSetStatus(entry._idx ?? 0, status)} style={{
+                height: 24, padding: "0 8px", borderRadius: 4, cursor: "pointer",
+                fontSize: 11, fontWeight: active ? 700 : 400,
+                background: active ? color : "transparent",
+                color: active ? "#fff" : color,
+                border: `1px solid ${color}`,
+                opacity: active ? 1 : 0.6,
+                transition: "opacity 0.12s, background 0.12s",
+                boxSizing: "border-box",
+              }}>{label}</button>
             );
           })}
         </div>
-        <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 8, flexShrink: 0 }}>
-          {t("edit.hint")}
-        </span>
-        <button
-          onClick={onClose}
-          title={t("edit.close_title")}
-          style={{ marginLeft: 4, width: 20, height: 20, borderRadius: 4, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-3)", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
-        >
+        <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 8, flexShrink: 0 }}>{t("edit.hint")}</span>
+        <button onClick={onClose} title={t("edit.close_title")} style={{ marginLeft: 4, width: 20, height: 20, borderRadius: 4, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-3)", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
           ×
         </button>
       </div>
 
-      {/* ── Contenu ───────────────────────────────────────────────────── */}
+      {/* ── Content ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* ── Original ──────────────────────────────────────────────── */}
+        {/* ── Original (read-only, selectable) ──────────────────────── */}
         <div style={{
           flex: 1, padding: "7px 10px",
           borderRight: "1px solid var(--border)",
@@ -224,13 +225,13 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           {/* Column header */}
           <div style={colHeaderStyle}>
             <span style={labelStyle}>{t("edit.original_label")}</span>
-            <span style={metaStyle}>{origChars} {t("edit.chars")}</span>
-            {origMulti && <span style={metaStyle}>{origLines.length} {t("edit.lines")}</span>}
-            <button
-              style={copyBtnStyle}
-              onClick={() => copyText(entry.original, "original")}
-              title={t("edit.copy_original")}
-            >
+            <span style={dotStyle}>·</span>
+            <span style={metaStyle}>{fmtCount(entry.original.length)} {t("edit.chars")}</span>
+            {origMulti && <>
+              <span style={dotStyle}>·</span>
+              <span style={metaStyle}>{fmtCount(origLines.length)} {t("edit.lines")}</span>
+            </>}
+            <button style={copyBtnStyle} onClick={() => copyText(entry.original, "original")} title={t("edit.copy_original")}>
               {copiedSide === "original"
                 ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span>
                 : <><CopyIcon />{t("edit.copy")}</>
@@ -238,38 +239,31 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             </button>
           </div>
 
-          {/* Gutter + content */}
-          <div style={{ display: "flex", flex: 1 }}>
-            {origMulti && (
-              <div style={{ width: GUTTER_WIDTH, flexShrink: 0 }}>
-                {origLines.map((_, i) => (
-                  <div key={i} style={gutterItemStyle}>{i + 1}</div>
-                ))}
+          {/* Per-line rendering: gutter number + text in same row → perfect alignment even on wrapped lines */}
+          <div style={{ flex: 1 }}>
+            {origLines.map((line, i) => (
+              <div key={i} style={{ display: "flex" }}>
+                {origMulti && <div style={gutterNumStyle}>{i + 1}</div>}
+                <div style={textLineStyle}>
+                  {line === "" ? "​" /* zero-width space keeps line height */ : <TaggedText text={line} />}
+                </div>
               </div>
-            )}
-            <div style={{
-              flex: 1,
-              fontSize: "var(--fz-table, 12px)", fontFamily: "var(--font-content, system-ui, sans-serif)",
-              color: "var(--text-2)", lineHeight: 1.6,
-              whiteSpace: "pre-wrap", wordBreak: "break-word",
-            }}>
-              <TaggedText text={entry.original} />
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Traduction ────────────────────────────────────────────── */}
+        {/* ── Translation ───────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "7px 10px" }}>
           {/* Column header */}
           <div style={colHeaderStyle}>
             <span style={labelStyle}>{t("edit.translation_label")}</span>
-            <span style={metaStyle}>{translChars} {t("edit.chars")}</span>
-            {translMulti && <span style={metaStyle}>{translLines.length} {t("edit.lines")}</span>}
-            <button
-              style={copyBtnStyle}
-              onClick={() => copyText(entry.translated ?? "", "translation")}
-              title={t("edit.copy_translation")}
-            >
+            <span style={dotStyle}>·</span>
+            <span style={metaStyle}>{fmtCount((entry.translated ?? "").length)} {t("edit.chars")}</span>
+            {translMulti && <>
+              <span style={dotStyle}>·</span>
+              <span style={metaStyle}>{fmtCount(translLines.length)} {t("edit.lines")}</span>
+            </>}
+            <button style={copyBtnStyle} onClick={() => copyText(entry.translated ?? "", "translation")} title={t("edit.copy_translation")}>
               {copiedSide === "translation"
                 ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span>
                 : <><CopyIcon />{t("edit.copy")}</>
@@ -282,10 +276,16 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             {translMulti && (
               <div
                 ref={translGutterRef}
-                style={{ width: GUTTER_WIDTH, flexShrink: 0, overflowY: "hidden", height: "100%" }}
+                style={{
+                  width: GUTTER_W, flexShrink: 0,
+                  overflowY: "hidden", height: "100%",
+                  // Match textarea vertical padding so line 1 aligns exactly
+                  paddingTop: TA_PAD_V,
+                  boxSizing: "border-box",
+                }}
               >
                 {translLines.map((_, i) => (
-                  <div key={i} style={gutterItemStyle}>{i + 1}</div>
+                  <div key={i} style={gutterNumStyle}>{i + 1}</div>
                 ))}
               </div>
             )}
@@ -300,13 +300,13 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
-                  resize: "none", padding: "5px 7px",
+                  resize: "none",
+                  padding: `${TA_PAD_V}px ${TA_PAD_H}px`,
                   background: "var(--bg-hover)",
-                  color: "transparent",
-                  caretColor: "var(--text-1)",
+                  color: "transparent", caretColor: "var(--text-1)",
                   border: "1px solid var(--border)", borderRadius: 6,
-                  fontSize: "var(--fz-table, 12px)", fontFamily: "var(--font-content, system-ui, sans-serif)",
-                  lineHeight: 1.6, outline: "none", boxSizing: "border-box",
+                  fontSize: TEXT_FZ, fontFamily: TEXT_FONT,
+                  lineHeight: TEXT_LH, outline: "none", boxSizing: "border-box",
                 }}
               />
               <div
@@ -314,11 +314,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 aria-hidden
                 style={{
                   position: "absolute", inset: 0,
-                  padding: "5px 7px",
+                  padding: `${TA_PAD_V}px ${TA_PAD_H}px`,
                   border: "1px solid transparent", borderRadius: 6,
-                  fontSize: "var(--fz-table, 12px)",
-                  fontFamily: "var(--font-content, system-ui, sans-serif)",
-                  lineHeight: 1.6,
+                  fontSize: TEXT_FZ, fontFamily: TEXT_FONT,
+                  lineHeight: TEXT_LH,
                   whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word",
                   overflow: "hidden", pointerEvents: "none",
                   color: "var(--text-1)", boxSizing: "border-box",
