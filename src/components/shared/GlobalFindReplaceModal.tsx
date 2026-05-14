@@ -159,11 +159,6 @@ export default function GlobalFindReplaceModal({
   const canReplace      = selectedResult !== null && selectedResult.field === "translated";
   const replaceAllCount = results.filter(r => r.field === "translated").length;
 
-  const handleNavigate = useCallback(() => {
-    if (!selectedResult) return;
-    onNavigate(selectedResult.entry);
-  }, [selectedResult, onNavigate]);
-
   const handleReplace = useCallback(() => {
     if (!selectedResult || selectedResult.field !== "translated") return;
     const re = buildRegex(query, caseSensitive, wholeWord, useRegex);
@@ -320,8 +315,7 @@ export default function GlobalFindReplaceModal({
           return (
             <div
               key={i}
-              onClick={() => setSelectedIdx(i)}
-              onDoubleClick={() => { setSelectedIdx(i); onNavigate(r.entry); }}
+              onClick={() => { setSelectedIdx(i); onNavigate(r.entry); }}
               style={{
                 padding: "5px 14px",
                 background: isSelected ? "var(--accent)" : "transparent",
@@ -373,7 +367,6 @@ export default function GlobalFindReplaceModal({
             boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}>{toast}</span>
         )}
-        <FBtn label={t("global_search.btn_navigate")}  disabled={!selectedResult}    onClick={handleNavigate}   title={!selectedResult ? t("global_search.no_selection") : t("global_search.btn_navigate_title")} />
         <FBtn label={t("global_search.btn_replace")}   disabled={!canReplace}        onClick={handleReplace}    title={!selectedResult ? t("global_search.no_selection") : !canReplace ? t("global_search.read_only") : undefined} />
         <FBtn label={t("global_search.btn_replace_all", { count: replaceAllCount })} disabled={replaceAllCount === 0} onClick={handleReplaceAll} accent />
         <div style={{ flex: 1 }} />
