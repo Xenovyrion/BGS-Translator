@@ -615,6 +615,8 @@
     "download_ok":          "Dictionnaire {{lang}} installé.",
     "download_error":       "Erreur : {{error}}",
     "delete_ok":            "Dictionnaire {{lang}} supprimé.",
+    "search_placeholder":   "Rechercher…",
+    "search_no_results":    "Aucun dictionnaire trouvé.",
     "show_more":            "Afficher {{count}} dictionnaire(s) supplémentaire(s)…",
     "show_less":            "Réduire la liste",
     "btn_check":            "Vérifier l'orthographe",

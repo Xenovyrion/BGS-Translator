@@ -471,9 +471,17 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
     } finally { setDeleting(null); }
   };
 
+  const [dictSearch, setDictSearch] = useState("");
+
   const installed = dicts.filter(d => d.installed);
   const available = dicts.filter(d => !d.installed);
-  const visibleAvailable = showAll ? available : available.slice(0, 10);
+  const filteredAvailable = dictSearch.trim()
+    ? available.filter(d =>
+        d.name.toLowerCase().includes(dictSearch.toLowerCase()) ||
+        d.lang.toLowerCase().includes(dictSearch.toLowerCase())
+      )
+    : available;
+  const visibleAvailable = showAll || dictSearch.trim() ? filteredAvailable : filteredAvailable.slice(0, 10);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -580,7 +588,27 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
       </Section>
 
       {/* Available dictionaries */}
-      <Section label={t("spellcheck.manage_available")}>
+      <Section label={
+        <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+          <span style={{ flex: 1 }}>{t("spellcheck.manage_available")}</span>
+          <input
+            type="text"
+            value={dictSearch}
+            onChange={e => { setDictSearch(e.target.value); setShowAll(false); }}
+            placeholder={t("spellcheck.search_placeholder")}
+            style={{
+              height: 26, padding: "0 10px", borderRadius: 6, fontSize: 11,
+              background: "var(--bg-hover)", color: "var(--text-1)",
+              border: "1px solid var(--border)", outline: "none", width: 160,
+            }}
+          />
+        </div>
+      }>
+        {filteredAvailable.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>
+            {t("spellcheck.search_no_results")}
+          </p>
+        ) : null}
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {visibleAvailable.map(d => (
             <div key={d.lang} style={{
