@@ -145,7 +145,21 @@
     "copy":               "Copy",
     "copy_original":      "Copy original text",
     "copy_translation":   "Copy translation",
-    "copied":             "✓ Copied"
+    "copied":             "✓ Copied",
+    "find_placeholder":   "Find…",
+    "find_case":          "Case sensitive",
+    "find_no_result":     "No results",
+    "replace_placeholder":"Replace with…",
+    "replace_btn":        "Replace",
+    "replace_all":        "Replace all",
+    "ops_btn":            "Tools",
+    "op_trim":            "Trim whitespace",
+    "op_upper":           "UPPERCASE",
+    "op_lower":           "lowercase",
+    "op_strip_tags":      "Remove tags",
+    "op_tags_section":    "Tags from original",
+    "op_insert":          "Insert",
+    "missing_tags":       "Tags missing from translation:"
   },
   "group": {
     "progress": "Progress",

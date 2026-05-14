@@ -145,7 +145,21 @@
     "copy":               "Copier",
     "copy_original":      "Copier le texte original",
     "copy_translation":   "Copier la traduction",
-    "copied":             "✓ Copié"
+    "copied":             "✓ Copié",
+    "find_placeholder":   "Rechercher…",
+    "find_case":          "Sensible à la casse",
+    "find_no_result":     "Aucun résultat",
+    "replace_placeholder":"Remplacer par…",
+    "replace_btn":        "Remplacer",
+    "replace_all":        "Tout remplacer",
+    "ops_btn":            "Outils",
+    "op_trim":            "Supprimer espaces (début/fin)",
+    "op_upper":           "MAJUSCULES",
+    "op_lower":           "minuscules",
+    "op_strip_tags":      "Supprimer les balises",
+    "op_tags_section":    "Balises de l'original",
+    "op_insert":          "Insérer",
+    "missing_tags":       "Balises manquantes dans la traduction :"
   },
   "group": {
     "progress": "Progression",
