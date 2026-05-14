@@ -435,16 +435,37 @@
     "export_error":      "Erreur d'export"
   },
   "convert_bgt": {
-    "title":      "Convertir en base de données .bgt",
-    "source":     "Fichier source",
-    "db_name":    "Nom de la base",
-    "game":       "Jeu",
-    "lang_from":  "Langue source",
-    "lang_to":    "Langue cible",
-    "convert":    "Convertir",
-    "cancel":     "Annuler",
-    "success":    "{{count}} entrées converties en {{name}}.bgt",
-    "error":      "Erreur de conversion : {{error}}"
+    "title":                   "Convertir en base de données .bgt",
+    "source":                  "Fichier source",
+    "db_name":                 "Nom de la base",
+    "game":                    "Jeu",
+    "lang_from":               "Langue source",
+    "lang_to":                 "Langue cible",
+    "output_folder":           "Dossier de sortie",
+    "output_folder_placeholder":"Chemin du dossier…",
+    "browse":                  "Parcourir…",
+    "browse_title":            "Choisir le dossier de sortie",
+    "db_type":                 "Type de base de données",
+    "db_type_default":         "BDD par défaut (lecture seule)",
+    "db_type_custom":          "BDD personnalisée (modifiable)",
+    "db_type_default_hint":    "Cette BDD sera utilisée automatiquement à l'ouverture d'un plugin.",
+    "db_type_custom_hint":     "Cette BDD est modifiable et doit être chargée manuellement.",
+    "convert":                 "Convertir",
+    "cancel":                  "Annuler",
+    "success":                 "{{count}} entrées converties en {{name}}.bgt",
+    "error":                   "Erreur de conversion : {{error}}",
+    "lang": {
+      "english":  "Anglais",
+      "french":   "Français",
+      "german":   "Allemand",
+      "spanish":  "Espagnol",
+      "italian":  "Italien",
+      "polish":   "Polonais",
+      "russian":  "Russe",
+      "chinese":  "Chinois",
+      "japanese": "Japonais",
+      "korean":   "Coréen"
+    }
   },
   "theme": {
     "name": {

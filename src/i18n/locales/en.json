@@ -435,16 +435,37 @@
     "export_error":      "Export error"
   },
   "convert_bgt": {
-    "title":      "Convert to .bgt database",
-    "source":     "Source file",
-    "db_name":    "Database name",
-    "game":       "Game",
-    "lang_from":  "Source language",
-    "lang_to":    "Target language",
-    "convert":    "Convert",
-    "cancel":     "Cancel",
-    "success":    "{{count}} entries converted to {{name}}.bgt",
-    "error":      "Conversion error: {{error}}"
+    "title":                   "Convert to .bgt database",
+    "source":                  "Source file",
+    "db_name":                 "Database name",
+    "game":                    "Game",
+    "lang_from":               "Source language",
+    "lang_to":                 "Target language",
+    "output_folder":           "Output folder",
+    "output_folder_placeholder":"Folder path…",
+    "browse":                  "Browse…",
+    "browse_title":            "Choose output folder",
+    "db_type":                 "Database type",
+    "db_type_default":         "Default DB (read-only)",
+    "db_type_custom":          "Custom DB (editable)",
+    "db_type_default_hint":    "This DB will be applied automatically when a plugin is opened.",
+    "db_type_custom_hint":     "This DB is editable and must be loaded manually.",
+    "convert":                 "Convert",
+    "cancel":                  "Cancel",
+    "success":                 "{{count}} entries converted to {{name}}.bgt",
+    "error":                   "Conversion error: {{error}}",
+    "lang": {
+      "english":  "English",
+      "french":   "French",
+      "german":   "German",
+      "spanish":  "Spanish",
+      "italian":  "Italian",
+      "polish":   "Polish",
+      "russian":  "Russian",
+      "chinese":  "Chinese",
+      "japanese": "Japanese",
+      "korean":   "Korean"
+    }
   },
   "theme": {
     "name": {

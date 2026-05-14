@@ -247,6 +247,7 @@ pub async fn convert_to_bgt_cmd(
     game:        String,
     lang_from:   String,
     lang_to:     String,
+    read_only:   bool,
 ) -> Result<usize, String> {
     log::info!("[cmd] convert_to_bgt: {} → {}", source_path, output_path);
     let src = std::path::Path::new(&source_path);
@@ -290,7 +291,7 @@ pub async fn convert_to_bgt_cmd(
     };
 
     let count = db_entries.len();
-    let db = TranslationDb::from_entries(db_name, game, lang_from, lang_to, false, db_entries);
+    let db = TranslationDb::from_entries(db_name, game, lang_from, lang_to, read_only, db_entries);
 
     if let Some(parent) = dst.parent() {
         if !parent.as_os_str().is_empty() {

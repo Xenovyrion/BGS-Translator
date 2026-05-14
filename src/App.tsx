@@ -138,6 +138,7 @@ export default function App() {
   const [notification,       setNotification]       = useState<Notification | null>(null);
   // null = modal closed, string = source file path shown in the ConvertToBgt modal
   const [convertBgtSource,   setConvertBgtSource]   = useState<string | null>(null);
+  const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
 
   const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
     setNotification({ message, type, detail, key: Date.now(), duration });
@@ -383,18 +384,26 @@ export default function App() {
       multiple: false,
     });
     if (!selected || typeof selected !== "string") return;
+    // Fetch (or refresh) default databases dir
+    try {
+      const dir = await invoke<string>("get_databases_dir_cmd", { customDir: null });
+      setDefaultDbDir(dir);
+    } catch {
+      setDefaultDbDir("");
+    }
     setConvertBgtSource(selected);
   }, [t]);
 
   const handleConvertConfirm = useCallback(async (opts: {
     dbName: string; game: string; langFrom: string; langTo: string;
+    outputFolder: string; readOnly: boolean;
   }) => {
     if (!convertBgtSource) return;
     const sourcePath = convertBgtSource;
     setConvertBgtSource(null);
 
-    // Build output path next to source file with .bgt extension
-    const folder = sourcePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+    // Build output path from chosen output folder
+    const folder     = opts.outputFolder.replace(/\\/g, "/").replace(/\/$/, "");
     const outputPath = (folder ? folder + "/" : "") + opts.dbName + ".bgt";
 
     try {
@@ -405,6 +414,7 @@ export default function App() {
         game:     opts.game,
         langFrom: opts.langFrom,
         langTo:   opts.langTo,
+        readOnly: opts.readOnly,
       });
       notify(
         `✓ ${t("convert_bgt.success", { count, name: opts.dbName })}`,
@@ -738,6 +748,7 @@ export default function App() {
       <ConvertToBgtModal
         isOpen={!!convertBgtSource}
         sourceFile={convertBgtSource ?? ""}
+        defaultOutputDir={defaultDbDir}
         onClose={() => setConvertBgtSource(null)}
         onConfirm={handleConvertConfirm}
       />
