@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS } from "../types";
 
 export interface DefaultDbEntry {
   path:    string;
@@ -25,6 +25,7 @@ export interface AppSettings {
   autoLoadSession:      boolean;  // auto-load matching session on plugin open
   dbApplyValidates:     boolean;  // DB match → Validated (vs Pending)
   shortcuts:            KeyboardShortcuts;
+  editShortcuts:        EditPanelShortcuts;
   dbFolder:         string;
   exportFolder:     string;  // default output folder for generated plugins
   silentExport:     boolean; // skip save dialog — write directly to the default path
@@ -48,6 +49,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoLoadSession:      false,
   dbApplyValidates:     true,
   shortcuts:            DEFAULT_SHORTCUTS,
+  editShortcuts:        DEFAULT_EDIT_SHORTCUTS,
   dbFolder:         "",
   exportFolder:     "",
   silentExport:     false,

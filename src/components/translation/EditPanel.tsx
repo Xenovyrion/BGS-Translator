@@ -1,7 +1,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { startDrag } from "../../hooks/useLayout";
-import type { TranslationEntry, EntryStatus } from "../../types";
+import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef } from "../../types";
+import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
 
 export interface EditPanelHandle { focus: () => void }
@@ -15,6 +16,7 @@ interface Props {
   panelHeight:    number;
   onPanelResize:  (delta: number) => void;
   recordColors:   Record<string, string>;
+  editShortcuts?: EditPanelShortcuts;
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -24,11 +26,13 @@ const TEXT_LH   = 1.6;
 const TEXT_FONT = "var(--font-content, system-ui, sans-serif)";
 const TA_PAD_V  = 5;
 const TA_PAD_H  = 7;
+// Uniform height for every tool button in the panel
+const BTN_H     = 22;
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 function CopyIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <rect x="5" y="5" width="9" height="9" rx="1.5"/>
       <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5V9.5A1.5 1.5 0 0 0 3.5 11H5"/>
     </svg>
@@ -43,12 +47,10 @@ function SearchIcon() {
   );
 }
 
-// ── Text segment utilities ─────────────────────────────────────────────────
+// ── Text-segment utilities ─────────────────────────────────────────────────
 type Segment = { text: string; isTag: boolean; isMatch: boolean; isCurrent: boolean };
 
-function findAllOccurrences(
-  text: string, query: string, caseSensitive: boolean,
-): Array<{ start: number; end: number }> {
+function findAllOccurrences(text: string, query: string, caseSensitive: boolean): Array<{ start: number; end: number }> {
   if (!query) return [];
   const hay    = caseSensitive ? text : text.toLowerCase();
   const needle = caseSensitive ? query : query.toLowerCase();
@@ -63,10 +65,7 @@ function findAllOccurrences(
   return out;
 }
 
-function buildSegments(
-  text: string,
-  matches: Array<{ start: number; end: number; isCurrent: boolean }>,
-): Segment[] {
+function buildSegments(text: string, matches: Array<{ start: number; end: number; isCurrent: boolean }>): Segment[] {
   type Evt = { pos: number; open: boolean; kind: "tag" | "match" | "current" };
   const evts: Evt[] = [];
   for (const m of text.matchAll(/<[^>]*>/g)) {
@@ -79,7 +78,6 @@ function buildSegments(
     evts.push({ pos: end, open: false, kind });
   }
   evts.sort((a, b) => a.pos - b.pos || (a.open ? 1 : -1));
-
   const segs: Segment[] = [];
   let pos = 0, inTag = false, inMatch = false, inCurrent = false;
   for (const evt of evts) {
@@ -106,12 +104,12 @@ function SegmentedText({ segments }: { segments: Segment[] }) {
   );
 }
 
-// ── Dropdown item ──────────────────────────────────────────────────────────
+// ── Dropdown menu item ─────────────────────────────────────────────────────
 function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <div
       role="menuitem" onClick={onClick}
-      style={{ padding: "5px 12px", fontSize: 12, cursor: "pointer", color: "var(--text-1)" }}
+      style={{ padding: "5px 12px", fontSize: 12, cursor: "pointer", color: "var(--text-1)", display: "flex", alignItems: "center" }}
       onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >
@@ -120,12 +118,39 @@ function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: (
   );
 }
 
+// ── Uniform tool button ────────────────────────────────────────────────────
+function ToolBtn({ children, onClick, title, active, disabled, style }: {
+  children: React.ReactNode; onClick?: () => void; title?: string;
+  active?: boolean; disabled?: boolean; style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      style={{
+        height: BTN_H, padding: "0 8px",
+        border: "1px solid var(--border)", borderRadius: 4,
+        cursor: disabled ? "default" : "pointer",
+        background: active ? "var(--accent)" : "var(--bg-primary)",
+        color: active ? "#fff" : disabled ? "var(--text-3)" : "var(--text-2)",
+        fontSize: 11, display: "flex", alignItems: "center", gap: 4,
+        flexShrink: 0, boxSizing: "border-box", opacity: disabled ? 0.5 : 1,
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc },
   ref,
 ) {
   const { t } = useTranslation();
+  const sc = editSc ?? DEFAULT_EDIT_SHORTCUTS;
 
   // ── Refs ────────────────────────────────────────────────────────────────
   const textareaRef     = useRef<HTMLTextAreaElement>(null);
@@ -154,30 +179,26 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const origMulti   = origLines.length > 1;
   const translMulti = translLines.length > 1;
 
-  // Line start offsets in the full original string (for match→line mapping)
   const origLineOffsets = useMemo(() => {
     let offset = 0;
     return origLines.map(line => { const o = offset; offset += line.length + 1; return o; });
   }, [origLines]);
 
-  // Tags present in original / translation
-  const origTags   = useMemo(() => [...new Set(entry.original.match(/<[^>]+>/g) ?? [])], [entry.original]);
-  const translTags = useMemo(() => [...new Set((entry.translated ?? "").match(/<[^>]+>/g) ?? [])], [entry.translated]);
+  const origTags    = useMemo(() => [...new Set(entry.original.match(/<[^>]+>/g) ?? [])], [entry.original]);
+  const translTags  = useMemo(() => [...new Set((entry.translated ?? "").match(/<[^>]+>/g) ?? [])], [entry.translated]);
   const missingTags = useMemo(() => origTags.filter(t => !translTags.includes(t)), [origTags, translTags]);
 
-  // All search matches across both columns
   const allMatches = useMemo(() => {
     if (!findQuery) return [];
-    const orig  = findAllOccurrences(entry.original,        findQuery, findCase).map(o => ({ ...o, col: "original"    as const }));
+    const orig   = findAllOccurrences(entry.original,         findQuery, findCase).map(o => ({ ...o, col: "original"    as const }));
     const transl = findAllOccurrences(entry.translated ?? "", findQuery, findCase).map(o => ({ ...o, col: "translation" as const }));
     return [...orig, ...transl];
   }, [findQuery, findCase, entry.original, entry.translated]);
 
-  const matchCount  = allMatches.length;
-  const clampedIdx  = matchCount > 0 ? ((matchIdx % matchCount) + matchCount) % matchCount : 0;
+  const matchCount   = allMatches.length;
+  const clampedIdx   = matchCount > 0 ? ((matchIdx % matchCount) + matchCount) % matchCount : 0;
   const currentMatch = matchCount > 0 ? allMatches[clampedIdx] : null;
 
-  // Translation overlay segments (null = no active search, use TaggedText)
   const translOverlaySegs = useMemo(() => {
     if (!findQuery) return null;
     const matches = allMatches
@@ -187,10 +208,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   }, [findQuery, allMatches, currentMatch, entry.translated]);
 
   // ── Effects ─────────────────────────────────────────────────────────────
-  // Reset match index when query or entry changes
   useEffect(() => { setMatchIdx(0); }, [findQuery, findCase, entry._idx]);
 
-  // Scroll to current match
   useEffect(() => {
     if (!currentMatch) return;
     if (currentMatch.col === "original") {
@@ -202,17 +221,15 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     } else {
       const before = (entry.translated ?? "").slice(0, currentMatch.start);
       const matchLine = before.split("\n").length - 1;
-      const lineHeightPx = 12 * TEXT_LH; // approximation (CSS variable not measurable here)
       if (textareaRef.current) {
-        const scrollTarget = matchLine * lineHeightPx - textareaRef.current.clientHeight / 3;
-        textareaRef.current.scrollTop = Math.max(0, scrollTarget);
+        const lineH = 12 * TEXT_LH;
+        textareaRef.current.scrollTop = Math.max(0, matchLine * lineH - textareaRef.current.clientHeight / 3);
         if (overlayRef.current)      overlayRef.current.scrollTop      = textareaRef.current.scrollTop;
         if (translGutterRef.current) translGutterRef.current.scrollTop = textareaRef.current.scrollTop;
       }
     }
   }, [currentMatch, origLineOffsets, entry.translated]);
 
-  // Close ops dropdown on outside click
   useEffect(() => {
     if (!opsOpen) return;
     const close = (e: MouseEvent) => {
@@ -241,9 +258,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   }, []);
 
   const openFind = useCallback((mode: "find" | "replace") => {
-    const sel = textareaRef.current?.value.slice(
-      textareaRef.current.selectionStart, textareaRef.current.selectionEnd,
-    ) ?? "";
+    const ta  = textareaRef.current;
+    const sel = ta ? ta.value.slice(ta.selectionStart, ta.selectionEnd) : "";
     if (sel) setFindQuery(sel);
     setFindVisible(true);
     setReplaceVisible(mode === "replace");
@@ -257,20 +273,42 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     textareaRef.current?.focus();
   }, []);
 
+  // Apply a text operation — selection-aware: if text is selected, operate only on that range.
   const applyOp = useCallback((op: "trim" | "upper" | "lower" | "strip-tags") => {
-    const text = entry.translated ?? "";
-    let next = text;
-    if (op === "trim")       next = text.split("\n").map(l => l.trim()).join("\n");
-    if (op === "upper")      next = text.toUpperCase();
-    if (op === "lower")      next = text.toLowerCase();
-    if (op === "strip-tags") next = text.replace(/<[^>]*>/g, "");
-    if (next !== text) onTranslate(entry._idx ?? 0, next);
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart, selectionEnd, value } = ta;
+    const hasSelection = selectionStart !== selectionEnd;
+
+    const transform = (s: string) => {
+      if (op === "trim")       return s.split("\n").map(l => l.trim()).join("\n");
+      if (op === "upper")      return s.toUpperCase();
+      if (op === "lower")      return s.toLowerCase();
+      if (op === "strip-tags") return s.replace(/<[^>]*>/g, "");
+      return s;
+    };
+
+    if (hasSelection) {
+      const before      = value.slice(0, selectionStart);
+      const transformed = transform(value.slice(selectionStart, selectionEnd));
+      const after       = value.slice(selectionEnd);
+      onTranslate(entry._idx ?? 0, before + transformed + after);
+      const newEnd = selectionStart + transformed.length;
+      requestAnimationFrame(() => {
+        ta.setSelectionRange(selectionStart, newEnd);
+        ta.focus();
+      });
+    } else {
+      const next = transform(value);
+      if (next !== value) onTranslate(entry._idx ?? 0, next);
+    }
     setOpsOpen(false);
-  }, [entry.translated, entry._idx, onTranslate]);
+  }, [entry._idx, onTranslate]);
 
   const insertAtCursor = useCallback((tag: string) => {
-    if (!textareaRef.current) return;
-    const { selectionStart, selectionEnd, value } = textareaRef.current;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart, selectionEnd, value } = ta;
     const next = value.slice(0, selectionStart) + tag + value.slice(selectionEnd);
     onTranslate(entry._idx ?? 0, next);
     setOpsOpen(false);
@@ -304,12 +342,13 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   }, [entry._idx, onTranslate]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-      e.preventDefault(); e.stopPropagation(); openFind("find"); return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "h") {
-      e.preventDefault(); e.stopPropagation(); openFind("replace"); return;
-    }
+    if (matchShortcut(e, sc.find))        { e.preventDefault(); e.stopPropagation(); openFind("find");    return; }
+    if (matchShortcut(e, sc.replace))     { e.preventDefault(); e.stopPropagation(); openFind("replace"); return; }
+    if (matchShortcut(e, sc.opTrim))      { e.preventDefault(); applyOp("trim");      return; }
+    if (matchShortcut(e, sc.opUpper))     { e.preventDefault(); applyOp("upper");     return; }
+    if (matchShortcut(e, sc.opLower))     { e.preventDefault(); applyOp("lower");     return; }
+    if (matchShortcut(e, sc.opStripTags)) { e.preventDefault(); applyOp("strip-tags"); return; }
+
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       onSetStatus(entry._idx ?? 0, "validated"); e.preventDefault(); return;
     }
@@ -318,13 +357,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
       onFocusTable(); e.preventDefault(); return;
     }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") e.stopPropagation();
-  }, [entry._idx, onSetStatus, onFocusTable, findVisible, openFind, closeFind]);
+  }, [entry._idx, onSetStatus, onFocusTable, findVisible, openFind, closeFind, applyOp, sc]);
 
   const handleFindKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      setMatchIdx(idx => idx + (e.shiftKey ? -1 : 1));
-    }
+    if (e.key === "Enter") { e.preventDefault(); setMatchIdx(i => i + (e.shiftKey ? -1 : 1)); }
     if (e.key === "Escape") { e.preventDefault(); closeFind(); }
   }, [closeFind]);
 
@@ -345,21 +381,20 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     { status: "ignored",      label: t("edit.status_ignored"),      color: "#64748b" },
     { status: "untranslated", label: t("edit.status_untranslated"), color: "#ef4444" },
   ];
-
-  const colHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexShrink: 0, padding: "2px 0" };
+  const colHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexShrink: 0 };
   const labelStyle:     React.CSSProperties = { fontSize: 11, color: "var(--text-1)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" };
   const dotStyle:       React.CSSProperties = { fontSize: 11, color: "var(--text-3)", opacity: 0.5 };
   const metaStyle:      React.CSSProperties = { fontSize: 11, color: "var(--text-2)" };
-  const iconBtnStyle:   React.CSSProperties = { height: 20, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", background: "var(--bg-hover)", color: "var(--text-2)", fontSize: 11, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 };
   const gutterNumStyle: React.CSSProperties = { width: GUTTER_W, flexShrink: 0, fontSize: TEXT_FZ, fontFamily: "monospace", lineHeight: TEXT_LH, color: "var(--text-3)", opacity: 0.45, userSelect: "none", textAlign: "right", paddingRight: 7, minHeight: "1.6em" };
   const textLineStyle:  React.CSSProperties = { flex: 1, fontSize: TEXT_FZ, fontFamily: TEXT_FONT, color: "var(--text-2)", lineHeight: TEXT_LH, whiteSpace: "pre-wrap", wordBreak: "break-word", minHeight: "1.6em", userSelect: "text" };
 
   const fmtN = (n: number) => n.toLocaleString();
+  const fmtSc = (def: ShortcutDef) => formatShortcut(def);
 
-  // ── Render helper: original line with search highlights ───────────────────
+  // ── Original-line renderer ────────────────────────────────────────────────
   const renderOrigLine = (line: string, i: number) => {
-    const lineStart = origLineOffsets[i];
-    const lineEnd   = lineStart + line.length;
+    const lineStart   = origLineOffsets[i];
+    const lineEnd     = lineStart + line.length;
     const lineMatches = allMatches
       .filter(m => m.col === "original" && m.end > lineStart && m.start < lineEnd)
       .map(m => ({ start: Math.max(0, m.start - lineStart), end: Math.min(line.length, m.end - lineStart), isCurrent: currentMatch?.col === "original" && m.start === currentMatch.start }));
@@ -410,8 +445,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
       {/* ── Find / Replace bar ────────────────────────────────────────── */}
       {findVisible && (
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", borderBottom: "1px solid var(--border)", background: "var(--bg-hover)", padding: "5px 10px", gap: 4 }}>
-          {/* Find row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <SearchIcon />
             <input
               ref={findInputRef}
@@ -419,42 +453,32 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               onChange={e => setFindQuery(e.target.value)}
               onKeyDown={handleFindKeyDown}
               placeholder={t("edit.find_placeholder")}
-              style={{ flex: 1, height: 24, padding: "0 7px", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontSize: 12, outline: "none", boxSizing: "border-box", minWidth: 0 }}
+              style={{ flex: 1, height: BTN_H, padding: "0 7px", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontSize: 12, outline: "none", boxSizing: "border-box", minWidth: 0 }}
             />
-            {/* Case-sensitive toggle */}
-            <button
-              onClick={() => setFindCase(c => !c)}
-              title={t("edit.find_case")}
-              style={{ height: 24, padding: "0 7px", borderRadius: 4, border: "1px solid var(--border)", cursor: "pointer", background: findCase ? "var(--accent)" : "var(--bg-primary)", color: findCase ? "#fff" : "var(--text-2)", fontSize: 11, fontWeight: 600, flexShrink: 0 }}
-            >Aa</button>
-            {/* Prev / Next */}
-            <button onClick={() => setMatchIdx(i => i - 1)} disabled={matchCount === 0} style={{ ...iconBtnStyle, padding: "0 6px", background: "var(--bg-primary)" }}>↑</button>
-            <button onClick={() => setMatchIdx(i => i + 1)} disabled={matchCount === 0} style={{ ...iconBtnStyle, padding: "0 6px", background: "var(--bg-primary)" }}>↓</button>
-            {/* Match count */}
-            <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, minWidth: 46, textAlign: "right" }}>
-              {findQuery
-                ? matchCount === 0
-                  ? t("edit.find_no_result")
-                  : `${clampedIdx + 1} / ${matchCount}`
-                : ""}
+            <ToolBtn active={findCase} onClick={() => setFindCase(c => !c)} title={t("edit.find_case")}>Aa</ToolBtn>
+            <ToolBtn onClick={() => setMatchIdx(i => i - 1)} disabled={matchCount === 0} title="Match précédent (Maj+Entrée)">↑</ToolBtn>
+            <ToolBtn onClick={() => setMatchIdx(i => i + 1)} disabled={matchCount === 0} title="Match suivant (Entrée)">↓</ToolBtn>
+            <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, minWidth: 52, textAlign: "right" }}>
+              {findQuery ? (matchCount === 0 ? t("edit.find_no_result") : `${clampedIdx + 1} / ${matchCount}`) : ""}
             </span>
-            {/* Toggle replace */}
-            <button onClick={() => setReplaceVisible(r => !r)} style={{ ...iconBtnStyle, background: replaceVisible ? "var(--bg-hover)" : "var(--bg-primary)", marginLeft: 4 }}>⇄</button>
-            {/* Close */}
-            <button onClick={closeFind} style={{ ...iconBtnStyle, background: "var(--bg-primary)" }}>×</button>
+            <ToolBtn onClick={() => setReplaceVisible(r => !r)} active={replaceVisible} title={t("edit.toggle_replace") + " (Ctrl+H)"} style={{ marginLeft: 4 }}>⇄</ToolBtn>
+            <ToolBtn onClick={closeFind} title="Fermer (Échap)">×</ToolBtn>
           </div>
-          {/* Replace row */}
           {replaceVisible && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, paddingLeft: 17 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: 18 }}>
               <input
                 value={replaceQuery}
                 onChange={e => setReplaceQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); closeFind(); } }}
                 placeholder={t("edit.replace_placeholder")}
-                style={{ flex: 1, height: 24, padding: "0 7px", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontSize: 12, outline: "none", boxSizing: "border-box", minWidth: 0 }}
+                style={{ flex: 1, height: BTN_H, padding: "0 7px", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontSize: 12, outline: "none", boxSizing: "border-box", minWidth: 0 }}
               />
-              <button onClick={replaceCurrent} disabled={!currentMatch || currentMatch.col !== "translation"} style={{ ...iconBtnStyle, background: "var(--bg-primary)", flexShrink: 0 }}>{t("edit.replace_btn")}</button>
-              <button onClick={replaceAll} disabled={matchCount === 0} style={{ ...iconBtnStyle, background: "var(--bg-primary)", flexShrink: 0 }}>{t("edit.replace_all")}</button>
+              <ToolBtn onClick={replaceCurrent} disabled={!currentMatch || currentMatch.col !== "translation"} title={t("edit.replace_btn") + " — remplace l'occurrence courante dans la traduction"}>
+                {t("edit.replace_btn")}
+              </ToolBtn>
+              <ToolBtn onClick={replaceAll} disabled={matchCount === 0} title={t("edit.replace_all") + " — remplace toutes les occurrences dans la traduction"}>
+                {t("edit.replace_all")}
+              </ToolBtn>
             </div>
           )}
         </div>
@@ -470,9 +494,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             <span style={dotStyle}>·</span>
             <span style={metaStyle}>{fmtN(entry.original.length)} {t("edit.chars")}</span>
             {origMulti && <><span style={dotStyle}>·</span><span style={metaStyle}>{fmtN(origLines.length)} {t("edit.lines")}</span></>}
-            <button style={{ ...iconBtnStyle, marginLeft: "auto" }} onClick={() => copyText(entry.original, "original")} title={t("edit.copy_original")}>
+            <ToolBtn style={{ marginLeft: "auto" }} onClick={() => copyText(entry.original, "original")} title={t("edit.copy_original")}>
               {copiedSide === "original" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><CopyIcon />{t("edit.copy")}</>}
-            </button>
+            </ToolBtn>
           </div>
           <div style={{ flex: 1 }}>
             {origLines.map((line, i) => renderOrigLine(line, i))}
@@ -486,23 +510,24 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             <span style={dotStyle}>·</span>
             <span style={metaStyle}>{fmtN((entry.translated ?? "").length)} {t("edit.chars")}</span>
             {translMulti && <><span style={dotStyle}>·</span><span style={metaStyle}>{fmtN(translLines.length)} {t("edit.lines")}</span></>}
-            {/* Missing tags warning */}
             {missingTags.length > 0 && (
-              <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "#f59e0b", cursor: "help", flexShrink: 0 }}>
-                ⚠ {missingTags.length}
-              </span>
+              <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "#f59e0b", cursor: "help", flexShrink: 0 }}>⚠ {missingTags.length}</span>
             )}
             {/* Tools dropdown */}
             <div ref={opsRef} style={{ position: "relative", marginLeft: "auto" }}>
-              <button style={iconBtnStyle} onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}>
-                ⚙ {t("edit.ops_btn")}
-              </button>
+              <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}>⚙ {t("edit.ops_btn")}</ToolBtn>
               {opsOpen && (
-                <div role="menu" style={{ position: "absolute", top: "calc(100% + 3px)", right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 210, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
-                  <MenuItem onClick={() => applyOp("trim")}>{t("edit.op_trim")}</MenuItem>
-                  <MenuItem onClick={() => applyOp("upper")}>{t("edit.op_upper")}</MenuItem>
-                  <MenuItem onClick={() => applyOp("lower")}>{t("edit.op_lower")}</MenuItem>
-                  <MenuItem onClick={() => applyOp("strip-tags")}>{t("edit.op_strip_tags")}</MenuItem>
+                <div role="menu" style={{ position: "absolute", top: `calc(100% + 3px)`, right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 240, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
+                  {([ ["trim","op_trim"],["upper","op_upper"],["lower","op_lower"],["strip-tags","op_strip_tags"] ] as [string, string][]).map(([op, i18Key]) => {
+                    const scKey = op === "trim" ? "opTrim" : op === "upper" ? "opUpper" : op === "lower" ? "opLower" : "opStripTags";
+                    const hint = fmtSc(sc[scKey as keyof EditPanelShortcuts]);
+                    return (
+                      <MenuItem key={op} onClick={() => applyOp(op as "trim"|"upper"|"lower"|"strip-tags")}>
+                        <span style={{ flex: 1 }}>{t(`edit.${i18Key}`)}</span>
+                        {hint && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 12, flexShrink: 0 }}>{hint}</span>}
+                      </MenuItem>
+                    );
+                  })}
                   {origTags.length > 0 && (
                     <>
                       <div style={{ borderTop: "1px solid var(--border)", margin: "4px 0" }} />
@@ -510,7 +535,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                       {origTags.map(tag => (
                         <div key={tag} style={{ display: "flex", alignItems: "center", padding: "3px 12px", gap: 8 }}>
                           <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--color-tag)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tag}</span>
-                          <button onClick={() => insertAtCursor(tag)} style={{ height: 18, padding: "0 6px", border: "1px solid var(--border)", borderRadius: 3, cursor: "pointer", background: "var(--bg-hover)", color: "var(--text-2)", fontSize: 10, flexShrink: 0 }}>{t("edit.op_insert")}</button>
+                          <button onClick={() => insertAtCursor(tag)} title={`${t("edit.op_insert")} ${tag} au curseur`} style={{ height: BTN_H - 4, padding: "0 6px", border: "1px solid var(--border)", borderRadius: 3, cursor: "pointer", background: "var(--bg-hover)", color: "var(--text-2)", fontSize: 10, flexShrink: 0 }}>
+                            {t("edit.op_insert")}
+                          </button>
                         </div>
                       ))}
                     </>
@@ -518,13 +545,11 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 </div>
               )}
             </div>
-            {/* Copy */}
-            <button style={iconBtnStyle} onClick={() => copyText(entry.translated ?? "", "translation")} title={t("edit.copy_translation")}>
+            <ToolBtn onClick={() => copyText(entry.translated ?? "", "translation")} title={t("edit.copy_translation")}>
               {copiedSide === "translation" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><CopyIcon />{t("edit.copy")}</>}
-            </button>
+            </ToolBtn>
           </div>
 
-          {/* Gutter + textarea+overlay */}
           <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
             {translMulti && (
               <div ref={translGutterRef} style={{ width: GUTTER_W, flexShrink: 0, overflowY: "hidden", height: "100%", paddingTop: TA_PAD_V, boxSizing: "border-box" }}>
@@ -542,10 +567,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", resize: "none", padding: `${TA_PAD_V}px ${TA_PAD_H}px`, background: "var(--bg-hover)", color: "transparent", caretColor: "var(--text-1)", border: "1px solid var(--border)", borderRadius: 6, fontSize: TEXT_FZ, fontFamily: TEXT_FONT, lineHeight: TEXT_LH, outline: "none", boxSizing: "border-box" }}
               />
               <div ref={overlayRef} aria-hidden style={{ position: "absolute", inset: 0, padding: `${TA_PAD_V}px ${TA_PAD_H}px`, border: "1px solid transparent", borderRadius: 6, fontSize: TEXT_FZ, fontFamily: TEXT_FONT, lineHeight: TEXT_LH, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", overflow: "hidden", pointerEvents: "none", color: "var(--text-1)", boxSizing: "border-box" }}>
-                {translOverlaySegs
-                  ? <SegmentedText segments={translOverlaySegs} />
-                  : <TaggedText text={entry.translated || ""} />
-                }
+                {translOverlaySegs ? <SegmentedText segments={translOverlaySegs} /> : <TaggedText text={entry.translated || ""} />}
                 {" "}
               </div>
             </div>

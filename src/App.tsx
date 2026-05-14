@@ -680,6 +680,7 @@ export default function App() {
                 panelHeight={layout.editPanelHeight}
                 onPanelResize={setEditPanelHeight}
                 recordColors={resolvedRecordColors}
+                editShortcuts={settings.editShortcuts}
               />
             )}
 

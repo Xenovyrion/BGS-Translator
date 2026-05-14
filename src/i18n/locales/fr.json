@@ -135,7 +135,7 @@
     "status_ignored":     "× Ignoré",
     "status_untranslated":"— Non traduit",
     "status_label":       "Statut :",
-    "hint":               "Ctrl+↵ valider · Esc retour",
+    "hint":               "Ctrl+↵ valider · Ctrl+F chercher · Esc retour",
     "close_title":        "Fermer",
     "original_label":     "Original",
     "translation_label":  "Traduction",
@@ -159,7 +159,8 @@
     "op_strip_tags":      "Supprimer les balises",
     "op_tags_section":    "Balises de l'original",
     "op_insert":          "Insérer",
-    "missing_tags":       "Balises manquantes dans la traduction :"
+    "missing_tags":       "Balises manquantes dans la traduction :",
+    "toggle_replace":     "Activer / désactiver le remplacement"
   },
   "group": {
     "progress": "Progression",
@@ -249,6 +250,15 @@
       "copy_original":     "Copier le texte original",
       "paste_translation": "Coller dans la traduction",
       "validate_entry":    "Valider l'entrée"
+    },
+    "edit_shortcuts": {
+      "section":      "Volet d'édition (textarea actif)",
+      "find":         "Ouvrir la recherche",
+      "replace":      "Ouvrir rechercher / remplacer",
+      "op_trim":      "Supprimer espaces début/fin",
+      "op_upper":     "Convertir en MAJUSCULES",
+      "op_lower":     "Convertir en minuscules",
+      "op_strip_tags":"Supprimer les balises"
     },
     "db": {
       "folder_section":           "Dossier des bases de données",

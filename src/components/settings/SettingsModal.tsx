@@ -7,8 +7,8 @@ import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
-import type { ShortcutDef, KeyboardShortcuts } from "../../types";
-import { DEFAULT_SHORTCUTS } from "../../types";
+import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
+import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS } from "../../types";
 
 type Tab = "apparence" | "raccourcis" | "database" | "divers" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
@@ -345,9 +345,25 @@ function ShortcutKeyInput({ value, onChange, pressKeyLabel }: { value: ShortcutD
   );
 }
 
+function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetLabel }: {
+  label: string; value: ShortcutDef; onChangeDef: (d: ShortcutDef) => void;
+  onReset: () => void; pressKeyLabel: string; resetLabel: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{label}</span>
+      <ShortcutKeyInput value={value} onChange={onChangeDef} pressKeyLabel={pressKeyLabel} />
+      <button onClick={onReset} style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}>
+        {resetLabel}
+      </button>
+    </div>
+  );
+}
+
 function ShortcutsTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
-  const sc = settings.shortcuts ?? DEFAULT_SHORTCUTS;
+  const sc  = settings.shortcuts      ?? DEFAULT_SHORTCUTS;
+  const esc = settings.editShortcuts  ?? DEFAULT_EDIT_SHORTCUTS;
 
   const shortcutLabels: Record<keyof KeyboardShortcuts, string> = {
     nextEntry:        t("settings_modal.shortcuts.next_entry"),
@@ -357,27 +373,51 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
     validateEntry:    t("settings_modal.shortcuts.validate_entry"),
   };
 
+  const editShortcutLabels: Record<keyof EditPanelShortcuts, string> = {
+    find:        t("settings_modal.edit_shortcuts.find"),
+    replace:     t("settings_modal.edit_shortcuts.replace"),
+    opTrim:      t("settings_modal.edit_shortcuts.op_trim"),
+    opUpper:     t("settings_modal.edit_shortcuts.op_upper"),
+    opLower:     t("settings_modal.edit_shortcuts.op_lower"),
+    opStripTags: t("settings_modal.edit_shortcuts.op_strip_tags"),
+  };
+
+  const pressKey   = t("settings_modal.shortcuts.press_key");
+  const resetLabel = t("settings_modal.shortcuts.reset_default");
+
   return (
-    <Section label={t("settings_modal.shortcuts.section")}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {(Object.keys(shortcutLabels) as Array<keyof KeyboardShortcuts>).map((k) => (
-          <div key={k} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{shortcutLabels[k]}</span>
-            <ShortcutKeyInput
+    <>
+      <Section label={t("settings_modal.shortcuts.section")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(Object.keys(shortcutLabels) as Array<keyof KeyboardShortcuts>).map((k) => (
+            <ShortcutRow
+              key={k}
+              label={shortcutLabels[k]}
               value={sc[k]}
-              onChange={(def) => onUpdate({ shortcuts: { ...sc, [k]: def } })}
-              pressKeyLabel={t("settings_modal.shortcuts.press_key")}
+              onChangeDef={(def) => onUpdate({ shortcuts: { ...sc, [k]: def } })}
+              onReset={() => onUpdate({ shortcuts: { ...sc, [k]: DEFAULT_SHORTCUTS[k] } })}
+              pressKeyLabel={pressKey}
+              resetLabel={resetLabel}
             />
-            <button
-              onClick={() => onUpdate({ shortcuts: { ...sc, [k]: DEFAULT_SHORTCUTS[k] } })}
-              style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
-            >
-              {t("settings_modal.shortcuts.reset_default")}
-            </button>
-          </div>
-        ))}
-      </div>
-    </Section>
+          ))}
+        </div>
+      </Section>
+      <Section label={t("settings_modal.edit_shortcuts.section")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(Object.keys(editShortcutLabels) as Array<keyof EditPanelShortcuts>).map((k) => (
+            <ShortcutRow
+              key={k}
+              label={editShortcutLabels[k]}
+              value={esc[k]}
+              onChangeDef={(def) => onUpdate({ editShortcuts: { ...esc, [k]: def } })}
+              onReset={() => onUpdate({ editShortcuts: { ...esc, [k]: DEFAULT_EDIT_SHORTCUTS[k] } })}
+              pressKeyLabel={pressKey}
+              resetLabel={resetLabel}
+            />
+          ))}
+        </div>
+      </Section>
+    </>
   );
 }
 

@@ -135,7 +135,7 @@
     "status_ignored":     "× Ignored",
     "status_untranslated":"— Untranslated",
     "status_label":       "Status:",
-    "hint":               "Ctrl+↵ validate · Esc back",
+    "hint":               "Ctrl+↵ validate · Ctrl+F find · Esc back",
     "close_title":        "Close",
     "original_label":     "Original",
     "translation_label":  "Translation",
@@ -159,7 +159,8 @@
     "op_strip_tags":      "Remove tags",
     "op_tags_section":    "Tags from original",
     "op_insert":          "Insert",
-    "missing_tags":       "Tags missing from translation:"
+    "missing_tags":       "Tags missing from translation:",
+    "toggle_replace":     "Toggle find & replace"
   },
   "group": {
     "progress": "Progress",
@@ -249,6 +250,15 @@
       "copy_original":     "Copy original text",
       "paste_translation": "Paste into translation",
       "validate_entry":    "Validate entry"
+    },
+    "edit_shortcuts": {
+      "section":      "Edit panel (textarea focused)",
+      "find":         "Open find bar",
+      "replace":      "Open find & replace",
+      "op_trim":      "Trim leading/trailing whitespace",
+      "op_upper":     "Convert to UPPERCASE",
+      "op_lower":     "Convert to lowercase",
+      "op_strip_tags":"Remove tags"
     },
     "db": {
       "folder_section":           "Database folder",
