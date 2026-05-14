@@ -2,6 +2,10 @@ fn main() {
     tauri_build::build();
     // Declare the custom cfg so the compiler doesn't warn about unknown keys
     println!("cargo::rustc-check-cfg=cfg(nuspell_available)");
+    // Re-run build.rs whenever these env vars change so cargo picks up vcpkg
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+    println!("cargo:rerun-if-env-changed=VCPKGRS_TRIPLET");
+    println!("cargo:rerun-if-env-changed=VCPKGRS_DYNAMIC");
     build_nuspell_wrapper();
 }
 
