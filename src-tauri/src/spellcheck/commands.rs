@@ -1,30 +1,59 @@
-use std::collections::HashMap;
-use std::io::Write as IoWrite;
+use std::io::Write as _;
 use std::path::PathBuf;
 use std::sync::Mutex;
+
+#[cfg(nuspell_available)]
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+#[cfg(nuspell_available)]
 use super::Spellchecker;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-/// Keyed by lang code (e.g. "fr_FR"). Loaded on demand, cached for the session.
+#[cfg(nuspell_available)]
 pub struct SpellState(pub Mutex<HashMap<String, Spellchecker>>);
+
+/// Stub state compiled when nuspell is absent — commands still register but return errors.
+#[cfg(not(nuspell_available))]
+pub struct SpellState(pub Mutex<()>);
+
+impl SpellState {
+    pub fn new() -> Self {
+        #[cfg(nuspell_available)]
+        return SpellState(Mutex::new(HashMap::new()));
+        #[cfg(not(nuspell_available))]
+        return SpellState(Mutex::new(()));
+    }
+}
+
+// ── DTOs ──────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DictionaryInfo {
+    pub lang: String,
+    pub name: String,
+    pub installed: bool,
+}
+
+#[derive(Serialize)]
+pub struct SpellError {
+    pub word: String,
+    pub char_start: usize,
+    pub char_len: usize,
+}
 
 // ── Dictionary catalog ────────────────────────────────────────────────────────
 
 struct DictEntry {
-    lang: &'static str,
-    name: &'static str,
-    /// Folder name inside the LibreOffice dictionaries repo
+    lang:   &'static str,
+    name:   &'static str,
     folder: &'static str,
-    /// Filename stem inside that folder (without extension)
-    stem: &'static str,
+    stem:   &'static str,
 }
 
-// Base URL for raw file access to the LibreOffice dictionaries repository
 const DICT_BASE: &str =
     "https://raw.githubusercontent.com/LibreOffice/dictionaries/master";
 
@@ -78,7 +107,7 @@ static CATALOG: &[DictEntry] = &[
     DictEntry { lang: "zh_TW", name: "中文 (繁體)",               folder: "zh_TW",  stem: "zh_TW"  },
 ];
 
-// ── Helper: dictionary storage directory ──────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn dict_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -91,98 +120,59 @@ fn dict_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-// ── DTOs ──────────────────────────────────────────────────────────────────────
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct DictionaryInfo {
-    pub lang: String,
-    pub name: String,
-    pub installed: bool,
-}
-
-#[derive(Serialize)]
-pub struct SpellError {
-    pub word: String,
-    pub char_start: usize,
-    pub char_len: usize,
-}
-
 // ── Tokenizer ─────────────────────────────────────────────────────────────────
 
-/// Extract (word, char_start) from a game-translation string.
-/// Skips: XML/tag markup `<…>`, ALL-CAPS tokens, tokens containing digits,
-/// tokens shorter than 2 chars, and `%`-format codes like `%d`/`%s`.
+#[cfg(nuspell_available)]
 fn tokenize(text: &str) -> Vec<(String, usize)> {
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
     let mut tokens = Vec::new();
     let mut i = 0;
-
     while i < len {
-        // Skip XML-style tags
         if chars[i] == '<' {
-            while i < len && chars[i] != '>' {
-                i += 1;
-            }
-            if i < len {
-                i += 1;
-            }
+            while i < len && chars[i] != '>' { i += 1; }
+            if i < len { i += 1; }
             continue;
         }
-
-        // Skip % format codes (e.g. %d, %s, %1, %0, %%)
         if chars[i] == '%' {
             i += 1;
-            while i < len && (chars[i].is_alphanumeric() || chars[i] == '%') {
-                i += 1;
-            }
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '%') { i += 1; }
             continue;
         }
-
-        // Start of a word (letters and apostrophes)
         if chars[i].is_alphabetic() {
             let start = i;
-            while i < len && (chars[i].is_alphabetic() || chars[i] == '\'') {
-                i += 1;
-            }
-            // Strip leading/trailing apostrophes
+            while i < len && (chars[i].is_alphabetic() || chars[i] == '\'') { i += 1; }
             let mut word_chars: Vec<char> = chars[start..i].to_vec();
             while word_chars.first() == Some(&'\'') { word_chars.remove(0); }
             while word_chars.last()  == Some(&'\'') { word_chars.pop(); }
-
             let word: String = word_chars.iter().collect();
             if word.len() < 2 { continue; }
-            // Skip ALL-CAPS (abbreviations / game tokens)
             if word.chars().all(|c| c.is_uppercase()) { continue; }
-
             tokens.push((word, start));
         } else {
             i += 1;
         }
     }
-
     tokens
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
-/// List all known dictionaries with their install status.
 #[tauri::command]
 pub async fn list_dictionaries_cmd(app: AppHandle) -> Result<Vec<DictionaryInfo>, String> {
     let dir = dict_dir(&app)?;
     let infos = CATALOG
         .iter()
         .map(|e| DictionaryInfo {
-            lang: e.lang.to_string(),
-            name: e.name.to_string(),
+            lang:      e.lang.to_string(),
+            name:      e.name.to_string(),
             installed: dir.join(format!("{}.aff", e.stem)).exists()
-                && dir.join(format!("{}.dic", e.stem)).exists(),
+                    && dir.join(format!("{}.dic", e.stem)).exists(),
         })
         .collect();
     Ok(infos)
 }
 
-/// Download and install a dictionary (.aff + .dic) from the LibreOffice repo.
 #[tauri::command]
 pub async fn download_dictionary_cmd(app: AppHandle, lang: String) -> Result<(), String> {
     let entry = CATALOG
@@ -216,7 +206,6 @@ pub async fn download_dictionary_cmd(app: AppHandle, lang: String) -> Result<(),
     Ok(())
 }
 
-/// Delete an installed dictionary (and evict it from the in-memory cache).
 #[tauri::command]
 pub async fn delete_dictionary_cmd(
     app: AppHandle,
@@ -237,14 +226,15 @@ pub async fn delete_dictionary_cmd(
         }
     }
 
-    // Evict from cache so a re-download takes effect immediately
+    #[cfg(nuspell_available)]
     state.0.lock().unwrap().remove(&lang);
+
+    #[cfg(not(nuspell_available))]
+    let _ = state;
 
     Ok(())
 }
 
-/// Spell-check `text` with the given dictionary.
-/// Returns the list of misspelled word positions (char-based).
 #[tauri::command]
 pub async fn spellcheck_cmd(
     app: AppHandle,
@@ -252,42 +242,47 @@ pub async fn spellcheck_cmd(
     text: String,
     state: State<'_, SpellState>,
 ) -> Result<Vec<SpellError>, String> {
-    // Load dictionary if not yet cached
+    #[cfg(not(nuspell_available))]
     {
-        let mut map = state.0.lock().unwrap();
-        if !map.contains_key(&lang) {
-            let entry = CATALOG
-                .iter()
-                .find(|e| e.lang == lang)
-                .ok_or_else(|| format!("Unknown language: {lang}"))?;
-            let dir = dict_dir(&app)?;
-            let aff = dir.join(format!("{}.aff", entry.stem));
-            if !aff.exists() {
-                return Err(format!("Dictionary {lang} is not installed"));
+        let _ = (app, lang, text, state);
+        return Err(
+            "Spell check not available: nuspell was not found at compile time.\n\
+             Windows : vcpkg install nuspell:x64-windows-static-md  (+ VCPKG_ROOT)\n\
+             Linux   : sudo apt install libnuspell-dev\n\
+             macOS   : brew install nuspell"
+                .to_string(),
+        );
+    }
+
+    #[cfg(nuspell_available)]
+    {
+        {
+            let mut map = state.0.lock().unwrap();
+            if !map.contains_key(&lang) {
+                let entry = CATALOG
+                    .iter()
+                    .find(|e| e.lang == lang)
+                    .ok_or_else(|| format!("Unknown language: {lang}"))?;
+                let dir = dict_dir(&app)?;
+                let aff = dir.join(format!("{}.aff", entry.stem));
+                if !aff.exists() {
+                    return Err(format!("Dictionary {lang} is not installed"));
+                }
+                map.insert(lang.clone(), Spellchecker::load(&aff)?);
             }
-            let checker = Spellchecker::load(&aff)?;
-            map.insert(lang.clone(), checker);
         }
-    }
-
-    let map = state.0.lock().unwrap();
-    let checker = map.get(&lang).unwrap();
-
-    let mut errors = Vec::new();
-    for (word, char_start) in tokenize(&text) {
-        if !checker.spell(&word) {
-            errors.push(SpellError {
-                char_len: word.chars().count(),
-                word,
-                char_start,
-            });
+        let map = state.0.lock().unwrap();
+        let checker = map.get(&lang).unwrap();
+        let mut errors = Vec::new();
+        for (word, char_start) in tokenize(&text) {
+            if !checker.spell(&word) {
+                errors.push(SpellError { char_len: word.chars().count(), word, char_start });
+            }
         }
+        Ok(errors)
     }
-
-    Ok(errors)
 }
 
-/// Return spelling suggestions for a single word.
 #[tauri::command]
 pub async fn get_suggestions_cmd(
     app: AppHandle,
@@ -295,24 +290,30 @@ pub async fn get_suggestions_cmd(
     word: String,
     state: State<'_, SpellState>,
 ) -> Result<Vec<String>, String> {
+    #[cfg(not(nuspell_available))]
     {
-        let mut map = state.0.lock().unwrap();
-        if !map.contains_key(&lang) {
-            let entry = CATALOG
-                .iter()
-                .find(|e| e.lang == lang)
-                .ok_or_else(|| format!("Unknown language: {lang}"))?;
-            let dir = dict_dir(&app)?;
-            let aff = dir.join(format!("{}.aff", entry.stem));
-            if !aff.exists() {
-                return Err(format!("Dictionary {lang} is not installed"));
-            }
-            let checker = Spellchecker::load(&aff)?;
-            map.insert(lang.clone(), checker);
-        }
+        let _ = (app, lang, word, state);
+        return Err("nuspell not available".to_string());
     }
 
-    let map = state.0.lock().unwrap();
-    let checker = map.get(&lang).unwrap();
-    Ok(checker.suggest(&word))
+    #[cfg(nuspell_available)]
+    {
+        {
+            let mut map = state.0.lock().unwrap();
+            if !map.contains_key(&lang) {
+                let entry = CATALOG
+                    .iter()
+                    .find(|e| e.lang == lang)
+                    .ok_or_else(|| format!("Unknown language: {lang}"))?;
+                let dir = dict_dir(&app)?;
+                let aff = dir.join(format!("{}.aff", entry.stem));
+                if !aff.exists() {
+                    return Err(format!("Dictionary {lang} is not installed"));
+                }
+                map.insert(lang.clone(), Spellchecker::load(&aff)?);
+            }
+        }
+        let map = state.0.lock().unwrap();
+        Ok(map.get(&lang).unwrap().suggest(&word))
+    }
 }

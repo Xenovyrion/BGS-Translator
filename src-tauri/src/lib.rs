@@ -41,9 +41,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(database::DbState(std::sync::Mutex::new(None)))
-        .manage(spellcheck::commands::SpellState(std::sync::Mutex::new(
-            std::collections::HashMap::new(),
-        )))
+        .manage(spellcheck::commands::SpellState::new())
         .invoke_handler(tauri::generate_handler![
             commands::open_plugin_cmd,
             commands::save_session_cmd,
