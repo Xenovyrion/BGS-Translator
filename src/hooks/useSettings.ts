@@ -12,10 +12,15 @@ export interface AppSettings {
   language:         string;
   targetLanguage:   string;
   debugMode:        boolean;
-  alternateRows:    boolean;
-  rowHover:         boolean;
-  shortcuts:        KeyboardShortcuts;
+  alternateRows:        boolean;
+  rowHover:             boolean;
+  propagateIdentical:   boolean;  // sync identical originals when translating
+  autoLoadSession:      boolean;  // auto-load matching session on plugin open
+  dbApplyValidates:     boolean;  // DB match → Validated (vs Pending)
+  shortcuts:            KeyboardShortcuts;
   dbFolder:         string;
+  exportFolder:     string;  // default output folder for generated plugins
+  silentExport:     boolean; // skip save dialog — write directly to the default path
   logFolder:        string;
   autosaveInterval: number; // minutes; 0 = disabled
 }
@@ -29,10 +34,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language:         "",
   targetLanguage:   "fr",
   debugMode:        false,
-  alternateRows:    true,
-  rowHover:         true,
-  shortcuts:        DEFAULT_SHORTCUTS,
+  alternateRows:        true,
+  rowHover:             true,
+  propagateIdentical:   true,
+  autoLoadSession:      false,
+  dbApplyValidates:     true,
+  shortcuts:            DEFAULT_SHORTCUTS,
   dbFolder:         "",
+  exportFolder:     "",
+  silentExport:     false,
   logFolder:        "",
   autosaveInterval: 0,
 };

@@ -24,6 +24,7 @@ interface Props {
   onOpenPlugin:          () => void;
   onOpenSession:         () => void;
   onSave?:               () => void;
+  onImport?:             () => void;
   onExport?:             () => void;
   onSettings:            () => void;
   onSettingsDb:          () => void;
@@ -38,7 +39,7 @@ interface Props {
 
 export default function MenuBar({
   pluginLoaded, loading,
-  onOpenPlugin, onOpenSession, onSave, onExport, onSettings, onSettingsDb, onChangelog,
+  onOpenPlugin, onOpenSession, onSave, onImport, onExport, onSettings, onSettingsDb, onChangelog,
   alternateRows, onToggleAlternateRows,
   showColumnFilters, onToggleColumnFilters,
 }: Props) {
@@ -64,7 +65,9 @@ export default function MenuBar({
         { label: t("menu.file_open_session"),                      onClick: () => { close(); onOpenSession(); } },
         { separator: true },
         { label: t("menu.file_save"),         shortcut: "Ctrl+S", onClick: onSave   ? () => { close(); onSave();   } : undefined, disabled: !pluginLoaded || loading },
-        { label: t("menu.file_export"),       shortcut: "Ctrl+E", onClick: onExport ? () => { close(); onExport(); } : undefined, disabled: !pluginLoaded || loading },
+        { separator: true },
+        { label: t("menu.file_import"),       shortcut: "Ctrl+I", onClick: onImport ? () => { close(); onImport(); } : undefined, disabled: !pluginLoaded || loading },
+        { label: t("menu.file_generate"),      shortcut: "Ctrl+E", onClick: onExport ? () => { close(); onExport(); } : undefined, disabled: !pluginLoaded || loading },
         { separator: true },
         { label: t("menu.file_quit"), onClick: close },
       ],

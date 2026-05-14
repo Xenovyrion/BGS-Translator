@@ -5,6 +5,7 @@ import type { TranslationEntry, EntryStatus, SortConfig } from "../../types";
 import { entryKey } from "../../hooks/usePlugin";
 import type { ColumnWidths } from "../../hooks/useLayout";
 import { startDrag } from "../../hooks/useLayout";
+import { TaggedText } from "../shared/TaggedText";
 
 const STATUS_COLORS: Record<EntryStatus, string> = {
   untranslated: "#ef4444",
@@ -356,10 +357,10 @@ const TableRow = memo(function TableRow({
         <span style={{ fontSize: "var(--fz-mono, 10px)", color: "var(--text-3)", fontFamily: "var(--font-mono, monospace)" }}>{entry.sub_type}</span>
       </td>
       <td style={{ padding: "3px 6px", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }} title={entry.original}>
-        {entry.original}
+        <TaggedText text={entry.original} />
       </td>
       <td style={{ padding: "3px 6px", color: entry.translated ? "var(--text-1)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0, fontStyle: entry.translated ? "normal" : "italic" }} title={entry.translated || notTranslatedLabel}>
-        {entry.translated || "–"}
+        {entry.translated ? <TaggedText text={entry.translated} /> : "–"}
       </td>
     </tr>
   );

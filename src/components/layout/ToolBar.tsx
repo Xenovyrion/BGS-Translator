@@ -37,7 +37,7 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
       flexShrink: 0,
       userSelect: "none",
     }}>
-      {/* ── Groupe Fichier ─────────────────────── */}
+      {/* ── Groupe Ouvrir ──────────────────────── */}
       <ToolGroup>
         <ToolBtn
           title={openTitle}
@@ -55,7 +55,12 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
         >
           <IconOpenSession set={iconSet} />
         </ToolBtn>
+      </ToolGroup>
 
+      <Divider />
+
+      {/* ── Sauvegarder ────────────────────────── */}
+      <ToolGroup>
         <ToolBtn
           title={t("toolbar.save_session")}
           onClick={onSave}
@@ -63,11 +68,17 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
         >
           <IconSave set={iconSet} />
         </ToolBtn>
+      </ToolGroup>
 
+      <Divider />
+
+      {/* ── Générer fichier traduit ─────────────── */}
+      <ToolGroup>
         <ToolBtn
           title={t("toolbar.export_plugin")}
           onClick={onExport}
           disabled={!pluginName || !onExport}
+          accent={!!pluginName && !!onExport}
         >
           <IconExport set={iconSet} />
         </ToolBtn>

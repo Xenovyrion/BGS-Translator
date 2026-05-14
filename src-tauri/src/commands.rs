@@ -16,6 +16,7 @@ use crate::translation::{
 #[derive(Serialize)]
 pub struct PluginMetadata {
     pub plugin_name:  String,
+    pub plugin_path:  String,
     pub author:       String,
     pub description:  String,
     pub masters:      Vec<String>,
@@ -46,6 +47,7 @@ pub async fn open_plugin_cmd(
 
     Ok(PluginMetadata {
         plugin_name:  loaded.path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_owned(),
+        plugin_path:  loaded.path.to_string_lossy().into_owned(),
         author:       loaded.info.author,
         description:  loaded.info.description,
         masters:      loaded.info.masters,
@@ -97,14 +99,44 @@ pub async fn delete_session_cmd(
     delete_session_by_id(&id, &app)
 }
 
+/// Opens a reference plugin and returns its entries so the frontend can
+/// compare them with the currently-open plugin and import translations.
+/// Unlike open_plugin_cmd, this is synchronous (no streaming) and intended
+/// for secondary "reference" files, not the main plugin.
+#[tauri::command]
+pub async fn import_translations_from_plugin_cmd(
+    reference_path: String,
+) -> Result<Vec<TranslationEntry>, String> {
+    log::info!("[cmd] import_translations_from: {}", reference_path);
+    let loaded = open_file(std::path::Path::new(&reference_path)).map_err(|e| {
+        log::error!("[cmd] import_translations_from failed: {}", e);
+        e.to_string()
+    })?;
+    log::info!("[cmd] import_translations_from: {} entries loaded from reference", loaded.entries.len());
+    Ok(loaded.entries)
+}
+
+/// Creates a directory (and all parents) from the frontend.
+/// Uses the Rust logger so errors appear in the log file.
+#[tauri::command]
+pub async fn ensure_dir_cmd(path: String) -> Result<(), String> {
+    log::info!("[cmd] ensure_dir: {}", path);
+    std::fs::create_dir_all(&path).map_err(|e| {
+        let msg = format!("Cannot create directory '{}': {}", path, e);
+        log::error!("[cmd] {}", msg);
+        msg
+    })
+}
+
 #[tauri::command]
 pub async fn export_plugin_cmd(
     source_path: String,
     output_path: String,
     entries: Vec<TranslationEntry>,
 ) -> Result<(), String> {
+    let total     = entries.len();
     let validated = entries.iter().filter(|e| e.status == crate::translation::entry::EntryStatus::Validated).count();
-    log::info!("[cmd] export_plugin: {} ({} validated entries)", output_path, validated);
+    log::info!("[cmd] export_plugin: {} ({} / {} validated entries)", output_path, validated, total);
     let result = write_translated_plugin(
         std::path::Path::new(&source_path),
         std::path::Path::new(&output_path),

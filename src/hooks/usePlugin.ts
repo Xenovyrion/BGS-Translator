@@ -24,7 +24,7 @@ const MASTER_TO_GAME: Record<string, string> = {
   "fallout3.esm":    "Fallout 3",
 };
 
-function detectGame(masters: string[]): string {
+export function detectGame(masters: string[]): string {
   for (const master of masters) {
     const key = master.toLowerCase();
     const game = MASTER_TO_GAME[key];
@@ -35,7 +35,13 @@ function detectGame(masters: string[]): string {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function usePlugin() {
+export function usePlugin({
+  propagateIdentical = true,
+  dbApplyValidates   = true,
+}: {
+  propagateIdentical?: boolean;
+  dbApplyValidates?:   boolean;
+} = {}) {
   const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
   const [entries, setEntries]               = useState<TranslationEntry[]>([]);
   const [loading, setLoading]               = useState(false);
@@ -46,7 +52,7 @@ export function usePlugin() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<TranslationEntry | null>(null);
   const [selectedKeys, setSelectedKeys]   = useState<Set<string>>(new Set());
-  const [sortConfig, setSortConfig]       = useState<SortConfig | null>(null);
+  const [sortConfig, setSortConfig]       = useState<SortConfig | null>({ column: "form_id", dir: "asc" });
   const [columnFilters, setColumnFilters] = useState<Partial<Record<string, string>>>({});
   const [dbApplyResult, setDbApplyResult] = useState<number | null>(null);
   const [dbNotFound, setDbNotFound]       = useState<string | null>(null);
@@ -58,7 +64,7 @@ export function usePlugin() {
     setSelectedEntry(null);
     setSelectedGroup(null);
     setSelectedKeys(new Set());
-    setSortConfig(null);
+    setSortConfig({ column: "form_id", dir: "asc" });
     setColumnFilters({});
     setDbApplyResult(null);
     setDbNotFound(null);
@@ -89,7 +95,18 @@ export function usePlugin() {
       const applied = await invoke<{ matched: number; total: number; entries: TranslationEntry[] }>(
         "apply_db_full_cmd", { entries: indexed }
       );
-      const out = applied.entries.map((e, i) => ({ ...e, _idx: i }));
+      let out = applied.entries.map((e, i) => ({ ...e, _idx: i }));
+
+      // If dbApplyValidates is off, downgrade DB-applied entries from Validated → Pending
+      if (!dbApplyValidates && applied.matched > 0) {
+        const wasEmpty = new Set(indexed.filter(e => !e.translated).map(e => e._idx));
+        out = out.map(e =>
+          wasEmpty.has(e._idx) && e.status === "validated"
+            ? { ...e, status: "pending" as EntryStatus }
+            : e
+        );
+      }
+
       if (applied.matched > 0) setDbApplyResult(applied.matched);
       setLoadedDbInfo(dbInfo);
       return out;
@@ -97,7 +114,7 @@ export function usePlugin() {
       setDbNotFound(game);
       return indexed;
     }
-  }, []);
+  }, [dbApplyValidates]);
 
   // ── Open a plugin file (.esp/.esm/.esl) ───────────────────────────────────
 
@@ -165,6 +182,7 @@ export function usePlugin() {
       // Reconstruct PluginInfo from the session
       const info: PluginInfo = {
         plugin_name:  session.plugin_name,
+        plugin_path:  session.plugin_path || undefined,
         author:       session.plugin_info.author,
         description:  session.plugin_info.description,
         masters:      session.plugin_info.masters,
@@ -200,20 +218,101 @@ export function usePlugin() {
   // ── Individual updates (by _idx) ─────────────────────────────────────────
 
   const updateTranslation = useCallback((idx: number, translated: string) => {
-    const patch = (e: TranslationEntry) => {
-      if (e._idx !== idx) return e;
-      const newStatus: EntryStatus = translated
-        ? (e.status === "untranslated" ? "pending" : e.status)
-        : "untranslated";
-      return { ...e, translated, status: newStatus };
-    };
-    setEntries((prev) => prev.map(patch));
-    setSelectedEntry((prev) => prev?._idx === idx ? patch(prev) : prev);
-  }, []);
+    // Status is never touched here — only explicit setStatus calls change it.
+    const patch = (e: TranslationEntry) =>
+      e._idx !== idx ? e : { ...e, translated };
+
+    setEntries((prev) => {
+      if (!propagateIdentical || !translated) return prev.map(patch);
+      const target = prev.find(e => e._idx === idx);
+      if (!target) return prev.map(patch);
+      const originalText = target.original;
+      return prev.map(e => {
+        if (e._idx === idx) return patch(e);
+        if (e.original === originalText && e.status !== "validated")
+          return { ...e, translated };
+        return e;
+      });
+    });
+    setSelectedEntry((prev) => prev?._idx === idx ? { ...prev, translated } : prev);
+  }, [propagateIdentical]);
 
   const setStatus = useCallback((idx: number, status: EntryStatus) => {
-    setEntries((prev) => prev.map((e) => e._idx === idx ? { ...e, status } : e));
+    setEntries((prev) => {
+      const target = prev.find(e => e._idx === idx);
+      // Propagate to all entries that share the same original AND same (non-empty) translation
+      if (propagateIdentical && target?.translated) {
+        return prev.map((e) => {
+          if (e._idx === idx) return { ...e, status };
+          if (e.original === target.original && e.translated === target.translated)
+            return { ...e, status };
+          return e;
+        });
+      }
+      return prev.map((e) => e._idx === idx ? { ...e, status } : e);
+    });
     setSelectedEntry((prev) => prev?._idx === idx ? { ...prev, status } : prev);
+  }, [propagateIdentical]);
+
+  // ── Import translations from a reference plugin ──────────────────────────
+  //
+  // refEntries: entries parsed from the reference (already-translated) file.
+  //
+  // Key insight: multiple entries can share the same form_id + sub_type (e.g.
+  // several CNAM fields for the same QUST record — one per quest stage). A
+  // simple Map<key, string> would only keep the last value and apply it to all
+  // siblings, producing wrong results. Instead we build a Map<key, string[]>
+  // (ordered list per key) and match by POSITION within each group, which
+  // preserves the 1-to-1 correspondence between current and reference entries.
+  //
+  // Returns the number of entries that were actually updated.
+
+  const applyImportedTranslations = useCallback((
+    refEntries: TranslationEntry[],
+    overwrite = false,
+  ): number => {
+    // Build positional map: "formId_subType" → [text at pos 0, text at pos 1, …]
+    // The order mirrors the parse order of the reference file, which must match
+    // the parse order of the currently-open file (same base record structure).
+    const refMap = new Map<string, string[]>();
+    for (const e of refEntries) {
+      const key = `${e.form_id}_${e.sub_type}`;
+      const list = refMap.get(key);
+      if (list) list.push(e.original);
+      else refMap.set(key, [e.original]);
+    }
+
+    // count is reset inside the updater so React Strict Mode double-invoke
+    // doesn't produce a doubled total.
+    let count = 0;
+    setEntries((prev) => {
+      let c = 0;
+      // Track how many times each key has been visited so far in this pass.
+      const keyCounters = new Map<string, number>();
+
+      const next = prev.map((e) => {
+        const key = `${e.form_id}_${e.sub_type}`;
+        const pos = keyCounters.get(key) ?? 0;
+        keyCounters.set(key, pos + 1);
+
+        // Always protect entries the user is actively working on or has explicitly ignored.
+        if (!overwrite && (e.status === "pending" || e.status === "ignored")) return e;
+
+        const refText = refMap.get(key)?.[pos];
+        // Skip: no match in reference, or text is unchanged (entry not translated in reference).
+        if (!refText || refText === e.original) return e;
+        // Skip: already validated with the exact same text — nothing to change.
+        if (!overwrite && e.status === "validated" && e.translated === refText) return e;
+
+        // Count only entries that actually change (new translation or updated text).
+        c++;
+        return { ...e, translated: refText, status: "validated" as EntryStatus };
+      });
+      count = c;
+      return next;
+    });
+
+    return count;
   }, []);
 
   // ── Bulk operations on the selection ─────────────────────────────────────
@@ -248,18 +347,24 @@ export function usePlugin() {
   // ── Sorting ───────────────────────────────────────────────────────────────
 
   const sortedEntries = useMemo(() => {
-    if (!sortConfig) return filteredEntries;
+    const stableKey = (a: typeof filteredEntries[0], b: typeof filteredEntries[0]) =>
+      a.form_id !== b.form_id ? a.form_id - b.form_id : a.sub_type.localeCompare(b.sub_type);
+
+    if (!sortConfig) return [...filteredEntries].sort(stableKey);
+
     const dir = sortConfig.dir === "asc" ? 1 : -1;
     return [...filteredEntries].sort((a, b) => {
+      let primary = 0;
       switch (sortConfig.column) {
-        case "form_id":      return dir * (a.form_id - b.form_id);
-        case "record_type":  return dir * a.record_type.localeCompare(b.record_type);
-        case "sub_type":     return dir * a.sub_type.localeCompare(b.sub_type);
-        case "original":     return dir * a.original.localeCompare(b.original);
-        case "translated":   return dir * a.translated.localeCompare(b.translated);
-        case "status":       return dir * a.status.localeCompare(b.status);
-        default:             return 0;
+        case "form_id":     primary = dir * (a.form_id - b.form_id); break;
+        case "record_type": primary = dir * a.record_type.localeCompare(b.record_type); break;
+        case "sub_type":    primary = dir * a.sub_type.localeCompare(b.sub_type); break;
+        case "original":    primary = dir * a.original.localeCompare(b.original); break;
+        case "translated":  primary = dir * a.translated.localeCompare(b.translated); break;
+        case "status":      primary = dir * a.status.localeCompare(b.status); break;
       }
+      // Secondary sort: form_id then sub_type for a deterministic order
+      return primary !== 0 ? primary : stableKey(a, b);
     });
   }, [filteredEntries, sortConfig]);
 
@@ -379,7 +484,7 @@ export function usePlugin() {
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount, progressPercent,
     openPlugin, loadSession,
-    updateTranslation, setStatus, navigateBy, bulkSetStatus,
+    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations,
     selectedCount: selectedKeys.size,
     columnFilters, setColumnFilter,
     dbApplyResult, clearDbApplyResult: () => setDbApplyResult(null),

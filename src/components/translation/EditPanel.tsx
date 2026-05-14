@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "
 import { useTranslation } from "react-i18next";
 import { startDrag } from "../../hooks/useLayout";
 import type { TranslationEntry, EntryStatus } from "../../types";
+import { TaggedText } from "../shared/TaggedText";
 
 export interface EditPanelHandle {
   focus: () => void;
@@ -24,7 +25,15 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
 ) {
   const { t } = useTranslation();
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const overlayRef   = useRef<HTMLDivElement>(null);
   const [handleHover, setHandleHover] = useState(false);
+
+  const syncScroll = useCallback(() => {
+    if (overlayRef.current && textareaRef.current) {
+      overlayRef.current.scrollTop  = textareaRef.current.scrollTop;
+      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, []);
   const formIdHex    = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
   const recordColor  = recordColors[entry.record_type] ?? "#64748b";
 
@@ -110,22 +119,37 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           {entry.sub_type}
         </span>
 
-        {/* Boutons de statut */}
-        <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
-          {STATUS_CONFIG.map(({ status, label, color }) => (
-            <button
-              key={status}
-              onClick={() => onSetStatus(entry._idx ?? 0, status)}
-              style={{
-                padding: "2px 8px", borderRadius: 4, border: "none",
-                cursor: "pointer", fontSize: 11, fontWeight: 600,
-                background: entry.status === status ? color : "var(--bg-primary)",
-                color: entry.status === status ? "#fff" : "var(--text-3)",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Status label + buttons */}
+        <span style={{
+          marginLeft: "auto", flexShrink: 0,
+          fontSize: 10, color: "var(--text-3)",
+          textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600,
+        }}>
+          {t("edit.status_label")}
+        </span>
+        <div style={{ display: "flex", gap: 3 }}>
+          {STATUS_CONFIG.map(({ status, label, color }) => {
+            const active = entry.status === status;
+            return (
+              <button
+                key={status}
+                onClick={() => onSetStatus(entry._idx ?? 0, status)}
+                style={{
+                  height: 24, padding: "0 8px",
+                  borderRadius: 4, cursor: "pointer",
+                  fontSize: 11, fontWeight: active ? 700 : 400,
+                  background: active ? color : "transparent",
+                  color: active ? "#fff" : color,
+                  border: `1px solid ${color}`,
+                  opacity: active ? 1 : 0.6,
+                  transition: "opacity 0.12s, background 0.12s",
+                  boxSizing: "border-box",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 8, flexShrink: 0 }}>
@@ -154,7 +178,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {t("edit.original_label")}
           </div>
-          {entry.original}
+          <TaggedText text={entry.original} />
         </div>
 
         {/* Traduction */}
@@ -162,20 +186,54 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {t("edit.translation_label")}
           </div>
-          <textarea
-            ref={textareaRef}
-            value={entry.translated}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={t("edit.placeholder")}
-            style={{
-              flex: 1, resize: "none", padding: "5px 7px",
-              background: "var(--bg-hover)", color: "var(--text-1)",
-              border: "1px solid var(--border)", borderRadius: 6,
-              fontSize: "var(--fz-table, 12px)", fontFamily: "var(--font-content, system-ui, sans-serif)",
-              lineHeight: 1.6, outline: "none", boxSizing: "border-box",
-            }}
-          />
+          {/* Wrapper: textarea below, overlay on top (pointerEvents:none) */}
+          <div style={{ flex: 1, position: "relative" }}>
+            {/* Actual textarea — transparent text so only overlay is visible */}
+            <textarea
+              ref={textareaRef}
+              value={entry.translated}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onScroll={syncScroll}
+              placeholder={t("edit.placeholder")}
+              style={{
+                position: "absolute", inset: 0,
+                width: "100%", height: "100%",
+                resize: "none", padding: "5px 7px",
+                background: "var(--bg-hover)",
+                color: "transparent",
+                caretColor: "var(--text-1)",
+                border: "1px solid var(--border)", borderRadius: 6,
+                fontSize: "var(--fz-table, 12px)", fontFamily: "var(--font-content, system-ui, sans-serif)",
+                lineHeight: 1.6, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {/* Read-only overlay rendered on top — provides visible colored text */}
+            <div
+              ref={overlayRef}
+              aria-hidden
+              style={{
+                position: "absolute", inset: 0,
+                padding: "5px 7px",
+                border: "1px solid transparent",
+                borderRadius: 6,
+                fontSize: "var(--fz-table, 12px)",
+                fontFamily: "var(--font-content, system-ui, sans-serif)",
+                lineHeight: 1.6,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                overflow: "hidden",
+                pointerEvents: "none",
+                color: "var(--text-1)",
+                boxSizing: "border-box",
+              }}
+            >
+              <TaggedText text={entry.translated || ""} />
+              {/* trailing space prevents last-line height collapse */}
+              {" "}
+            </div>
+          </div>
         </div>
       </div>
     </div>

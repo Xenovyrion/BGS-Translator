@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { documentDir } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { useTranslation } from "react-i18next";
@@ -9,7 +10,7 @@ import { useSettings } from "./hooks/useSettings";
 import { usePlugin } from "./hooks/usePlugin";
 import { useLayout } from "./hooks/useLayout";
 import { DEFAULT_SHORTCUTS } from "./types";
-import type { SortConfig, TranslationEntry, ShortcutDef } from "./types";
+import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
 
@@ -26,6 +27,8 @@ import UpdateModal       from "./components/shared/UpdateModal";
 import ChangelogModal    from "./components/shared/ChangelogModal";
 import SessionPickerModal from "./components/shared/SessionPickerModal";
 import ThemeManagerModal from "./components/themes/ThemeManagerModal";
+import { NotificationBanner } from "./components/shared/NotificationBanner";
+import type { Notification } from "./components/shared/NotificationBanner";
 
 interface UpdateInfo { version: string; notes?: string }
 
@@ -70,6 +73,7 @@ export default function App() {
 
   const {
     pluginInfo, entries, displayEntries, loading, loadingProgress, error,
+    // (usePlugin receives settings-driven options below)
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,
@@ -78,13 +82,48 @@ export default function App() {
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
     openPlugin, loadSession,
-    updateTranslation, setStatus, navigateBy, bulkSetStatus,
+    updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations,
     selectedCount,
     columnFilters, setColumnFilter,
     dbApplyResult, clearDbApplyResult,
     dbNotFound, clearDbNotFound,
     loadedDbInfo,
-  } = usePlugin();
+  } = usePlugin({
+    propagateIdentical: settings.propagateIdentical !== false,
+    dbApplyValidates:   settings.dbApplyValidates   !== false,
+  });
+
+  // Source path resolved interactively when session lacks it
+  const [resolvedSourcePath, setResolvedSourcePath] = useState<string>("");
+  // Documents/BGS-Translator/Output — computed once at startup as the initial default
+  const [defaultExportDir, setDefaultExportDir]     = useState<string>("");
+
+  // Reset resolved path when a different plugin is opened/loaded
+  useEffect(() => {
+    setResolvedSourcePath("");
+  }, [pluginInfo?.plugin_name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Base folder: Documents/BGS-Translator/Traduction (game sub-folder added at export time).
+  // On first run, auto-save it so the settings field isn't empty.
+  useEffect(() => {
+    documentDir().then((dir) => {
+      const base = dir.replace(/[/\\]+$/, "") + "/BGS-Translator/Traduction";
+      setDefaultExportDir(base);
+      const sentinel = "bgstranslator_export_dir_init_v2";
+      if (!settings.exportFolder && !localStorage.getItem(sentinel)) {
+        localStorage.setItem(sentinel, "1");
+        updateSettings({ exportFolder: base });
+      }
+      // Always ensure the folder exists on startup (logged server-side)
+      invoke("ensure_dir_cmd", { path: base }).catch(() => {});
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Create the configured export folder whenever it changes, so the save dialog opens there
+  useEffect(() => {
+    if (!settings.exportFolder) return;
+    invoke("ensure_dir_cmd", { path: settings.exportFolder }).catch(() => {});
+  }, [settings.exportFolder]);
 
   const [showSettings,       setShowSettings]       = useState(false);
   const [showThemeManager,   setShowThemeManager]   = useState(false);
@@ -95,7 +134,12 @@ export default function App() {
   const [showColumnFilters,  setShowColumnFilters]  = useState(false);
   const [appVersion,         setAppVersion]         = useState("0.1.0");
   const [lastAutosave,       setLastAutosave]       = useState<Date | null>(null);
-  const [sessionError,       setSessionError]       = useState<string | null>(null);
+  const [notification,       setNotification]       = useState<Notification | null>(null);
+
+  const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
+    setNotification({ message, type, detail, key: Date.now(), duration });
+  }, []);
+  const dismissNotification = useCallback(() => setNotification(null), []);
 
   const editPanelRef = useRef<EditPanelHandle>(null);
   const tableRef     = useRef<HTMLDivElement>(null);
@@ -118,7 +162,7 @@ export default function App() {
       try {
         await invoke("save_session_cmd", {
           session: {
-            plugin_path: "",
+            plugin_path: pluginInfo.plugin_path ?? "",
             plugin_name: pluginInfo.plugin_name,
             plugin_info: pluginInfo,
             entries,
@@ -131,6 +175,21 @@ export default function App() {
     return () => clearInterval(timer);
   }, [settings.autosaveInterval, pluginInfo, entries, settings.targetLanguage]);
 
+  /* ── Notification triggers ──────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (dbApplyResult === null) return;
+    const detail = `${dbApplyResult.toLocaleString()} ${t("db.banner_suffix", { count: dbApplyResult })}${loadedDbInfo ? ` — ${loadedDbInfo.name} (${loadedDbInfo.game})` : ""}`;
+    notify(`✓ ${t("db.banner_title")}`, "success", detail, 6000);
+    clearDbApplyResult();
+  }, [dbApplyResult]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!dbNotFound) return;
+    notify(`⚠ ${t("db.no_db_title")}`, "error", t("db.no_db_message", { game: dbNotFound }), 8000);
+    clearDbNotFound();
+  }, [dbNotFound]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── File actions ────────────────────────────────────────────────────────── */
 
   const handleOpenPlugin = useCallback(async () => {
@@ -139,8 +198,23 @@ export default function App() {
       multiple: false,
     });
     if (!selected || typeof selected !== "string") return;
+    if (settings.autoLoadSession) {
+      try {
+        const stem = selected.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/, "") ?? "";
+        const sessions = await invoke<SessionListItem[]>("list_sessions_cmd");
+        const matching = sessions.filter(s => s.plugin_name.toLowerCase() === stem.toLowerCase());
+        if (matching.length > 0) {
+          const latest = matching.reduce((a, b) => a.saved_at > b.saved_at ? a : b);
+          await loadSession(latest.id, settings.dbFolder);
+          // Keep the path the user just selected so export doesn't ask for it again
+          setResolvedSourcePath(selected);
+          return;
+        }
+      } catch { /* fall through to normal open */ }
+    }
+
     await openPlugin(selected, settings.dbFolder);
-  }, [openPlugin, settings.dbFolder]);
+  }, [openPlugin, loadSession, settings.dbFolder, settings.autoLoadSession]);
 
   const handleOpenSession = useCallback(() => {
     setShowSessionPicker(true);
@@ -148,11 +222,10 @@ export default function App() {
 
   const handleSaveSession = useCallback(async () => {
     if (!pluginInfo) return;
-    setSessionError(null);
     try {
       await invoke("save_session_cmd", {
         session: {
-          plugin_path: "",
+          plugin_path: pluginInfo.plugin_path ?? "",
           plugin_name: pluginInfo.plugin_name,
           plugin_info: pluginInfo,
           entries,
@@ -160,17 +233,117 @@ export default function App() {
         },
       });
       setLastAutosave(new Date());
+      notify(`✓ ${t("session.saved")}`, "success", undefined, 3000);
     } catch (e) {
-      setSessionError(String(e));
+      notify(`⚠ ${t("session.save_error_title")}`, "error", String(e), 8000);
     }
-  }, [pluginInfo, entries, settings.targetLanguage]);
+  }, [pluginInfo, entries, settings.targetLanguage, notify, t]);
+
+  const handleImportTranslations = useCallback(async () => {
+    if (!pluginInfo) return;
+
+    const importDefaultPath = settings.exportFolder || defaultExportDir || undefined;
+    const selected = await open({
+      filters: [{ name: "Bethesda Plugin", extensions: ["esp", "esm", "esl"] }],
+      title: t("import.pick_title"),
+      defaultPath: importDefaultPath,
+      multiple: false,
+    });
+    if (!selected || typeof selected !== "string") return;
+
+    try {
+      const refEntries = await invoke<TranslationEntry[]>(
+        "import_translations_from_plugin_cmd",
+        { referencePath: selected },
+      );
+
+      const count = applyImportedTranslations(refEntries);
+
+      if (count > 0) {
+        notify(
+          `✓ ${t("import.success")}`,
+          "success",
+          t("import.success_detail", { count: count.toLocaleString() }),
+          5000,
+        );
+      } else {
+        notify(
+          `ℹ ${t("import.none_found")}`,
+          "success",
+          t("import.none_found_detail"),
+          5000,
+        );
+      }
+    } catch (e) {
+      notify(`⚠ ${t("import.error_title")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, applyImportedTranslations, notify, t]);
 
   const handleExport = useCallback(async () => {
     if (!pluginInfo) return;
-    const path = await save({ filters: [{ name: "Bethesda Plugin", extensions: ["esp", "esm"] }] });
-    if (!path) return;
-    await invoke("export_plugin_cmd", { sourcePath: "", outputPath: path, entries });
-  }, [pluginInfo, entries]);
+
+    // ── 1. Resolve the source file path ─────────────────────────────────────
+    let sourcePath = resolvedSourcePath || pluginInfo.plugin_path || "";
+    if (!sourcePath) {
+      // Old session without saved path — ask user to locate the original file
+      const picked = await open({
+        filters: [{ name: "Bethesda Plugin", extensions: ["esp", "esm", "esl"] }],
+        title: t("export.pick_source_title"),
+        multiple: false,
+      });
+      if (!picked || typeof picked !== "string") return;
+      sourcePath = picked;
+      setResolvedSourcePath(sourcePath);
+    }
+
+    // ── 2. Build the default output path ────────────────────────────────────
+    const ext      = (sourcePath.match(/(\.[^./\\]+)$/i)?.[1] ?? ".esp");
+    const baseName = (pluginInfo.plugin_name ?? "output") + ext;
+
+    // Compute the output folder:
+    //   - If user configured a folder → use it exactly
+    //   - Otherwise → Documents/BGS-Translator/Traduction
+    const folder = (settings.exportFolder || defaultExportDir || "").replace(/[/\\]+$/, "");
+
+    const defaultOutputPath = folder ? folder + "/" + baseName : baseName;
+
+    console.log("[export] source:", sourcePath);
+    console.log("[export] defaultOutputPath:", defaultOutputPath);
+
+    // ── 3. Ensure the target folder exists before showing the dialog ────────
+    if (folder) {
+      await invoke("ensure_dir_cmd", { path: folder }).catch(() => {});
+    }
+
+    // ── 4. Determine final output path ──────────────────────────────────────
+    let outputPath: string;
+    if (settings.silentExport) {
+      // Silent mode — write directly without showing a dialog
+      outputPath = defaultOutputPath;
+    } else {
+      const chosen = await save({
+        filters: [{ name: "Bethesda Plugin", extensions: ["esp", "esm", "esl"] }],
+        defaultPath: defaultOutputPath,
+      });
+      if (!chosen) return;
+      outputPath = chosen;
+    }
+
+    // ── 5. Run the export ───────────────────────────────────────────────────
+    console.log("[export] Writing to:", outputPath);
+    try {
+      await invoke("export_plugin_cmd", { sourcePath, outputPath, entries });
+      const validated = entries.filter(e => e.status === "validated").length;
+      notify(
+        `✓ ${t("export.success")}`, "success",
+        t("export.success_detail", { count: validated.toLocaleString(), total: entries.length.toLocaleString() }),
+        6000,
+      );
+    } catch (e) {
+      notify(`⚠ ${t("export.error_title")}`, "error", String(e), 10000);
+    }
+  }, [pluginInfo, resolvedSourcePath, defaultExportDir, entries,
+      settings.exportFolder, settings.silentExport, notify, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Keyboard shortcuts ──────────────────────────────────────────────────── */
 
@@ -229,12 +402,13 @@ export default function App() {
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && e.key === "o") { e.preventDefault(); handleOpenPlugin(); }
       if (ctrl && e.key === "s" && pluginInfo) { e.preventDefault(); handleSaveSession(); }
+      if (ctrl && e.key === "i" && pluginInfo) { e.preventDefault(); handleImportTranslations(); }
       if (ctrl && e.key === "e" && pluginInfo) { e.preventDefault(); handleExport(); }
       if (ctrl && e.key === ",") { e.preventDefault(); setShowSettings(true); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleOpenPlugin, handleSaveSession, handleExport, pluginInfo]);
+  }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo]);
 
   /* ── Render ──────────────────────────────────────────────────────────────── */
 
@@ -248,6 +422,7 @@ export default function App() {
         onOpenPlugin={handleOpenPlugin}
         onOpenSession={handleOpenSession}
         onSave={pluginInfo ? handleSaveSession : undefined}
+        onImport={pluginInfo ? handleImportTranslations : undefined}
         onExport={pluginInfo ? handleExport : undefined}
         onSettings={() => setShowSettings(true)}
         onSettingsDb={() => setShowSettings(true)}
@@ -272,54 +447,12 @@ export default function App() {
         lastAutosave={lastAutosave}
       />
 
-      {/* ── DB auto-apply success banner ──────────────────────────────────── */}
-      {dbApplyResult !== null && (
-        <div style={{
-          padding: "5px 14px", flexShrink: 0,
-          background: "rgba(34,197,94,0.1)", borderBottom: "1px solid rgba(34,197,94,0.2)",
-          display: "flex", alignItems: "center", gap: 10, fontSize: 12,
-        }}>
-          <span style={{ color: "#22c55e", fontWeight: 700 }}>✓ {t("db.banner_title")}</span>
-          <span style={{ color: "var(--text-2)" }}>
-            <strong style={{ color: "var(--text-1)" }}>{dbApplyResult}</strong>{" "}
-            {t("db.banner_suffix", { count: dbApplyResult })}
-          </span>
-          {loadedDbInfo && (
-            <span style={{ color: "var(--text-3)", fontSize: 11 }}>
-              — {loadedDbInfo.name} ({loadedDbInfo.game})
-            </span>
-          )}
-          <button onClick={clearDbApplyResult} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
-        </div>
-      )}
-
-      {/* ── No DB found for detected game ─────────────────────────────────── */}
-      {dbNotFound && (
-        <div style={{
-          padding: "5px 14px", flexShrink: 0,
-          background: "rgba(239,68,68,0.1)", borderBottom: "1px solid rgba(239,68,68,0.25)",
-          display: "flex", alignItems: "center", gap: 10, fontSize: 12,
-        }}>
-          <span style={{ color: "#ef4444", fontWeight: 700 }}>⚠ {t("db.no_db_title")}</span>
-          <span style={{ color: "var(--text-2)" }}>
-            {t("db.no_db_message", { game: dbNotFound })}
-          </span>
-          <button onClick={clearDbNotFound} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
-        </div>
-      )}
-
-      {/* ── Session save error ────────────────────────────────────────────── */}
-      {sessionError && (
-        <div style={{
-          padding: "5px 14px", flexShrink: 0,
-          background: "rgba(239,68,68,0.1)", borderBottom: "1px solid rgba(239,68,68,0.25)",
-          display: "flex", alignItems: "center", gap: 10, fontSize: 12,
-        }}>
-          <span style={{ color: "#ef4444", fontWeight: 700 }}>⚠ {t("session.save_error_title")}</span>
-          <span style={{ color: "var(--text-2)", fontFamily: "var(--font-mono, monospace)", fontSize: 11 }}>{sessionError}</span>
-          <button onClick={() => setSessionError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
-        </div>
-      )}
+      {/* ── Notifications — fixed-height slot so content below never shifts ── */}
+      <div style={{ height: 30, flexShrink: 0 }}>
+        {notification && (
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+        )}
+      </div>
 
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -419,6 +552,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           onOpenThemeManager={() => { setShowSettings(false); setShowThemeManager(true); }}
           onResetLayout={resetLayout}
+          defaultExportDir={defaultExportDir}
         />
       )}
 

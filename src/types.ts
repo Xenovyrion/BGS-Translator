@@ -23,6 +23,7 @@ export interface TranslationEntry {
 
 export interface PluginInfo {
   plugin_name:  string;
+  plugin_path?: string;
   author:       string;
   description:  string;
   masters:      string[];

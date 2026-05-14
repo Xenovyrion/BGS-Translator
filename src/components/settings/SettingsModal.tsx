@@ -11,8 +11,8 @@ import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts } from "../../types";
 import { DEFAULT_SHORTCUTS } from "../../types";
 
-type Tab = "apparence" | "raccourcis" | "database" | "systeme";
-type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void };
+type Tab = "apparence" | "raccourcis" | "database" | "divers" | "systeme";
+type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
 
 // ── Modal principal ───────────────────────────────────────────────────────────
 
@@ -22,9 +22,10 @@ interface Props {
   onClose:            () => void;
   onOpenThemeManager: () => void;
   onResetLayout?:     () => void;
+  defaultExportDir?:  string;
 }
 
-export default function SettingsModal({ settings, onUpdate, onClose, onOpenThemeManager, onResetLayout }: Props) {
+export default function SettingsModal({ settings, onUpdate, onClose, onOpenThemeManager, onResetLayout, defaultExportDir = "" }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("apparence");
 
@@ -32,6 +33,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
     { id: "apparence",  labelKey: "settings_modal.tab_appearance", icon: "✦" },
     { id: "raccourcis", labelKey: "settings_modal.tab_shortcuts",  icon: "⌨" },
     { id: "database",   labelKey: "settings_modal.tab_database",   icon: "▤" },
+    { id: "divers",     labelKey: "settings_modal.tab_misc",       icon: "⋮" },
     { id: "systeme",    labelKey: "settings_modal.tab_system",     icon: "⚙" },
   ];
 
@@ -115,6 +117,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
           {tab === "apparence"  && <AppearanceTab settings={settings} onUpdate={onUpdate} onOpenThemeManager={onOpenThemeManager} onResetLayout={onResetLayout} />}
           {tab === "raccourcis" && <ShortcutsTab  settings={settings} onUpdate={onUpdate} />}
           {tab === "database"   && <DatabaseTab   settings={settings} onUpdate={onUpdate} />}
+          {tab === "divers"     && <DiversTab     settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
           {tab === "systeme"    && <SystemeTab    settings={settings} onUpdate={onUpdate} />}
         </div>
 
@@ -592,6 +595,17 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
         </Section>
       )}
 
+      {/* DB apply behavior */}
+      <Section label={t("settings_modal.db.apply_validates_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.db.apply_validates_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn label={t("settings_modal.db.apply_validates_on")}  active={settings.dbApplyValidates !== false} onClick={() => onUpdate({ dbApplyValidates: true  })} />
+          <PillBtn label={t("settings_modal.db.apply_validates_off")} active={settings.dbApplyValidates === false}  onClick={() => onUpdate({ dbApplyValidates: false })} />
+        </div>
+      </Section>
+
       {/* Export the currently loaded DB */}
       <Section label={t("settings_modal.db.export_section")}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -610,6 +624,87 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
           {t("settings_modal.db.export_hint")}
         </p>
       </Section>
+    </div>
+  );
+}
+
+// ── Divers tab ────────────────────────────────────────────────────────────────
+
+function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
+  const { t } = useTranslation();
+
+  const pickExportFolder = async () => {
+    try {
+      const dir = await openDialog({ directory: true, multiple: false, title: t("settings_modal.misc.export_folder_pick_title") });
+      if (dir && typeof dir === "string") onUpdate({ exportFolder: dir });
+    } catch {}
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* Export folder */}
+      <Section label={t("settings_modal.misc.export_folder_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.misc.export_folder_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="text"
+            value={settings.exportFolder ?? ""}
+            onChange={(e) => onUpdate({ exportFolder: e.target.value })}
+            placeholder={defaultExportDir || t("settings_modal.misc.export_folder_placeholder")}
+            style={{
+              flex: 1, padding: "7px 10px", borderRadius: 7, fontSize: 11,
+              background: "var(--bg-hover)", color: "var(--accent)",
+              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace",
+            }}
+          />
+          <button onClick={pickExportFolder} title={t("settings_modal.misc.export_folder_pick_title")} style={iconBtn()}>📁</button>
+          <button
+            onClick={() => onUpdate({ exportFolder: defaultExportDir || "" })}
+            title={t("settings_modal.misc.export_folder_reset_title")}
+            style={iconBtn()}
+          >↺</button>
+        </div>
+      </Section>
+
+      {/* Silent export */}
+      <Section label={t("settings_modal.misc.silent_export_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.misc.silent_export_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn label={t("settings_modal.misc.silent_export_on")}  active={settings.silentExport === true}  onClick={() => onUpdate({ silentExport: true  })} />
+          <PillBtn label={t("settings_modal.misc.silent_export_off")} active={settings.silentExport !== true}  onClick={() => onUpdate({ silentExport: false })} />
+        </div>
+        {settings.silentExport && !settings.exportFolder && (
+          <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 8, lineHeight: 1.4 }}>
+            ⚠ {t("settings_modal.misc.silent_export_warn")}
+          </p>
+        )}
+      </Section>
+
+      <Section label={t("settings_modal.misc.propagate_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.misc.propagate_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn label={t("settings_modal.misc.propagate_on")}  active={settings.propagateIdentical !== false} onClick={() => onUpdate({ propagateIdentical: true  })} />
+          <PillBtn label={t("settings_modal.misc.propagate_off")} active={settings.propagateIdentical === false}  onClick={() => onUpdate({ propagateIdentical: false })} />
+        </div>
+      </Section>
+
+      <Section label={t("settings_modal.misc.autosession_section")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.misc.autosession_desc")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn label={t("settings_modal.misc.autosession_on")}  active={settings.autoLoadSession === true}  onClick={() => onUpdate({ autoLoadSession: true  })} />
+          <PillBtn label={t("settings_modal.misc.autosession_off")} active={settings.autoLoadSession !== true}   onClick={() => onUpdate({ autoLoadSession: false })} />
+        </div>
+      </Section>
+
     </div>
   );
 }

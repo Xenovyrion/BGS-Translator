@@ -61,6 +61,8 @@
     "file_open_session":  "Open session…",
     "file_save":          "Save session…",
     "file_export":        "Export plugin…",
+    "file_import":        "Import translations from file…",
+    "file_generate":      "Generate translated file…",
     "file_quit":          "Quit",
     "edit":               "Edit",
     "edit_select_all":    "Select all",
@@ -87,7 +89,7 @@
     "open_file_loading": "Loading…",
     "open_session":      "Open a session",
     "save_session":      "Save session (Ctrl+S)",
-    "export_plugin":     "Export plugin (Ctrl+E)",
+    "export_plugin":     "Generate translated file (Ctrl+E)",
     "settings":          "Settings (Ctrl+,)",
     "loading":           "Loading…",
     "autosaved":         "💾 Saved at {{time}}"
@@ -100,6 +102,7 @@
     "ignored":             "Ignored",
     "search_placeholder":  "Search in entries…",
     "localized_badge":     "Localized",
+    "filter_label":        "Show:",
     "column_filters":      "Column filters",
     "column_filters_title":"Filter by column"
   },
@@ -118,6 +121,7 @@
     "status_pending":     "? Pending",
     "status_ignored":     "× Ignored",
     "status_untranslated":"— Untranslated",
+    "status_label":       "Status:",
     "hint":               "Ctrl+↵ validate · Esc back",
     "close_title":        "Close",
     "original_label":     "Original",
@@ -184,6 +188,7 @@
     "tab_appearance": "Appearance",
     "tab_shortcuts":  "Shortcuts",
     "tab_database":   "Databases",
+    "tab_misc":       "Misc",
     "tab_system":     "System",
     "appearance": {
       "theme_section":      "Theme",
@@ -241,7 +246,31 @@
       "export_bgt":               "Native .bgt format",
       "export_csv":               "CSV (comma)",
       "export_tsv":               "TSV (tab)",
-      "export_btn":               "Export…"
+      "export_btn":               "Export…",
+      "apply_validates_section":  "Database application behavior",
+      "apply_validates_desc":     "Sets the status of entries filled automatically by the database when opening a plugin.",
+      "apply_validates_on":       "Validated (final status)",
+      "apply_validates_off":      "Pending (to review)"
+    },
+    "misc": {
+      "propagate_section":   "Translation propagation",
+      "propagate_desc":      "When you translate an entry, automatically copies the translation to all other entries sharing the same original text that have not yet been validated.",
+      "export_folder_section":      "Default output folder",
+      "export_folder_desc":         "Folder where generated translated files will be saved. If left empty, the source plugin folder is used. The folder is created automatically if it does not exist.",
+      "export_folder_placeholder":  "e.g. C:/Games/Starfield/Data",
+      "export_folder_pick_title":   "Choose output folder",
+      "export_folder_reset_title":  "Reset (use source folder)",
+      "silent_export_section":      "Direct export (no dialog)",
+      "silent_export_desc":         "When enabled, the translated file is saved directly to the configured output folder without showing a save dialog. Requires an output folder to be set.",
+      "silent_export_on":           "Enabled",
+      "silent_export_off":          "Disabled (show dialog)",
+      "silent_export_warn":         "No output folder configured — the file will be saved to the source plugin folder.",
+      "propagate_on":               "Enabled",
+      "propagate_off":              "Disabled",
+      "autosession_section":        "Auto-load session",
+      "autosession_desc":           "When opening a plugin, automatically loads the most recent saved session matching that file (same name).",
+      "autosession_on":             "Enabled",
+      "autosession_off":            "Disabled"
     },
     "sys": {
       "lang_section":          "Language",
@@ -358,8 +387,24 @@
     "confirm_delete": "Delete?",
     "delete_yes":     "Yes",
     "delete_no":       "No",
+    "saved":            "Session saved",
     "save_error_title":"Save error",
     "load_latest":     "Load latest"
+  },
+  "export": {
+    "success":          "Translated file generated",
+    "success_detail":   "{{count}} validated entries written out of {{total}} total",
+    "error_title":      "Generation failed",
+    "pick_source_title":"Locate source file",
+    "pick_source_hint": "Select the original plugin file (.esp/.esm) to generate the translation."
+  },
+  "import": {
+    "pick_title":        "Select translated reference file",
+    "success":           "Translations imported",
+    "success_detail":    "{{count}} entry/entries imported and validated",
+    "none_found":        "No translations imported",
+    "none_found_detail": "The reference file contains no entries that differ from the source (or all were already translated).",
+    "error_title":       "Import failed"
   },
   "theme": {
     "name": {

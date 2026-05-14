@@ -61,6 +61,8 @@
     "file_open_session":  "Ouvrir une session…",
     "file_save":          "Sauvegarder la session…",
     "file_export":        "Exporter le plugin…",
+    "file_import":        "Importer traductions depuis un fichier…",
+    "file_generate":      "Générer fichier traduit…",
     "file_quit":          "Quitter",
     "edit":               "Édition",
     "edit_select_all":    "Sélectionner tout",
@@ -87,7 +89,7 @@
     "open_file_loading": "Chargement…",
     "open_session":      "Ouvrir une session",
     "save_session":      "Sauvegarder la session (Ctrl+S)",
-    "export_plugin":     "Exporter le plugin (Ctrl+E)",
+    "export_plugin":     "Générer fichier traduit (Ctrl+E)",
     "settings":          "Paramètres (Ctrl+,)",
     "loading":           "Chargement…",
     "autosaved":         "💾 Sauvegardé à {{time}}"
@@ -100,6 +102,7 @@
     "ignored":             "Ignoré",
     "search_placeholder":  "Rechercher dans les entrées…",
     "localized_badge":     "Localisé",
+    "filter_label":        "Afficher :",
     "column_filters":      "Filtres colonnes",
     "column_filters_title":"Filtres par colonne"
   },
@@ -118,6 +121,7 @@
     "status_pending":     "? En cours",
     "status_ignored":     "× Ignoré",
     "status_untranslated":"— Non traduit",
+    "status_label":       "Statut :",
     "hint":               "Ctrl+↵ valider · Esc retour",
     "close_title":        "Fermer",
     "original_label":     "Original",
@@ -184,6 +188,7 @@
     "tab_appearance": "Apparence",
     "tab_shortcuts":  "Raccourcis",
     "tab_database":   "Bases de données",
+    "tab_misc":       "Divers",
     "tab_system":     "Système",
     "appearance": {
       "theme_section":      "Thème",
@@ -241,7 +246,31 @@
       "export_bgt":               "Format natif .bgt",
       "export_csv":               "CSV (virgule)",
       "export_tsv":               "TSV (tabulation)",
-      "export_btn":               "Exporter…"
+      "export_btn":               "Exporter…",
+      "apply_validates_section":  "Comportement d'application BDD",
+      "apply_validates_desc":     "Définit le statut des entrées remplies automatiquement par la base de données à l'ouverture d'un plugin.",
+      "apply_validates_on":       "Validé (statut final)",
+      "apply_validates_off":      "En cours (à vérifier)"
+    },
+    "misc": {
+      "export_folder_section":      "Dossier de sortie par défaut",
+      "export_folder_desc":         "Dossier où seront enregistrés les fichiers traduits générés. Si laissé vide, le dossier source du plugin est utilisé par défaut. Le dossier est créé automatiquement si inexistant.",
+      "export_folder_placeholder":  "Ex : C:/Jeux/Starfield/Data",
+      "export_folder_pick_title":   "Choisir le dossier de sortie",
+      "export_folder_reset_title":  "Réinitialiser (utiliser le dossier source)",
+      "silent_export_section":      "Export direct (sans dialogue)",
+      "silent_export_desc":         "Si activé, le fichier traduit est enregistré directement dans le dossier de sortie configuré sans afficher de fenêtre de sélection. Nécessite un dossier de sortie défini.",
+      "silent_export_on":           "Activé",
+      "silent_export_off":          "Désactivé (afficher le dialogue)",
+      "silent_export_warn":         "Aucun dossier de sortie défini — le fichier sera enregistré dans le dossier source du plugin.",
+      "propagate_section":          "Propagation des traductions",
+      "propagate_desc":             "Quand vous traduisez une entrée, copie automatiquement la traduction sur toutes les autres entrées ayant le même texte original et n'étant pas encore validées.",
+      "propagate_on":               "Activé",
+      "propagate_off":              "Désactivé",
+      "autosession_section":        "Reprise automatique de session",
+      "autosession_desc":           "À l'ouverture d'un plugin, charge automatiquement la dernière session sauvegardée correspondant à ce fichier (même nom).",
+      "autosession_on":             "Activé",
+      "autosession_off":            "Désactivé"
     },
     "sys": {
       "lang_section":          "Langue",
@@ -358,8 +387,24 @@
     "confirm_delete": "Supprimer ?",
     "delete_yes":     "Oui",
     "delete_no":       "Non",
+    "saved":            "Session sauvegardée",
     "save_error_title":"Erreur de sauvegarde",
     "load_latest":     "Charger dernière session"
+  },
+  "export": {
+    "success":          "Fichier traduit généré",
+    "success_detail":   "{{count}} entrées validées écrites sur {{total}} au total",
+    "error_title":      "Erreur de génération",
+    "pick_source_title":"Localiser le fichier source",
+    "pick_source_hint": "Sélectionnez le fichier plugin original (.esp/.esm) pour générer la traduction."
+  },
+  "import": {
+    "pick_title":        "Sélectionner le fichier de référence traduit",
+    "success":           "Traductions importées",
+    "success_detail":    "{{count}} entrée(s) importée(s) et validée(s)",
+    "none_found":        "Aucune traduction importée",
+    "none_found_detail": "Le fichier de référence ne contient aucune entrée différente du fichier source (ou toutes étaient déjà traduites).",
+    "error_title":       "Erreur d'import"
   },
   "theme": {
     "name": {
