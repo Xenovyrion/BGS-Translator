@@ -139,7 +139,13 @@
     "close_title":        "Close",
     "original_label":     "Original",
     "translation_label":  "Translation",
-    "placeholder":        "Enter translation… (Ctrl+↵ to validate)"
+    "placeholder":        "Enter translation… (Ctrl+↵ to validate)",
+    "chars":              "chars",
+    "lines":              "lines",
+    "copy":               "Copy",
+    "copy_original":      "Copy original text",
+    "copy_translation":   "Copy translation",
+    "copied":             "✓ Copied"
   },
   "group": {
     "progress": "Progress",

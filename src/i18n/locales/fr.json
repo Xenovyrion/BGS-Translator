@@ -139,7 +139,13 @@
     "close_title":        "Fermer",
     "original_label":     "Original",
     "translation_label":  "Traduction",
-    "placeholder":        "Saisir la traduction… (Ctrl+↵ pour valider)"
+    "placeholder":        "Saisir la traduction… (Ctrl+↵ pour valider)",
+    "chars":              "car.",
+    "lines":              "lig.",
+    "copy":               "Copier",
+    "copy_original":      "Copier le texte original",
+    "copy_translation":   "Copier la traduction",
+    "copied":             "✓ Copié"
   },
   "group": {
     "progress": "Progression",
