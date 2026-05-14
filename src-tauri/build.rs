@@ -44,6 +44,14 @@ fn build_nuspell_wrapper() {
             println!("cargo:rerun-if-changed=src/spellcheck/wrapper.cpp");
             println!("cargo:rerun-if-changed=src/spellcheck/wrapper.h");
 
+            // nuspell depends on ICU; link its static libs explicitly on Windows
+            #[cfg(target_os = "windows")]
+            {
+                println!("cargo:rustc-link-lib=icuuc");
+                println!("cargo:rustc-link-lib=icuin");
+                println!("cargo:rustc-link-lib=icudt");
+            }
+
             #[cfg(target_os = "macos")]
             println!("cargo:rustc-link-lib=c++");
             #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
