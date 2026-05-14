@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
 import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS } from "../../types";
 
-type Tab = "apparence" | "raccourcis" | "database" | "divers" | "systeme";
+type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
 
 // ── Modal principal ───────────────────────────────────────────────────────────
@@ -29,11 +29,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
   const [tab, setTab] = useState<Tab>("apparence");
 
   const TABS: Array<{ id: Tab; labelKey: string; icon: string }> = [
-    { id: "apparence",  labelKey: "settings_modal.tab_appearance", icon: "✦" },
-    { id: "raccourcis", labelKey: "settings_modal.tab_shortcuts",  icon: "⌨" },
-    { id: "database",   labelKey: "settings_modal.tab_database",   icon: "▤" },
-    { id: "divers",     labelKey: "settings_modal.tab_misc",       icon: "⋮" },
-    { id: "systeme",    labelKey: "settings_modal.tab_system",     icon: "⚙" },
+    { id: "apparence",   labelKey: "settings_modal.tab_appearance",   icon: "✦" },
+    { id: "raccourcis",  labelKey: "settings_modal.tab_shortcuts",    icon: "⌨" },
+    { id: "orthographe", labelKey: "settings_modal.tab_spellcheck",   icon: "✓" },
+    { id: "database",    labelKey: "settings_modal.tab_database",     icon: "▤" },
+    { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: "⋮" },
+    { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: "⚙" },
   ];
 
   useEffect(() => {
@@ -113,11 +114,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-          {tab === "apparence"  && <AppearanceTab settings={settings} onUpdate={onUpdate} onOpenThemeManager={onOpenThemeManager} onResetLayout={onResetLayout} />}
-          {tab === "raccourcis" && <ShortcutsTab  settings={settings} onUpdate={onUpdate} />}
-          {tab === "database"   && <DatabaseTab   settings={settings} onUpdate={onUpdate} />}
-          {tab === "divers"     && <DiversTab     settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
-          {tab === "systeme"    && <SystemeTab    settings={settings} onUpdate={onUpdate} />}
+          {tab === "apparence"   && <AppearanceTab   settings={settings} onUpdate={onUpdate} onOpenThemeManager={onOpenThemeManager} onResetLayout={onResetLayout} />}
+          {tab === "raccourcis"  && <ShortcutsTab   settings={settings} onUpdate={onUpdate} />}
+          {tab === "orthographe" && <SpellCheckTab  settings={settings} onUpdate={onUpdate} />}
+          {tab === "database"    && <DatabaseTab    settings={settings} onUpdate={onUpdate} />}
+          {tab === "divers"      && <DiversTab      settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
+          {tab === "systeme"     && <SystemeTab     settings={settings} onUpdate={onUpdate} />}
         </div>
 
         {/* Footer */}
@@ -419,6 +421,219 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
         </div>
       </Section>
     </>
+  );
+}
+
+// ── Spell check tab ───────────────────────────────────────────────────────────
+
+interface DictionaryInfo { lang: string; name: string; installed: boolean; }
+
+function SpellCheckTab({ settings, onUpdate }: TabProps) {
+  const { t } = useTranslation();
+  const [dicts,       setDicts]       = useState<DictionaryInfo[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [deleting,    setDeleting]    = useState<string | null>(null);
+  const [toast,       setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
+  const [showAll,     setShowAll]     = useState(false);
+
+  const loadDicts = useCallback(async () => {
+    try { setDicts(await invoke<DictionaryInfo[]>("list_dictionaries_cmd")); } catch {}
+  }, []);
+
+  useEffect(() => { loadDicts(); }, [loadDicts]);
+
+  const showToast = (msg: string, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const download = async (lang: string) => {
+    setDownloading(lang);
+    try {
+      await invoke("download_dictionary_cmd", { lang });
+      showToast(t("spellcheck.download_ok", { lang }));
+      await loadDicts();
+      if (!settings.spellLang) onUpdate({ spellLang: lang });
+    } catch (e) {
+      showToast(t("spellcheck.download_error", { error: String(e) }), false);
+    } finally { setDownloading(null); }
+  };
+
+  const deleteDic = async (lang: string) => {
+    setDeleting(lang);
+    try {
+      await invoke("delete_dictionary_cmd", { lang });
+      showToast(t("spellcheck.delete_ok", { lang }));
+      await loadDicts();
+      if (settings.spellLang === lang) onUpdate({ spellLang: "" });
+    } catch (e) {
+      showToast(String(e), false);
+    } finally { setDeleting(null); }
+  };
+
+  const installed = dicts.filter(d => d.installed);
+  const available = dicts.filter(d => !d.installed);
+  const visibleAvailable = showAll ? available : available.slice(0, 10);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* Active dictionary */}
+      <Section label={t("spellcheck.section_title")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          {t("spellcheck.section_desc")}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", minWidth: 130 }}>
+            {t("spellcheck.dictionary_label")}
+          </span>
+          <select
+            value={settings.spellLang ?? ""}
+            onChange={e => onUpdate({ spellLang: e.target.value })}
+            style={{
+              flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 12,
+              background: "var(--bg-hover)", color: "var(--text-1)",
+              border: "1px solid var(--border)", cursor: "pointer",
+            }}
+          >
+            <option value="">{t("spellcheck.no_dictionary")}</option>
+            {installed.map(d => (
+              <option key={d.lang} value={d.lang}>{d.name} ({d.lang})</option>
+            ))}
+          </select>
+        </div>
+      </Section>
+
+      {/* Real-time options */}
+      <Section label={t("spellcheck.realtime_section")}>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
+          <input
+            type="checkbox"
+            checked={settings.spellRealtime ?? false}
+            onChange={e => onUpdate({ spellRealtime: e.target.checked })}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+          />
+          <div>
+            <div style={{ fontSize: 13, color: "var(--text-1)", fontWeight: 500 }}>
+              {t("spellcheck.realtime_label")}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+              {t("spellcheck.realtime_desc")}
+            </div>
+          </div>
+        </label>
+
+        {settings.spellRealtime && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 24 }}>
+            <span style={{ fontSize: 12, color: "var(--text-2)" }}>{t("spellcheck.debounce_label")}</span>
+            <input
+              type="range" min={200} max={2000} step={100}
+              value={settings.spellDebounce ?? 600}
+              onChange={e => onUpdate({ spellDebounce: Number(e.target.value) })}
+              style={{ width: 160, accentColor: "var(--accent)" }}
+            />
+            <span style={{ fontSize: 12, color: "var(--text-3)", minWidth: 50 }}>
+              {settings.spellDebounce ?? 600} ms
+            </span>
+          </div>
+        )}
+      </Section>
+
+      {/* Installed dictionaries */}
+      <Section label={t("spellcheck.manage_installed")}>
+        {installed.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>
+            {t("spellcheck.none_installed")}
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {installed.map(d => (
+              <div key={d.lang} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "var(--bg-hover)", borderRadius: 7, padding: "8px 12px",
+                border: settings.spellLang === d.lang ? "1px solid var(--accent)" : "1px solid transparent",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--text-1)" }}>
+                  {d.name}
+                  <span style={{ marginLeft: 8, fontSize: 11, color: "var(--text-3)" }}>({d.lang})</span>
+                  {settings.spellLang === d.lang && (
+                    <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
+                      ★ {t("spellcheck.active_badge")}
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => deleteDic(d.lang)}
+                  disabled={deleting === d.lang}
+                  style={{
+                    padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer",
+                    border: "1px solid #ef4444", background: "none",
+                    color: "#ef4444", opacity: deleting === d.lang ? 0.5 : 1,
+                  }}
+                >
+                  {deleting === d.lang ? "…" : t("spellcheck.btn_delete")}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Available dictionaries */}
+      <Section label={t("spellcheck.manage_available")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {visibleAvailable.map(d => (
+            <div key={d.lang} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "6px 10px", borderRadius: 6,
+              background: "var(--bg-hover)",
+            }}>
+              <span style={{ flex: 1, fontSize: 12, color: "var(--text-2)" }}>
+                {d.name}
+                <span style={{ marginLeft: 6, fontSize: 11, color: "var(--text-3)" }}>({d.lang})</span>
+              </span>
+              <button
+                onClick={() => download(d.lang)}
+                disabled={downloading === d.lang}
+                style={{
+                  padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer",
+                  border: "1px solid var(--accent)", background: "none",
+                  color: "var(--accent)", opacity: downloading === d.lang ? 0.5 : 1,
+                  flexShrink: 0,
+                }}
+              >
+                {downloading === d.lang ? t("spellcheck.downloading") : t("spellcheck.btn_download")}
+              </button>
+            </div>
+          ))}
+        </div>
+        {available.length > 10 && (
+          <button
+            onClick={() => setShowAll(v => !v)}
+            style={{
+              marginTop: 8, fontSize: 12, color: "var(--accent)", background: "none",
+              border: "none", cursor: "pointer", padding: 0,
+            }}
+          >
+            {showAll
+              ? t("spellcheck.show_less")
+              : t("spellcheck.show_more", { count: available.length - 10 })}
+          </button>
+        )}
+      </Section>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          fontSize: 12, padding: "8px 14px", borderRadius: 7,
+          background: toast.ok ? "var(--bg-hover)" : "rgba(239,68,68,0.12)",
+          color: toast.ok ? "var(--text-1)" : "#ef4444",
+          border: `1px solid ${toast.ok ? "var(--border)" : "#ef4444"}`,
+        }}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
   );
 }
 
