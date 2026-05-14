@@ -362,8 +362,8 @@ function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetL
 
 function ShortcutsTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
-  const sc  = settings.shortcuts      ?? DEFAULT_SHORTCUTS;
-  const esc = settings.editShortcuts  ?? DEFAULT_EDIT_SHORTCUTS;
+  const sc  = { ...DEFAULT_SHORTCUTS,       ...(settings.shortcuts      ?? {}) };
+  const esc = { ...DEFAULT_EDIT_SHORTCUTS, ...(settings.editShortcuts  ?? {}) };
 
   const shortcutLabels: Record<keyof KeyboardShortcuts, string> = {
     nextEntry:        t("settings_modal.shortcuts.next_entry"),
