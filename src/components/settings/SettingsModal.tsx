@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
-import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { appLogDir } from "@tauri-apps/api/path";
 import { THEME_PRESETS } from "../../themes";
@@ -123,7 +123,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
 
         {/* Footer */}
         <div style={{
-          display: "flex", justifyContent: "flex-end", gap: 10,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
           padding: "12px 20px",
           background: "var(--bg-card)",
           borderTop: "1px solid var(--border)",
@@ -416,12 +416,13 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
   const [defaultDir, setDefaultDir] = useState<string>("");
   const [converting, setConverting] = useState<string | null>(null);
   const [error, setError]           = useState<string | null>(null);
-  const [exportFmt, setExportFmt]   = useState<"bgt" | "csv" | "tsv">("bgt");
+  const [loading, setLoading]       = useState<boolean>(false);
   const [gameNames, setGameNames]   = useState<Record<string, string>>({});
 
   const activeDir = settings.dbFolder || defaultDir;
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const [dir, list] = await Promise.all([
         invoke<string>("get_databases_dir_cmd", { customDir: null }),
@@ -440,11 +441,11 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
         return next;
       });
     } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
   }, [settings.dbFolder]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const bgtFiles = files.filter((f) => f.format === "bgt");
   const eetFiles = files.filter((f) => f.format === "eet");
 
   const pickDbFolder = async () => {
@@ -465,14 +466,6 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
       await refresh();
     } catch (e) { setError(String(e)); }
     finally { setConverting(null); }
-  };
-
-  const exportDb = async () => {
-    const ext  = exportFmt;
-    const path = await save({ filters: [{ name: "Export BDD", extensions: [ext] }] });
-    if (!path) return;
-    try { await invoke("export_db_cmd", { path, format: ext }); }
-    catch (e) { setError(String(e)); }
   };
 
   const openActiveDir = () => openFolder(settings.dbFolder || defaultDir);
@@ -501,49 +494,14 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
           <button onClick={pickDbFolder} title={t("settings_modal.db.folder_pick_title")} style={iconBtn()}>📁</button>
           <button onClick={() => onUpdate({ dbFolder: "" })} title={t("settings_modal.db.folder_reset_title")} style={iconBtn()}>↺</button>
           <button onClick={openActiveDir} title={t("settings_modal.db.folder_open_explorer")} style={smallBtnStyle()}>{t("settings_modal.db.folder_open")}</button>
-          <button onClick={refresh} title={t("settings_modal.db.folder_refresh_title")} style={smallBtnStyle()}>↻</button>
+          <button onClick={refresh} title={t("settings_modal.db.folder_refresh_title")} style={smallBtnStyle()} disabled={loading}>
+            {loading ? "…" : "↻"}
+          </button>
         </div>
         <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
           {t("settings_modal.db.folder_hint")}
         </p>
-      </Section>
-
-      {/* Available databases (read-only list + info) */}
-      <Section label={t("settings_modal.db.main_section")}>
-        {/* Auto-detection info */}
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", marginBottom: 10,
-          background: "rgba(59,130,246,0.07)", borderRadius: 8, border: "1px solid rgba(59,130,246,0.2)",
-        }}>
-          <span style={{ fontSize: 14, flexShrink: 0 }}>🎮</span>
-          <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-            {t("settings_modal.db.auto_info")}
-          </p>
-        </div>
-
-        {bgtFiles.length === 0 && eetFiles.length === 0 && (
-          <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>
-            {t("settings_modal.db.no_bgt")}
-          </p>
-        )}
-        {error && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{error}</div>}
-
-        {bgtFiles.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {bgtFiles.map((f) => (
-              <div key={f.path} style={{
-                background: "var(--bg-hover)", borderRadius: 7, padding: "8px 12px",
-                display: "flex", alignItems: "center", gap: 12, fontSize: 12,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{f.name}</span>
-                  {f.game && <span style={{ marginLeft: 8, color: "var(--accent)", fontSize: 11 }}>{f.game}</span>}
-                </div>
-                <span style={{ color: "var(--text-3)", fontSize: 11, flexShrink: 0 }}>{fmt(f.size)}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {error && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>{error}</div>}
       </Section>
 
       {/* .eet conversion */}
@@ -606,24 +564,6 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
         </div>
       </Section>
 
-      {/* Export the currently loaded DB */}
-      <Section label={t("settings_modal.db.export_section")}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select
-            value={exportFmt}
-            onChange={(e) => setExportFmt(e.target.value as "bgt" | "csv" | "tsv")}
-            style={{ padding: "6px 10px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)" }}
-          >
-            <option value="bgt">{t("settings_modal.db.export_bgt")}</option>
-            <option value="csv">{t("settings_modal.db.export_csv")}</option>
-            <option value="tsv">{t("settings_modal.db.export_tsv")}</option>
-          </select>
-          <button onClick={exportDb} style={smallBtnStyle()}>{t("settings_modal.db.export_btn")}</button>
-        </div>
-        <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
-          {t("settings_modal.db.export_hint")}
-        </p>
-      </Section>
     </div>
   );
 }
@@ -716,7 +656,6 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [logPath, setLogPath]           = useState<string>("");
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [copied, setCopied]             = useState(false);
 
   useEffect(() => {
     appLogDir()
@@ -743,17 +682,9 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
   const displayLogPath = settings.logFolder || logPath;
   const openLogs = () => {
-    // Open the folder containing the log (strips the final filename)
-    const dir = displayLogPath.replace(/[/\\][^/\\]+$/, "");
+    // If a custom folder is set, open it directly; otherwise derive folder from default log file path
+    const dir = settings.logFolder || logPath.replace(/[/\\][^/\\]+$/, "");
     openFolder(dir);
-  };
-
-  const copyLogPath = async () => {
-    if (displayLogPath) {
-      await navigator.clipboard.writeText(displayLogPath).catch(() => {});
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }
   };
 
   const pickLogFolder = async () => {
@@ -834,12 +765,6 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={openLogs} style={smallBtnStyle()}>{t("settings_modal.sys.log_open_folder")}</button>
-          <button
-            onClick={copyLogPath}
-            style={{ ...smallBtnStyle(), color: copied ? "var(--success)" : "var(--text-1)" }}
-          >
-            {copied ? t("settings_modal.sys.log_copied") : t("settings_modal.sys.log_copy")}
-          </button>
         </div>
       </Section>
 
@@ -930,7 +855,7 @@ function btnStyle(bg: string, outline = false): React.CSSProperties {
 
 function smallBtnStyle(): React.CSSProperties {
   return {
-    padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500,
+    padding: "7px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500,
     background: "var(--bg-hover)", color: "var(--text-1)",
     border: "1px solid var(--border)",
   };
@@ -938,7 +863,7 @@ function smallBtnStyle(): React.CSSProperties {
 
 function iconBtn(): React.CSSProperties {
   return {
-    padding: "5px 8px", borderRadius: 6, cursor: "pointer", fontSize: 14,
+    padding: "7px 9px", borderRadius: 6, cursor: "pointer", fontSize: 14,
     background: "var(--bg-hover)", color: "var(--text-1)",
     border: "1px solid var(--border)", flexShrink: 0, lineHeight: 1,
   };

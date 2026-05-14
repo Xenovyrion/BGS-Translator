@@ -213,6 +213,8 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Auto-apply**: match entries from the database against the open plugin and apply translations automatically — reports matched / total counts
 - Bundled databases: Morrowind EN→FR, Oblivion EN→FR, Starfield EN→FR
 - Read-only protection for bundled databases
+- Database folder and `.eet` → `.bgt` conversion managed in **Settings → Database**
+- Export/convert database accessible from the **File** menu
 
 ### Sessions
 - Save the current translation state (all entries + statuses) to a named session file
@@ -228,9 +230,12 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Output folder is configurable in Settings
 - Keyboard shortcut: `Ctrl+G`
 
-### Import Translations from File
-- Pick any existing `.esp` / `.esm` / `.esl` as a reference and import its translations into the current session
-- Designed for the **mod-update workflow**: open the new version of a mod, then import from a previously generated translated file to instantly recover all existing translations
+### Import / Export — Multi-format
+- **Import from file**: pick any existing `.esp` / `.esm` / `.esl` as a reference and import its translations into the current session — designed for the **mod-update workflow**
+- **Import from xTranslator XML** (`.xml`) or **ESP-ESM Translator XML** (`.xml`)
+- **Import from CSV** (`.csv`)
+- **Export to xTranslator XML**, **ESP-ESM Translator XML**, or **CSV** — accessible from the **File** menu
+- **Export / convert database** (`.bgt`, CSV, TSV) — accessible from the **File** menu
 - Positional matching within each `form_id + sub_type` group preserves correct per-entry pairing even when multiple subrecords share the same type
 - Protected entries: `pending` (active work) and `ignored` (explicit decision) are never overwritten
 - Keyboard shortcut: `Ctrl+I`
