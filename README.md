@@ -105,6 +105,11 @@ BGS-Translator/
 │   │   │   ├── mod.rs
 │   │   │   ├── store.rs              # In-memory database store (AHashMap)
 │   │   │   └── types.rs              # DbEntry, DbInfo, ApplyResult
+│   │   ├── formats/
+│   │   │   ├── mod.rs
+│   │   │   ├── xtranslator_xml.rs    # xTranslator XML import/export
+│   │   │   ├── esptranslator_xml.rs  # ESP-ESM Translator XML import/export
+│   │   │   └── session_csv.rs        # CSV import/export
 │   │   ├── parser/
 │   │   │   ├── error.rs              # ParseError type
 │   │   │   ├── group.rs              # GRUP header parsing
@@ -194,9 +199,12 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Full-text search across original and translated strings
 
 ### Edit Panel
-- Side panel for editing one entry at a time
+- Bottom panel for editing one entry at a time
 - Keyboard navigation between entries (configurable shortcuts)
-- One-click copy of original text
+- **Character count** — live character count on both the original and translated columns (thousands-separated)
+- **Line numbers** — numbered gutter automatically shown for multi-line entries (books, dialogues); hidden on single-line strings to avoid noise; gutter scrolls in sync with the translation textarea
+- **Copy to clipboard** — one-click copy button on each column (original and translated) with 1.5 s visual confirmation
+- Original text is selectable but read-only
 - Status change from the edit panel
 - **Identical-entry propagation** — changing the translation or status of an entry automatically propagates to all entries that share the same original text and translation, eliminating repetitive work
 
@@ -214,6 +222,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Bundled databases: Morrowind EN→FR, Oblivion EN→FR, Starfield EN→FR
 - Read-only protection for bundled databases
 - Database folder and `.eet` → `.bgt` conversion managed in **Settings → Database**
+- **Default database per game** — in Settings → Database, assign one `.bgt` file as the default for each game; auto-apply uses this file first and falls back to a directory scan only when no explicit default is set
 - Export/convert database accessible from the **File** menu
 
 ### Sessions
@@ -254,6 +263,8 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Log Panel
 - In-app activity log for parser events, database operations, and errors
+- Persistent log file: `bgstranslator.log` in the OS app-log directory (legacy `BGS Translator.log` is deleted automatically on startup)
+- **Settings → Système**: buttons to open the log file in the default text editor or reveal the log folder in the file manager
 
 ### Updates
 - Automatic check for new versions via GitHub Releases
@@ -280,7 +291,8 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 | Export output | `{Documents}/BGS-Translator/Traduction/` |
 | Sessions | `{Documents}/BGS-Translator/sessions/` |
 | Databases | bundled inside the app binary |
+| Log file | `{AppLog}/bgstranslator.log` (e.g. `%APPDATA%\com.bgstranslator\logs\` on Windows) |
 
-Both directories are created automatically on first launch and are cross-platform (`Documents` resolves via the OS API on Windows, macOS and Linux).
+Export and session directories are created automatically on first launch and are cross-platform (`Documents` resolves via the OS API on Windows, macOS and Linux).
 
 ---
