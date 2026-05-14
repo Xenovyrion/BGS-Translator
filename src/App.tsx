@@ -115,9 +115,8 @@ export default function App() {
       if (!settings.exportFolder && !localStorage.getItem(sentinel)) {
         localStorage.setItem(sentinel, "1");
         updateSettings({ exportFolder: base });
+        // Effect 2 (settings.exportFolder) will call ensure_dir_cmd once the value is set
       }
-      // Always ensure the folder exists on startup (logged server-side)
-      invoke("ensure_dir_cmd", { path: base }).catch(() => {});
     }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
