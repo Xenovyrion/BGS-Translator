@@ -5,6 +5,13 @@ import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
 import { type KeyboardShortcuts, DEFAULT_SHORTCUTS } from "../types";
 
+export interface DefaultDbEntry {
+  path:    string;
+  game:    string;
+  srcLang: string;
+  dstLang: string;
+}
+
 export interface AppSettings {
   themeId:          string;
   customThemeVars:  Record<string, string>;
@@ -23,6 +30,7 @@ export interface AppSettings {
   silentExport:     boolean; // skip save dialog — write directly to the default path
   logFolder:        string;
   autosaveInterval: number; // minutes; 0 = disabled
+  defaultDbs:       Record<string, DefaultDbEntry>; // keyed by game name (lowercase)
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -45,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   silentExport:     false,
   logFolder:        "",
   autosaveInterval: 0,
+  defaultDbs:       {},
 };
 
 export function useSettings() {

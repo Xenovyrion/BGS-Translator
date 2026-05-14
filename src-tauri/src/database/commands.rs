@@ -213,12 +213,15 @@ pub async fn scan_databases_dir_cmd(custom_dir: Option<String>) -> Result<Vec<Db
         if ext != "bgt" && ext != "eet" { continue; }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("?").to_owned();
-        let game = if ext == "bgt" {
-            crate::database::format::peek_bgt_game(&p).unwrap_or_default()
+        let (game, lang_from, lang_to) = if ext == "bgt" {
+            match crate::database::format::peek_bgt_info(&p) {
+                Some(info) => (info.game, info.lang_from, info.lang_to),
+                None       => (String::new(), String::new(), String::new()),
+            }
         } else {
-            String::new()
+            (String::new(), String::new(), String::new())
         };
-        list.push(DbFileInfo { name, path: p.to_string_lossy().into_owned(), format: ext, size, game });
+        list.push(DbFileInfo { name, path: p.to_string_lossy().into_owned(), format: ext, size, game, lang_from, lang_to });
     }
     list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(list)
@@ -313,11 +316,13 @@ pub async fn convert_eet_cmd(
 
     log::info!("[eet→bgt] {} entries converted → '{}'", count, dest.display());
     Ok(DbFileInfo {
-        name:   stem,
-        path:   dest.to_string_lossy().into_owned(),
-        format: "bgt".into(),
-        size:   std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0),
+        name:      stem,
+        path:      dest.to_string_lossy().into_owned(),
+        format:    "bgt".into(),
+        size:      std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0),
         game,
+        lang_from: "en".into(),
+        lang_to:   "fr".into(),
     })
 }
 

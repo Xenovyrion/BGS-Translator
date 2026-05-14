@@ -408,7 +408,13 @@ function guessGameName(stem: string): string {
     .join(" ");
 }
 
-interface DbFileInfo { name: string; path: string; format: string; size: number; game: string }
+interface DbFileInfo { name: string; path: string; format: string; size: number; game: string; lang_from: string; lang_to: string }
+interface DefaultForm { path: string; game: string; srcLang: string; dstLang: string }
+
+const LANG_OPTIONS = [
+  ["fr","Français"],["en","English"],["de","Deutsch"],["es","Español"],
+  ["it","Italiano"],["pl","Polski"],["ru","Русский"],["zh","中文"],["ja","日本語"],["ko","한국어"],
+];
 
 function DatabaseTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
@@ -418,6 +424,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
   const [error, setError]           = useState<string | null>(null);
   const [loading, setLoading]       = useState<boolean>(false);
   const [gameNames, setGameNames]   = useState<Record<string, string>>({});
+  const [defForm, setDefForm]       = useState<DefaultForm | null>(null);
 
   const activeDir = settings.dbFolder || defaultDir;
 
@@ -494,14 +501,135 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
           <button onClick={pickDbFolder} title={t("settings_modal.db.folder_pick_title")} style={iconBtn()}>📁</button>
           <button onClick={() => onUpdate({ dbFolder: "" })} title={t("settings_modal.db.folder_reset_title")} style={iconBtn()}>↺</button>
           <button onClick={openActiveDir} title={t("settings_modal.db.folder_open_explorer")} style={smallBtnStyle()}>{t("settings_modal.db.folder_open")}</button>
-          <button onClick={refresh} title={t("settings_modal.db.folder_refresh_title")} style={smallBtnStyle()} disabled={loading}>
-            {loading ? "…" : "↻"}
-          </button>
         </div>
         <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
           {t("settings_modal.db.folder_hint")}
         </p>
         {error && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>{error}</div>}
+      </Section>
+
+      {/* BGT databases list */}
+      <Section label={
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+          <span style={{ flex: 1 }}>{t("settings_modal.db.bgt_section")}</span>
+          <button onClick={refresh} disabled={loading} title={t("settings_modal.db.folder_refresh_title")}
+            style={{ ...smallBtnStyle(), padding: "3px 9px", fontSize: 12, fontWeight: 600 }}>
+            {loading ? "…" : "↻"}
+          </button>
+        </div>
+      }>
+        {files.filter(f => f.format === "bgt").length === 0 && !loading && (
+          <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic" }}>
+            {t("settings_modal.db.no_bgt")}
+          </p>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {files.filter(f => f.format === "bgt").map((f) => {
+            const isDefault = Object.values(settings.defaultDbs ?? {}).some(d => d.path === f.path);
+            const isEditing = defForm?.path === f.path;
+            return (
+              <div key={f.path} style={{
+                background: "var(--bg-hover)", borderRadius: 8, padding: "10px 12px",
+                border: isDefault ? "1px solid var(--accent)" : "1px solid transparent",
+              }}>
+                {/* File info row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, fontSize: 12, color: "var(--text-1)" }}>{f.name}</span>
+                    {f.game && (
+                      <span style={{ marginLeft: 8, fontSize: 11, color: "var(--accent)" }}>{f.game}</span>
+                    )}
+                    {(f.lang_from || f.lang_to) && (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "var(--text-3)" }}>
+                        {f.lang_from.toUpperCase()} → {f.lang_to.toUpperCase()}
+                      </span>
+                    )}
+                    {isDefault && (
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--accent)", opacity: 0.8 }}>
+                        ★ {t("settings_modal.db.default_badge")}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>{fmt(f.size)}</span>
+                  <button
+                    onClick={() => {
+                      if (isEditing) { setDefForm(null); return; }
+                      setDefForm({ path: f.path, game: f.game || "", srcLang: f.lang_from || "en", dstLang: f.lang_to || "fr" });
+                    }}
+                    style={{ ...smallBtnStyle(), fontSize: 11, flexShrink: 0 }}
+                  >
+                    {isEditing ? t("settings_modal.db.default_cancel") : t("settings_modal.db.default_set")}
+                  </button>
+                </div>
+
+                {/* Inline default DB form */}
+                {isEditing && defForm && (
+                  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 140px", minWidth: 120 }}>
+                        <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                          {t("settings_modal.db.default_game")}
+                        </label>
+                        <input
+                          type="text"
+                          value={defForm.game}
+                          onChange={(e) => setDefForm(f => f ? { ...f, game: e.target.value } : f)}
+                          placeholder="Starfield"
+                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", outline: "none" }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                          {t("settings_modal.db.default_src")}
+                        </label>
+                        <select value={defForm.srcLang} onChange={(e) => setDefForm(f => f ? { ...f, srcLang: e.target.value } : f)}
+                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)" }}>
+                          {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                          {t("settings_modal.db.default_dst")}
+                        </label>
+                        <select value={defForm.dstLang} onChange={(e) => setDefForm(f => f ? { ...f, dstLang: e.target.value } : f)}
+                          style={{ padding: "5px 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)" }}>
+                          {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          if (!defForm.game.trim()) return;
+                          const key = defForm.game.trim().toLowerCase();
+                          onUpdate({ defaultDbs: { ...(settings.defaultDbs ?? {}), [key]: { path: defForm.path, game: defForm.game.trim(), srcLang: defForm.srcLang, dstLang: defForm.dstLang } } });
+                          setDefForm(null);
+                        }}
+                        style={btnStyle("var(--accent)")}
+                      >
+                        {t("settings_modal.db.default_confirm")}
+                      </button>
+                      {isDefault && (
+                        <button
+                          onClick={() => {
+                            const next = { ...(settings.defaultDbs ?? {}) };
+                            const key = Object.entries(next).find(([, v]) => v.path === f.path)?.[0];
+                            if (key) delete next[key];
+                            onUpdate({ defaultDbs: next });
+                            setDefForm(null);
+                          }}
+                          style={{ ...smallBtnStyle(), color: "var(--danger)", borderColor: "var(--danger)" }}
+                        >
+                          {t("settings_modal.db.default_remove")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Section>
 
       {/* .eet conversion */}
@@ -869,12 +997,13 @@ function iconBtn(): React.CSSProperties {
   };
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <div style={{
         fontSize: 11, fontWeight: 700, color: "var(--text-3)",
         textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10,
+        display: "flex", alignItems: "center",
       }}>
         {label}
       </div>

@@ -92,6 +92,7 @@ export default function App() {
   } = usePlugin({
     propagateIdentical: settings.propagateIdentical !== false,
     dbApplyValidates:   settings.dbApplyValidates   !== false,
+    defaultDbs:         settings.defaultDbs         ?? {},
   });
 
   // Source path resolved interactively when session lacks it

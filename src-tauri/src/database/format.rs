@@ -315,17 +315,37 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
     Ok((game_name, entries))
 }
 
-/// Reads just the game name from a .bgt file without loading all entries.
-/// Returns None if the file is not a valid .bgt or if the game field is empty.
-pub fn peek_bgt_game(path: &std::path::Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    if bytes.len() < 5 || &bytes[..4] != BGT_MAGIC { return None; }
-    let decompressed = zstd::decode_all(&bytes[5..]).ok()?;
+/// Metadata extracted from the .bgt header without loading all entries.
+pub struct BgtPeek {
+    pub game:      String,
+    pub lang_from: String,
+    pub lang_to:   String,
+}
+
+/// Stream-reads just the header fields of a .bgt file without decompressing all entries.
+/// Much faster than reading the full file — only decodes the first few hundred bytes.
+pub fn peek_bgt_info(path: &std::path::Path) -> Option<BgtPeek> {
+    use std::io::Read as _;
+    let file = std::fs::File::open(path).ok()?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut magic = [0u8; 4];
+    reader.read_exact(&mut magic).ok()?;
+    if &magic != BGT_MAGIC { return None; }
+    let mut _ver = [0u8; 1];
+    reader.read_exact(&mut _ver).ok()?;
+    // Streaming decoder: bincode reads only as many bytes as the header struct needs,
+    // so the vast majority of compressed entries are never decompressed.
+    let decoder = zstd::Decoder::new(reader).ok()?;
     #[derive(Deserialize)]
-    #[allow(dead_code)]
-    struct BgtHeader { name: String, game: String }
-    let header: BgtHeader = bincode::deserialize(&decompressed).ok()?;
-    if header.game.is_empty() { None } else { Some(header.game) }
+    struct BgtHeader { name: String, game: String, lang_from: String, lang_to: String }
+    let h: BgtHeader = bincode::deserialize_from(decoder).ok()?;
+    Some(BgtPeek { game: h.game, lang_from: h.lang_from, lang_to: h.lang_to })
+}
+
+/// Convenience wrapper that returns only the game name.
+pub fn peek_bgt_game(path: &std::path::Path) -> Option<String> {
+    let info = peek_bgt_info(path)?;
+    if info.game.is_empty() { None } else { Some(info.game) }
 }
 
 // ── Automatic format detection ───────────────────────────────────────────────

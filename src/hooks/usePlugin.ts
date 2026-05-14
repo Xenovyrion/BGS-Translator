@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo } from "../types";
+import type { DefaultDbEntry } from "./useSettings";
 
 /** Unique key based on _idx (assigned at load time) to avoid collisions
  *  on records that have multiple sub-fields of the same type (e.g. QUST/CNAM). */
@@ -38,9 +39,11 @@ export function detectGame(masters: string[]): string {
 export function usePlugin({
   propagateIdentical = true,
   dbApplyValidates   = true,
+  defaultDbs         = {},
 }: {
   propagateIdentical?: boolean;
   dbApplyValidates?:   boolean;
+  defaultDbs?:         Record<string, DefaultDbEntry>;
 } = {}) {
   const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
   const [entries, setEntries]               = useState<TranslationEntry[]>([]);
@@ -80,10 +83,14 @@ export function usePlugin({
   ): Promise<TranslationEntry[]> => {
     if (!game) return indexed;
 
-    const dbPath = await invoke<string | null>("find_db_for_game_cmd", {
-      game,
-      customDir: dbFolder || null,
-    });
+    // Check explicit user-defined default DB first (avoids slow directory scan)
+    const explicit = defaultDbs[game.toLowerCase()];
+    const dbPath = explicit
+      ? explicit.path
+      : await invoke<string | null>("find_db_for_game_cmd", {
+          game,
+          customDir: dbFolder || null,
+        });
 
     if (!dbPath) {
       setDbNotFound(game);
@@ -114,7 +121,7 @@ export function usePlugin({
       setDbNotFound(game);
       return indexed;
     }
-  }, [dbApplyValidates]);
+  }, [dbApplyValidates, defaultDbs]);
 
   // ── Open a plugin file (.esp/.esm/.esl) ───────────────────────────────────
 
