@@ -730,7 +730,7 @@ export default function App() {
               tableRef={tableRef}
             />
 
-            {selectedEntry && (
+            {selectedEntry && selectedCount < 2 && (
               <EditPanel
                 ref={editPanelRef}
                 entry={selectedEntry}
