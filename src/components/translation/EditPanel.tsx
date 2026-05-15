@@ -27,18 +27,20 @@ interface Props {
   entry:          TranslationEntry;
   onTranslate:    (idx: number, translated: string) => void;
   onSetStatus:    (idx: number, status: EntryStatus) => void;
-  onClose:        () => void;
-  onFocusTable:   () => void;
-  panelHeight:    number;
-  onPanelResize:  (delta: number) => void;
-  recordColors:   Record<string, string>;
-  editShortcuts?: EditPanelShortcuts;
-  spellLang?:     string;
-  spellRealtime?: boolean;
-  spellDebounce?: number;
-  deeplApiKey?:   string;
-  deeplApiType?:  string;
-  deeplTargetLang?: string;
+  onClose:            () => void;
+  onFocusTable:       () => void;
+  panelHeight:        number;
+  onPanelResize:      (delta: number) => void;
+  recordColors:       Record<string, string>;
+  editShortcuts?:     EditPanelShortcuts;
+  spellLang?:         string;
+  spellRealtime?:     boolean;
+  spellDebounce?:     number;
+  deeplApiKey?:       string;
+  deeplApiType?:      string;
+  deeplTargetLang?:   string;
+  onAddToPersonalDb?: () => void;    // Add single entry to personal DB
+  personalDbName?:    string;        // Name of the active personal DB (for tooltip)
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -178,7 +180,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr" },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr", onAddToPersonalDb, personalDbName },
   ref,
 ) {
   const { t } = useTranslation();
@@ -647,6 +649,22 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
 
             {/* Spacer — pushes all action buttons to the right */}
             <div style={{ flex: 1 }} />
+
+            {/* Personal DB button (single entry) */}
+            {onAddToPersonalDb && (
+              <ToolBtn
+                onClick={() => {
+                  if (entry.translated) onAddToPersonalDb();
+                }}
+                disabled={!entry.translated}
+                title={personalDbName
+                  ? t("edit.add_personal_db_named", { name: personalDbName })
+                  : t("edit.add_personal_db")}
+                style={{ background: "var(--bg-primary)", color: "var(--accent)", borderColor: "var(--accent)" }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 700 }}>+ DB</span>
+              </ToolBtn>
+            )}
 
             {/* DeepL button */}
             {deeplApiKey && (

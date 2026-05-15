@@ -753,6 +753,8 @@ function guessGameName(stem: string): string {
 
 interface DbFileInfo { name: string; path: string; format: string; size: number; game: string; lang_from: string; lang_to: string }
 interface DefaultForm { path: string; game: string; srcLang: string; dstLang: string }
+interface PersonalFileInfo { name: string; path: string; size: number; game: string; lang_from: string; lang_to: string; entry_count: number }
+interface CreatePersonalForm { name: string; game: string; srcLang: string; dstLang: string; saving: boolean; error: string }
 
 const LANG_OPTIONS = [
   ["fr","Français"],["en","English"],["de","Deutsch"],["es","Español"],
@@ -773,6 +775,13 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
   const [loading, setLoading]       = useState<boolean>(false);
   const [gameNames, setGameNames]   = useState<Record<string, string>>({});
   const [defForm, setDefForm]       = useState<DefaultForm | null>(null);
+
+  // ── Personal DB state ──────────────────────────────────────────────────────
+  const [personalFiles, setPersonalFiles]       = useState<PersonalFileInfo[]>([]);
+  const [personalDir, setPersonalDir]           = useState<string>("");
+  const [personalLoading, setPersonalLoading]   = useState(false);
+  const [createForm, setCreateForm]             = useState<CreatePersonalForm | null>(null);
+  const [confirmDeletePath, setConfirmDeletePath] = useState<string | null>(null);
 
   const activeDir = settings.dbFolder || defaultDir;
 
@@ -799,7 +808,20 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
     finally { setLoading(false); }
   }, [settings.dbFolder]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const refreshPersonal = useCallback(async () => {
+    setPersonalLoading(true);
+    try {
+      const [dir, list] = await Promise.all([
+        invoke<string>("get_personal_dbs_dir_cmd", { customDir: settings.personalDbFolder || null }),
+        invoke<PersonalFileInfo[]>("scan_personal_dbs_cmd", { customDir: settings.personalDbFolder || null }),
+      ]);
+      setPersonalDir(dir);
+      setPersonalFiles(list);
+    } catch { /* ignore */ }
+    finally { setPersonalLoading(false); }
+  }, [settings.personalDbFolder]);
+
+  useEffect(() => { refresh(); refreshPersonal(); }, [refresh, refreshPersonal]);
 
   const eetFiles = files.filter((f) => f.format === "eet");
 
@@ -823,7 +845,32 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
     finally { setConverting(null); }
   };
 
-  const openActiveDir = () => openFolder(settings.dbFolder || defaultDir);
+  const openActiveDir        = () => openFolder(settings.dbFolder || defaultDir);
+  const openPersonalDir      = () => openFolder(settings.personalDbFolder || personalDir);
+  const pickPersonalDbFolder = async () => {
+    try {
+      const dir = await openDialog({ directory: true, multiple: false, title: t("settings_modal.personal_db.folder_pick_title") });
+      if (dir && typeof dir === "string") onUpdate({ personalDbFolder: dir });
+    } catch {}
+  };
+
+  const submitCreatePersonal = async () => {
+    if (!createForm || !createForm.name.trim() || createForm.saving) return;
+    setCreateForm(f => f ? { ...f, saving: true, error: "" } : f);
+    try {
+      await invoke("create_personal_db_cmd", {
+        name:      createForm.name.trim(),
+        game:      createForm.game,
+        langFrom:  createForm.srcLang,
+        langTo:    createForm.dstLang,
+        customDir: settings.personalDbFolder || null,
+      });
+      await refreshPersonal();
+      setCreateForm(null);
+    } catch (e) {
+      setCreateForm(f => f ? { ...f, saving: false, error: String(e) } : f);
+    }
+  };
 
   const fmt = (bytes: number) => bytes > 1_000_000
     ? `${(bytes / 1_000_000).toFixed(1)} Mo`
@@ -1039,6 +1086,234 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
           <PillBtn label={t("settings_modal.db.apply_validates_on")}  active={settings.dbApplyValidates !== false} onClick={() => onUpdate({ dbApplyValidates: true  })} />
           <PillBtn label={t("settings_modal.db.apply_validates_off")} active={settings.dbApplyValidates === false}  onClick={() => onUpdate({ dbApplyValidates: false })} />
         </div>
+      </Section>
+
+      {/* ── BDD Personnelle ─────────────────────────────────────────────── */}
+      <Section label={
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+          <span style={{ flex: 1 }}>{t("settings_modal.personal_db.section")}</span>
+          <button
+            onClick={refreshPersonal}
+            disabled={personalLoading}
+            title={t("settings_modal.personal_db.refresh_title")}
+            style={{ ...smallBtnStyle(), padding: "3px 9px", fontSize: 12, fontWeight: 600 }}
+          >
+            {personalLoading ? "…" : "↻"}
+          </button>
+        </div>
+      }>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          {t("settings_modal.personal_db.section_desc")}
+        </p>
+
+        {/* Personal DB folder */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+          <input
+            type="text"
+            value={settings.personalDbFolder || personalDir}
+            onChange={(e) => onUpdate({ personalDbFolder: e.target.value })}
+            placeholder={personalDir || t("settings_modal.personal_db.folder_placeholder")}
+            style={{
+              flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 11,
+              background: "var(--bg-hover)", color: "var(--accent)",
+              border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
+            }}
+          />
+          <button onClick={pickPersonalDbFolder} title={t("settings_modal.personal_db.folder_pick_title")} style={iconBtn()}>📁</button>
+          <button onClick={() => onUpdate({ personalDbFolder: "" })} title={t("settings_modal.db.folder_reset_title")} style={iconBtn()}>↺</button>
+          <button onClick={openPersonalDir} style={smallBtnStyle()}>{t("settings_modal.db.folder_open")}</button>
+        </div>
+
+        {/* Auto-apply toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>
+            {t("settings_modal.personal_db.auto_apply_label")}
+          </span>
+          <PillBtn
+            label={t("settings_modal.personal_db.auto_apply_on")}
+            active={settings.personalDbAutoApply !== false}
+            onClick={() => onUpdate({ personalDbAutoApply: true })}
+          />
+          <PillBtn
+            label={t("settings_modal.personal_db.auto_apply_off")}
+            active={settings.personalDbAutoApply === false}
+            onClick={() => onUpdate({ personalDbAutoApply: false })}
+          />
+        </div>
+
+        {/* List of .bgtx files */}
+        {personalFiles.length === 0 && !personalLoading && (
+          <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", marginBottom: 10 }}>
+            {t("settings_modal.personal_db.no_files")}
+          </p>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {personalFiles.map((f) => {
+            const isActive = settings.activePersonalDbPath === f.path;
+            return (
+              <div key={f.path} style={{
+                background: "var(--bg-hover)", borderRadius: 8, padding: "9px 12px",
+                border: isActive ? "1px solid var(--accent)" : "1px solid transparent",
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color: isActive ? "var(--accent)" : "var(--text-1)" }}>
+                    {f.name}
+                  </span>
+                  {f.game && (
+                    <span style={{ marginLeft: 8, fontSize: 11, color: "var(--text-2)" }}>{f.game}</span>
+                  )}
+                  <span style={{ marginLeft: 6, fontSize: 10, color: "var(--text-3)" }}>
+                    {f.lang_from.toUpperCase()} → {f.lang_to.toUpperCase()}
+                  </span>
+                  <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-3)" }}>
+                    {f.entry_count} {t("settings_modal.personal_db.entries_label")}
+                  </span>
+                  {isActive && (
+                    <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
+                      ★ {t("settings_modal.personal_db.active_badge")}
+                    </span>
+                  )}
+                </div>
+                {confirmDeletePath !== f.path && (!isActive ? (
+                  <button
+                    onClick={() => onUpdate({ activePersonalDbPath: f.path })}
+                    style={{ ...smallBtnStyle(), background: "transparent", color: "var(--accent)", borderColor: "var(--accent)" }}
+                  >
+                    {t("settings_modal.personal_db.set_active")}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onUpdate({ activePersonalDbPath: "" })}
+                    style={{ ...smallBtnStyle(), background: "transparent", color: "var(--text-3)", borderColor: "var(--border)" }}
+                  >
+                    {t("settings_modal.personal_db.deactivate")}
+                  </button>
+                ))}
+                {confirmDeletePath === f.path ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "var(--danger)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {t("settings_modal.personal_db.delete_confirm_inline")}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await invoke("delete_personal_db_cmd", { path: f.path });
+                        if (isActive) onUpdate({ activePersonalDbPath: "" });
+                        setConfirmDeletePath(null);
+                        await refreshPersonal();
+                      }}
+                      style={{ ...smallBtnStyle(), color: "#fff", borderColor: "var(--danger)", background: "var(--danger)" }}
+                    >
+                      {t("settings_modal.personal_db.delete_confirm_yes")}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeletePath(null)}
+                      style={{ ...smallBtnStyle(), background: "transparent", color: "var(--text-2)", borderColor: "var(--border)" }}
+                    >
+                      {t("settings_modal.personal_db.delete_confirm_no")}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeletePath(f.path)}
+                    style={{ ...smallBtnStyle(), color: "var(--danger)", borderColor: "var(--danger)", background: "transparent" }}
+                  >
+                    {t("settings_modal.personal_db.delete")}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Create new personal DB */}
+        {createForm ? (
+          <div style={{
+            background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.25)",
+            borderRadius: 8, padding: "12px 14px",
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", marginBottom: 10 }}>
+              {t("settings_modal.personal_db.create_title")}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {/* Name */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 180px" }}>
+                <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                  {t("settings_modal.personal_db.create_name")}
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm(f => f ? { ...f, name: e.target.value } : f)}
+                  placeholder={t("settings_modal.personal_db.create_name_placeholder")}
+                  style={{
+                    height: 32, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                    background: "var(--bg-card)", color: "var(--text-1)",
+                    border: "1px solid var(--border)", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              {/* Game */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 130px" }}>
+                <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                  {t("settings_modal.db.default_game")}
+                </label>
+                <select
+                  value={createForm.game}
+                  onChange={(e) => setCreateForm(f => f ? { ...f, game: e.target.value } : f)}
+                  style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}
+                >
+                  <option value="">— {t("settings_modal.db.default_game")} —</option>
+                  {KNOWN_GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+              {/* Source lang */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                  {t("settings_modal.db.default_src")}
+                </label>
+                <select value={createForm.srcLang} onChange={(e) => setCreateForm(f => f ? { ...f, srcLang: e.target.value } : f)}
+                  style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
+                  {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              {/* Target lang */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>
+                  {t("settings_modal.db.default_dst")}
+                </label>
+                <select value={createForm.dstLang} onChange={(e) => setCreateForm(f => f ? { ...f, dstLang: e.target.value } : f)}
+                  style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
+                  {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+            {createForm.error && (
+              <p style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{createForm.error}</p>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={submitCreatePersonal}
+                disabled={!createForm.name.trim() || createForm.saving}
+                style={btnStyle("var(--accent)")}
+              >
+                {createForm.saving ? "…" : t("settings_modal.personal_db.create_confirm")}
+              </button>
+              <button onClick={() => setCreateForm(null)} style={smallBtnStyle()}>
+                {t("settings_modal.db.default_cancel")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCreateForm({ name: "", game: "", srcLang: "en", dstLang: "fr", saving: false, error: "" })}
+            style={{ ...smallBtnStyle(), gap: 6 }}
+          >
+            <span style={{ fontSize: 14 }}>＋</span>
+            {t("settings_modal.personal_db.create_btn")}
+          </button>
+        )}
       </Section>
 
     </div>

@@ -82,6 +82,13 @@ pub fn run() {
             spellcheck::commands::get_suggestions_cmd,
             deepl::commands::translate_deepl_cmd,
             deepl::commands::translate_deepl_batch_cmd,
+            database::personal_commands::create_personal_db_cmd,
+            database::personal_commands::scan_personal_dbs_cmd,
+            database::personal_commands::peek_personal_db_cmd,
+            database::personal_commands::add_to_personal_db_cmd,
+            database::personal_commands::apply_personal_db_cmd,
+            database::personal_commands::get_personal_dbs_dir_cmd,
+            database::personal_commands::delete_personal_db_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");

@@ -2,19 +2,22 @@ import { useTranslation } from "react-i18next";
 import type { EntryStatus } from "../../types";
 
 interface Props {
-  count:              number;
-  totalVisible:       number;
-  onSetStatus:        (status: EntryStatus) => void;
-  onAddToDb?:         () => void;
-  onClear:            () => void;
-  onSelectAll?:       () => void;
-  onDeeplBatch?:      () => void;
-  deeplBatchLoading?: boolean;
+  count:                  number;
+  totalVisible:           number;
+  onSetStatus:            (status: EntryStatus) => void;
+  onAddToPersonalDb?:     () => void;   // write selected → personal DB
+  onApplyFromPersonalDb?: () => void;   // read personal DB → fill selected
+  personalDbName?:        string;       // displayed in both buttons
+  onClear:                () => void;
+  onSelectAll?:           () => void;
+  onDeeplBatch?:          () => void;
+  deeplBatchLoading?:     boolean;
 }
 
 export default function BulkActionBar({
   count, totalVisible,
-  onSetStatus, onAddToDb, onClear, onSelectAll,
+  onSetStatus, onAddToPersonalDb, onApplyFromPersonalDb, personalDbName,
+  onClear, onSelectAll,
   onDeeplBatch, deeplBatchLoading,
 }: Props) {
   const { t } = useTranslation();
@@ -45,10 +48,28 @@ export default function BulkActionBar({
       <BulkBtn label={t("bulk.ignore")}   color="#64748b" onClick={() => onSetStatus("ignored")} />
       <BulkBtn label={t("bulk.reset")}    color="#ef4444" onClick={() => onSetStatus("untranslated")} />
 
-      {onAddToDb && (
+      {/* Personal DB — read (apply) + write (add) */}
+      {(onApplyFromPersonalDb || onAddToPersonalDb) && (
         <>
           <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", flexShrink: 0 }} />
-          <BulkBtn label={t("bulk.add_db")} color="#6366f1" onClick={onAddToDb} />
+          {onApplyFromPersonalDb && (
+            <BulkBtn
+              label={personalDbName
+                ? t("bulk.apply_personal_db_named", { name: personalDbName })
+                : t("bulk.apply_personal_db")}
+              color="#0ea5e9"
+              onClick={onApplyFromPersonalDb}
+            />
+          )}
+          {onAddToPersonalDb && (
+            <BulkBtn
+              label={personalDbName
+                ? t("bulk.add_personal_db_named", { name: personalDbName })
+                : t("bulk.add_personal_db")}
+              color="#6366f1"
+              onClick={onAddToPersonalDb}
+            />
+          )}
         </>
       )}
 

@@ -41,9 +41,11 @@ interface Props {
   onExportXtXml?:     () => void;
   onExportEtXml?:     () => void;
   onExportCsv?:       () => void;
-  onConvertToBgt?:    () => void;
-  onGlobalFind?:      () => void;
-  globalFindShortcut?: string;
+  onConvertToBgt?:         () => void;
+  onGlobalFind?:           () => void;
+  globalFindShortcut?:     string;
+  onApplyPersonalDb?:      () => void;
+  hasActivePersonalDb?:    boolean;
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -57,6 +59,7 @@ export default function MenuBar({
   onExportXtXml, onExportEtXml, onExportCsv,
   onConvertToBgt,
   onGlobalFind, globalFindShortcut,
+  onApplyPersonalDb, hasActivePersonalDb,
 }: Props) {
   const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -121,7 +124,7 @@ export default function MenuBar({
       items: [
         { label: t("menu.db_manage"), onClick: () => { close(); onSettingsDb(); } },
         { separator: true },
-        { label: t("menu.db_apply"), disabled: true },
+        { label: t("menu.db_apply_personal"), disabled: !pluginLoaded || loading || !hasActivePersonalDb, onClick: onApplyPersonalDb ? () => { close(); onApplyPersonalDb!(); } : undefined },
         { separator: true },
         {
           label: t("menu.db_convert_section"),

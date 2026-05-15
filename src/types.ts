@@ -134,6 +134,27 @@ export const DEFAULT_EDIT_SHORTCUTS: EditPanelShortcuts = {
   opStripTags: { key: "b", ctrl: true, shift: true },
 };
 
+// ── Personal DB types ─────────────────────────────────────────────────────────
+
+export interface PersonalDbInfo {
+  name:        string;
+  path:        string;
+  game:        string;
+  lang_from:   string;
+  lang_to:     string;
+  entry_count: number;
+}
+
+export interface PersonalDbFileInfo {
+  name:        string;
+  path:        string;
+  size:        number;
+  game:        string;
+  lang_from:   string;
+  lang_to:     string;
+  entry_count: number;
+}
+
 /** Returns true when a keyboard event matches a ShortcutDef. */
 export function matchShortcut(
   e: { key: string; ctrlKey: boolean; metaKey?: boolean; altKey: boolean; shiftKey: boolean },

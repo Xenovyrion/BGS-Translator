@@ -39,6 +39,10 @@ export interface AppSettings {
   // DeepL auto-translation
   deeplApiKey:    string;   // DeepL API key (free keys end with :fx)
   deeplApiType:   string;   // "free" | "pro"
+  // Personal DB
+  personalDbFolder:   string;  // folder containing .bgtx files (empty = default personal_dbs/)
+  activePersonalDbPath: string; // path of the active personal DB (empty = none)
+  personalDbAutoApply:  boolean; // auto-apply personal DB when opening a plugin
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -68,6 +72,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellDebounce: 600,
   deeplApiKey:   "",
   deeplApiType:  "free",
+  personalDbFolder:     "",
+  activePersonalDbPath: "",
+  personalDbAutoApply:  true,
 };
 
 export function useSettings() {

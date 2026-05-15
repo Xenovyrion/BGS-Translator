@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import "./i18n";
 import { useSettings } from "./hooks/useSettings";
 import { usePlugin } from "./hooks/usePlugin";
+import { usePersonalDb } from "./hooks/usePersonalDb";
 import { useLayout } from "./hooks/useLayout";
 import { DEFAULT_SHORTCUTS, formatShortcut } from "./types";
 import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from "./types";
@@ -86,16 +87,26 @@ export default function App() {
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
     openPlugin, loadSession,
     updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
+    applyPersonalDbManual,
     selectedCount,
     columnFilters, setColumnFilter,
-    dbApplyResult, clearDbApplyResult,
+    autoApplyResult, clearAutoApplyResult,
     dbNotFound, clearDbNotFound,
     loadedDbInfo,
   } = usePlugin({
-    propagateIdentical: settings.propagateIdentical !== false,
-    dbApplyValidates:   settings.dbApplyValidates   !== false,
-    defaultDbs:         settings.defaultDbs         ?? {},
+    propagateIdentical:  settings.propagateIdentical  !== false,
+    dbApplyValidates:    settings.dbApplyValidates     !== false,
+    defaultDbs:          settings.defaultDbs           ?? {},
+    personalDbPath:      settings.activePersonalDbPath ?? "",
+    personalDbAutoApply: settings.personalDbAutoApply  !== false,
   });
+
+  const {
+    addToPersonalDb,
+    personalDbInfo: personalDbInfoLoaded,
+    peekPersonalDb,
+    setPersonalDbInfo,
+  } = usePersonalDb();
 
   // Source path resolved interactively when session lacks it
   const [resolvedSourcePath, setResolvedSourcePath] = useState<string>("");
@@ -200,11 +211,33 @@ export default function App() {
   /* ── Notification triggers ──────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (dbApplyResult === null) return;
-    const detail = `${dbApplyResult.toLocaleString()} ${t("db.banner_suffix", { count: dbApplyResult })}${loadedDbInfo ? ` — ${loadedDbInfo.name} (${loadedDbInfo.game})` : ""}`;
-    notify(`✓ ${t("db.banner_title")}`, "success", detail, 6000);
-    clearDbApplyResult();
-  }, [dbApplyResult]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!autoApplyResult) return;
+    const { refDb, personalDb } = autoApplyResult;
+
+    if (refDb > 0 && personalDb > 0) {
+      // Both DBs matched — one combined notification
+      const refPart  = `${refDb.toLocaleString()} ${t("db.banner_suffix", { count: refDb })}${loadedDbInfo ? ` (${loadedDbInfo.name})` : ""}`;
+      const persPart = `${personalDb.toLocaleString()} ${t("personal_db.apply_banner_suffix", { count: personalDb })}`;
+      notify(`✓ ${t("db.banner_title")}`, "success", `${refPart} · ${persPart}`, 7000);
+    } else if (refDb > 0) {
+      const detail = `${refDb.toLocaleString()} ${t("db.banner_suffix", { count: refDb })}${loadedDbInfo ? ` — ${loadedDbInfo.name} (${loadedDbInfo.game})` : ""}`;
+      notify(`✓ ${t("db.banner_title")}`, "success", detail, 6000);
+    } else if (personalDb > 0) {
+      notify(
+        `✓ ${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_banner_desc", { count: personalDb }), 5000,
+      );
+    }
+
+    clearAutoApplyResult();
+  }, [autoApplyResult]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load personal DB info (name) when active path changes
+  useEffect(() => {
+    const path = settings.activePersonalDbPath;
+    if (!path) { setPersonalDbInfo(null); return; }
+    peekPersonalDb(path).then(setPersonalDbInfo).catch(() => setPersonalDbInfo(null));
+  }, [settings.activePersonalDbPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dbNotFound) return;
@@ -552,14 +585,73 @@ export default function App() {
 
   const focusTable   = useCallback(() => tableRef.current?.focus(), []);
 
-  const handleAddToDb = useCallback(async () => {
+  const handleAddToPersonalDb = useCallback(async () => {
+    const dbPath = settings.activePersonalDbPath;
+    if (!dbPath) {
+      notify(`⚠ ${t("personal_db.no_active_title")}`, "error", t("personal_db.no_active_desc"), 6000);
+      return;
+    }
     const toAdd = entries.filter(e => selectedKeys.has(String(e._idx)) && e.translated);
     if (toAdd.length === 0) return;
-    try {
-      const count = await invoke<number>("add_to_db_cmd", { entries: toAdd });
-      alert(t("db.added", { count }));
-    } catch (e) { alert(t("db.error", { error: String(e) })); }
-  }, [entries, selectedKeys, t]);
+    const info = await addToPersonalDb(dbPath, toAdd, {
+      game:     pluginInfo ? undefined : undefined,
+      langFrom: "en",
+      langTo:   settings.targetLanguage || "fr",
+    });
+    if (info) {
+      notify(`✓ ${t("personal_db.add_success_title")}`,
+        "success",
+        t("personal_db.add_success_desc", { count: toAdd.length, db: info.name }),
+        5000,
+      );
+    }
+  }, [entries, selectedKeys, settings.activePersonalDbPath, settings.targetLanguage, addToPersonalDb, notify, t, pluginInfo]);
+
+  /** Add the currently open single entry to the active personal DB. */
+  const handleAddSingleToPersonalDb = useCallback(async () => {
+    const dbPath = settings.activePersonalDbPath;
+    if (!dbPath || !selectedEntry || !selectedEntry.translated) return;
+    const info = await addToPersonalDb(dbPath, [selectedEntry], {
+      langFrom: "en",
+      langTo:   settings.targetLanguage || "fr",
+    });
+    if (info) {
+      notify(`✓ ${t("personal_db.add_success_title")}`, "success",
+        t("personal_db.add_success_desc", { count: 1, db: info.name }), 4000);
+    }
+  }, [selectedEntry, settings.activePersonalDbPath, settings.targetLanguage, addToPersonalDb, notify, t]);
+
+  /** Apply personal DB to all entries (global, from menu). */
+  const handleApplyPersonalDbAll = useCallback(async () => {
+    if (!settings.activePersonalDbPath) {
+      notify(`⚠ ${t("personal_db.no_active_title")}`, "error", t("personal_db.no_active_desc"), 6000);
+      return;
+    }
+    const matched = await applyPersonalDbManual();
+    if (matched > 0) {
+      notify(`✓ ${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_banner_desc", { count: matched }), 5000);
+    } else {
+      notify(`${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_no_match"), 4000);
+    }
+  }, [settings.activePersonalDbPath, applyPersonalDbManual, notify, t]);
+
+  /** Apply personal DB only to the current selection (from BulkActionBar). */
+  const handleApplyPersonalDbSelection = useCallback(async () => {
+    if (!settings.activePersonalDbPath) {
+      notify(`⚠ ${t("personal_db.no_active_title")}`, "error", t("personal_db.no_active_desc"), 6000);
+      return;
+    }
+    const matched = await applyPersonalDbManual(selectedKeys);
+    if (matched > 0) {
+      notify(`✓ ${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_banner_desc", { count: matched }), 5000);
+    } else {
+      notify(`${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_no_match"), 4000);
+    }
+  }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t]);
 
   const handleDeeplBatch = useCallback(async () => {
     if (!settings.deeplApiKey || deeplBatchLoading) return;
@@ -644,6 +736,8 @@ export default function App() {
         onConvertToBgt={handleConvertToBgt}
         onGlobalFind={pluginInfo ? () => setShowGlobalFind(true) : undefined}
         globalFindShortcut={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
+        onApplyPersonalDb={pluginInfo ? handleApplyPersonalDbAll : undefined}
+        hasActivePersonalDb={!!settings.activePersonalDbPath}
       />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
@@ -690,7 +784,9 @@ export default function App() {
           count={selectedCount}
           totalVisible={displayEntries.length}
           onSetStatus={bulkSetStatus}
-          onAddToDb={loadedDbInfo && !loadedDbInfo.read_only ? handleAddToDb : undefined}
+          onApplyFromPersonalDb={settings.activePersonalDbPath ? handleApplyPersonalDbSelection : undefined}
+          onAddToPersonalDb={settings.activePersonalDbPath ? handleAddToPersonalDb : undefined}
+          personalDbName={personalDbInfoLoaded?.name ?? undefined}
           onClear={clearSelection}
           onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
           onDeeplBatch={settings.deeplApiKey ? handleDeeplBatch : undefined}
@@ -748,6 +844,8 @@ export default function App() {
                 deeplApiKey={settings.deeplApiKey || undefined}
                 deeplApiType={settings.deeplApiType}
                 deeplTargetLang={settings.targetLanguage}
+                onAddToPersonalDb={settings.activePersonalDbPath ? handleAddSingleToPersonalDb : undefined}
+                personalDbName={personalDbInfoLoaded?.name ?? undefined}
               />
             )}
 

@@ -108,6 +108,7 @@ BGS-Translator/
 │   ├── hooks/
 │   │   ├── useLayout.ts              # Panel visibility / layout state
 │   │   ├── useLogs.ts                # Log panel state
+│   │   ├── usePersonalDb.ts          # Personal database (.bgtx) commands wrapper
 │   │   ├── usePlugin.ts              # Plugin loading + translation session
 │   │   └── useSettings.ts            # Persistent settings (localStorage)
 │   ├── i18n/
@@ -125,11 +126,14 @@ BGS-Translator/
 │   │   ├── main.rs                   # Entry point
 │   │   ├── updater.rs                # Auto-update commands
 │   │   ├── database/
-│   │   │   ├── commands.rs           # Tauri commands for database operations
+│   │   │   ├── commands.rs           # Tauri commands for reference database operations
 │   │   │   ├── format.rs             # .bgt binary format (bincode + zstd)
 │   │   │   ├── mod.rs
-│   │   │   ├── store.rs              # In-memory database store (AHashMap)
-│   │   │   └── types.rs              # DbEntry, DbInfo, ApplyResult
+│   │   │   ├── personal_commands.rs  # Tauri commands for personal database (.bgtx)
+│   │   │   ├── personal_format.rs    # .bgtx binary format (magic + zstd + bincode)
+│   │   │   ├── personal_store.rs     # PersonalDb dual-index store (ID + text)
+│   │   │   ├── store.rs              # In-memory reference database store (AHashMap)
+│   │   │   └── types.rs              # DbEntry, DbInfo, PersonalDbEntry, PersonalDbInfo…
 │   │   ├── formats/
 │   │   │   ├── mod.rs
 │   │   │   ├── xtranslator_xml.rs    # xTranslator XML import/export
@@ -175,7 +179,7 @@ BGS-Translator/
 | Binary parsing | `binrw` 0.14 | Derive macros for ESP/ESM record structures |
 | Compression | `flate2` (zlib) · `zstd` 0.13 | Compressed records · database compression |
 | Encoding | `encoding_rs` 0.8 | Windows-1252 → UTF-8 for legacy plugins |
-| Database format | `bincode` 1 + zstd | Custom `.bgt` binary format |
+| Database format | `bincode` 1 + zstd | Custom `.bgt` (reference) and `.bgtx` (personal) binary formats |
 | HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads — no OpenSSL dependency |
 | Spell check | [Nuspell](https://nuspell.github.io/) 5.x | C ABI wrapper · ICU · 47 languages |
 | Virtualisation | `@tanstack/react-virtual` 3 | Windowed rendering for large entry lists |
@@ -282,6 +286,24 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Bulk Actions
 - Select multiple entries and apply a status change in one click
+- **Apply personal DB to selection** (`↓ [DB name]`) — fills empty translations in the selected rows from the personal database
+- **Save selection to personal DB** (`+ [DB name]`) — writes all translated entries in the selection to the active personal database
+
+### Personal Translation Database (`.bgtx`)
+- Custom binary format (`BGTX` magic + zstd + bincode) for storing personal translation pairs across sessions
+- **Dual-index lookup**: primary match by `form_id + sub_type` (highest precision); text-based fallback by original string (handles mods where IDs differ)
+- **Auto-apply pipeline**: on plugin open, the reference `.bgt` is applied first, then all `.bgtx` files in the personal folder are applied in alphabetical order — one combined notification reports total matches from both sources
+- **Active database**: designate one `.bgtx` as the write target; all files in the folder are always read during auto-apply
+- **Manual apply — all entries**: Database menu → *Appliquer BDD personnelle (toutes les entrées)*
+- **Manual apply — selection**: `↓ [DB name]` button in the bulk action bar (fills only empty translations in the selection)
+- **Save entry from Edit Panel**: `+ DB` button adds the currently edited entry directly to the active personal database
+- **Save selection in bulk**: `+ [DB name]` button in the bulk action bar
+- Managed in **Settings → Database → BDD PERSONNELLE (.BGTX)**:
+  - Configure the personal databases folder (defaults to `personal_dbs/` next to the executable)
+  - Create new `.bgtx` databases (name, game, source/target language)
+  - Activate / deactivate the write target
+  - Delete a database (inline confirmation — no native dialog)
+  - Auto-apply toggle (Automatic / Manual)
 
 ### Translation Database (`.bgt`)
 - Custom binary format (bincode + zstd) for storing translation pairs
@@ -392,7 +414,8 @@ ICU (International Components for Unicode), a transitive dependency of Nuspell, 
 |---------|------|
 | Export output | `{Documents}/BGS-Translator/Traduction/` |
 | Sessions | `{Documents}/BGS-Translator/sessions/` |
-| Databases | Bundled inside the app binary |
+| Reference databases (`.bgt`) | Bundled inside the app binary |
+| Personal databases (`.bgtx`) | `personal_dbs/` next to the executable (configurable in Settings) |
 | Spell check dictionaries | `{AppData}/com.bgstranslator/dictionaries/` |
 | Log file | `{AppLog}/bgstranslator.log` (e.g. `%APPDATA%\com.bgstranslator\logs\` on Windows) |
 
