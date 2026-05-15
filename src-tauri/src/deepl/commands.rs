@@ -8,10 +8,6 @@ struct DeeplRequest {
     target_lang:  String,
     #[serde(skip_serializing_if = "Option::is_none")]
     source_lang:  Option<String>,
-    /// Enable XML tag-awareness so protected placeholders are preserved as-is.
-    tag_handling: String,
-    /// Tags named "x" are our BGS-tag placeholders — DeepL must not touch them.
-    ignore_tags:  Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -62,32 +58,43 @@ fn to_deepl_target(lang: &str) -> String {
 }
 
 // ── Tag protection ────────────────────────────────────────────────────────────
+//
+// We use rare Unicode bracket pairs ⟦N⟧ as placeholders (U+27E6/U+27E7).
+// This avoids sending `tag_handling:"xml"` to DeepL, which would fragment
+// the text at each placeholder and cause poor translation of surrounding words.
+// DeepL naturally preserves these characters as-is since they carry no
+// translatable meaning.
+//
+// Example:
+//   "Power from Beyond (<Alias=PlanetWithTrait>)"
+//   → protected: "Power from Beyond (⟦0⟧)"
+//   → DeepL FR : "Pouvoir venu d'ailleurs (⟦0⟧)"
+//   → restored : "Pouvoir venu d'ailleurs (<Alias=PlanetWithTrait>)"
 
-/// Replace every `<...>` BGS tag with `<x id="N"/>` so DeepL preserves them
-/// verbatim thanks to `tag_handling: "xml"` + `ignore_tags: ["x"]`.
-///
-/// Returns the modified text and the list of original tags in encounter order.
+/// Extract BGS-style tags (`<...>`) and replace them with `⟦N⟧` placeholders.
+/// Returns the modified text and the original tags in encounter order.
 fn protect_tags(text: &str) -> (String, Vec<String>) {
-    let mut out  = String::with_capacity(text.len());
+    let mut out  = String::with_capacity(text.len() + 8);
     let mut tags: Vec<String> = Vec::new();
     let chars: Vec<char> = text.chars().collect();
-    let len = chars.len();
+    let n = chars.len();
     let mut i = 0;
-    while i < len {
+    while i < n {
         if chars[i] == '<' {
-            // Find closing '>'
             let start = i;
             i += 1;
-            while i < len && chars[i] != '>' { i += 1; }
-            if i < len {
+            while i < n && chars[i] != '>' { i += 1; }
+            if i < n {
                 i += 1; // consume '>'
-                let original: String = chars[start..i].iter().collect();
+                let tag: String = chars[start..i].iter().collect();
                 let id = tags.len();
-                tags.push(original);
-                // Use self-closing XML element — DeepL will leave it alone
-                out.push_str(&format!(r#"<x id="{id}"/>"#));
+                tags.push(tag);
+                // ⟦ = U+27E6, ⟧ = U+27E7
+                out.push('\u{27E6}');
+                out.push_str(&id.to_string());
+                out.push('\u{27E7}');
             } else {
-                // Unclosed '<' — emit as-is
+                // Unclosed '<' — emit verbatim
                 out.extend(chars[start..i].iter());
             }
         } else {
@@ -98,38 +105,20 @@ fn protect_tags(text: &str) -> (String, Vec<String>) {
     (out, tags)
 }
 
-/// Put the original BGS tags back after DeepL has returned the translated text.
+/// Restore the original BGS tags after DeepL has returned the translated text.
 ///
-/// DeepL generally preserves `<x id="N"/>` exactly, but we also handle
-/// variants with a space before `/>` or with single quotes.
+/// DeepL preserves the ⟦N⟧ tokens verbatim.  We also handle the rare case
+/// where DeepL adds a thin-space or regular space inside the brackets.
 fn restore_tags(text: &str, tags: &[String]) -> String {
     let mut s = text.to_string();
     for (id, original) in tags.iter().enumerate() {
-        // Variants DeepL may produce
-        s = s
-            .replace(&format!(r#"<x id="{id}"/>"#),   original)
-            .replace(&format!(r#"<x id="{id}" />"#),   original)
-            .replace(&format!(r#"<x id='{id}'/>"#),    original)
-            .replace(&format!(r#"<x id='{id}' />"#),   original);
+        let placeholder = format!("\u{27E6}{id}\u{27E7}");
+        s = s.replace(&placeholder, original);
     }
     s
 }
 
-// ── Shared HTTP helper ────────────────────────────────────────────────────────
-
-fn make_request_body(
-    texts:       Vec<String>,
-    target_lang: &str,
-    source_lang: Option<String>,
-) -> DeeplRequest {
-    DeeplRequest {
-        text:         texts,
-        target_lang:  to_deepl_target(target_lang),
-        source_lang,
-        tag_handling: "xml".to_string(),
-        ignore_tags:  vec!["x".to_string()],
-    }
-}
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 fn endpoint(api_type: &str) -> &'static str {
     if api_type == "pro" {
@@ -169,7 +158,11 @@ pub async fn translate_deepl_cmd(
     // Protect BGS tags before sending
     let (protected, tag_list) = protect_tags(&text);
 
-    let body = make_request_body(vec![protected], &target_lang, mapped_source);
+    let body = DeeplRequest {
+        text:        vec![protected],
+        target_lang: to_deepl_target(&target_lang),
+        source_lang: mapped_source,
+    };
 
     let client = reqwest::Client::new();
     let response = client
@@ -198,13 +191,11 @@ pub async fn translate_deepl_cmd(
 
 // ── Batch command ─────────────────────────────────────────────────────────────
 
-/// Translate multiple texts in a **single** DeepL API call.
+/// Translate multiple texts in a **single** DeepL API call (one HTTP round-trip).
 ///
-/// Each element of `texts` is tag-protected independently before sending.
-/// The returned `Vec<String>` has the same length and order as the input.
-/// DeepL supports multiple `text[]` values natively — one roundtrip only.
-///
-/// To avoid hitting payload limits on large selections, chunks of 50 are used.
+/// Each text is tag-protected independently.  Results are returned in the same
+/// order as the input.  Large selections are split into chunks of 50 to stay
+/// well within DeepL's payload limits.
 #[tauri::command]
 pub async fn translate_deepl_batch_cmd(
     api_key:     String,
@@ -221,22 +212,20 @@ pub async fn translate_deepl_batch_cmd(
     let auth    = format!("DeepL-Auth-Key {key}");
     let tlang   = to_deepl_target(&target_lang);
 
-    // Protect tags for every text, keeping the mapping
+    // Protect tags for every text, keeping the tag maps for later restoration
     let protected_and_maps: Vec<(String, Vec<String>)> =
         texts.iter().map(|t| protect_tags(t)).collect();
 
     let mut results: Vec<String> = Vec::with_capacity(texts.len());
 
-    // Chunk into groups of 50 to stay well within DeepL's payload limits
+    // Chunk into groups of 50 to stay within DeepL payload limits
     for chunk in protected_and_maps.chunks(50) {
         let chunk_texts: Vec<String> = chunk.iter().map(|(t, _)| t.clone()).collect();
 
         let body = DeeplRequest {
-            text:         chunk_texts,
-            target_lang:  tlang.clone(),
-            source_lang:  None, // auto-detect per chunk
-            tag_handling: "xml".to_string(),
-            ignore_tags:  vec!["x".to_string()],
+            text:        chunk_texts,
+            target_lang: tlang.clone(),
+            source_lang: None, // auto-detect is best for mixed-content batches
         };
 
         let response = client
