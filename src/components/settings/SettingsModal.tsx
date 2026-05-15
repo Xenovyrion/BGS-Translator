@@ -59,7 +59,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
         style={{
           background: "var(--bg-primary)",
           borderRadius: 12,
-          width: 780,
+          width: 860,
           height: 680,
           display: "flex", flexDirection: "column",
           border: "1px solid var(--border)",
@@ -98,7 +98,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
               key={tabDef.id}
               onClick={() => setTab(tabDef.id)}
               style={{
-                padding: "0 16px", height: 40,
+                padding: "0 12px", height: 40,
                 background: "none", border: "none",
                 borderBottom: tab === tabDef.id ? "2px solid var(--accent)" : "2px solid transparent",
                 color: tab === tabDef.id ? "var(--accent)" : "var(--text-2)",
