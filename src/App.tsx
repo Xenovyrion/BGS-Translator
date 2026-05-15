@@ -80,6 +80,7 @@ export default function App() {
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,
     selectedKeys, handleRowClick,
+    clearSelection, selectAll,
     sortConfig, toggleSort,
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
@@ -550,7 +551,6 @@ export default function App() {
   }, [handleRowClick]);
 
   const focusTable   = useCallback(() => tableRef.current?.focus(), []);
-  const clearSelection = useCallback(() => setSelectedEntry(null), [setSelectedEntry]);
 
   const handleAddToDb = useCallback(async () => {
     const toAdd = entries.filter(e => selectedKeys.has(String(e._idx)) && e.translated);
@@ -684,6 +684,10 @@ export default function App() {
           onFilterChange={setFilter}
           onSearchChange={setSearch}
           onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
+          selectedCount={selectedCount}
+          totalVisible={displayEntries.length}
+          onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
+          onClearSelection={selectedCount > 0 ? clearSelection : undefined}
         />
 
         <BulkActionBar

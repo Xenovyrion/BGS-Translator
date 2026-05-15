@@ -515,12 +515,26 @@ export function usePlugin({
     ? Math.round(((translatedCount + ignoredCount) / entries.length) * 100)
     : 0;
 
+  const clearSelection = useCallback(() => {
+    setSelectedKeys(new Set());
+    setSelectedEntry(null);
+  }, []);
+
+  const selectAll = useCallback((entriesToSelect: TranslationEntry[]) => {
+    if (entriesToSelect.length === 0) return;
+    setSelectedKeys(new Set(entriesToSelect.map(entryKey)));
+    // Keep the first entry as the "anchor" for the edit panel
+    setSelectedEntry(entriesToSelect[0]);
+  }, []);
+
   return {
     pluginInfo, entries, displayEntries, loading, loadingProgress, error,
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,
     selectedKeys, handleRowClick,
+    clearSelection,
+    selectAll,
     sortConfig, toggleSort,
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount, progressPercent,

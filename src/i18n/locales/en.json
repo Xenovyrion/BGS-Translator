@@ -118,7 +118,12 @@
     "localized_badge":     "Localized",
     "filter_label":        "Show:",
     "column_filters":      "Column filters",
-    "column_filters_title":"Filter by column"
+    "column_filters_title":"Filter by column",
+    "select_all":          "Select all",
+    "select_all_title":    "Select all {{count}} visible rows",
+    "deselect_all_title":  "Deselect all",
+    "n_selected":          "{{count}} / {{total}} selected",
+    "selection_hint":      "Ctrl+Click: add to selection • Shift+Click: select range • ☑: select all"
   },
   "bulk": {
     "selected":     "{{count}} rows selected —",

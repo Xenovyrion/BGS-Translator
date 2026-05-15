@@ -118,7 +118,12 @@
     "localized_badge":     "Localisé",
     "filter_label":        "Afficher :",
     "column_filters":      "Filtres colonnes",
-    "column_filters_title":"Filtres par colonne"
+    "column_filters_title":"Filtres par colonne",
+    "select_all":          "Tout sélectionner",
+    "select_all_title":    "Sélectionner les {{count}} lignes visibles",
+    "deselect_all_title":  "Désélectionner tout",
+    "n_selected":          "{{count}} / {{total}} sélectionnées",
+    "selection_hint":      "Ctrl+Clic : ajouter à la sélection • Shift+Clic : sélectionner une plage • ☑ : tout sélectionner"
   },
   "bulk": {
     "selected":     "{{count}} lignes sélectionnées —",
