@@ -230,9 +230,9 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
         </p>
         <button
           onClick={() => { onResetLayout?.(); }}
-          style={{ ...smallBtnStyle(), gap: 7 }}
+          style={{ ...smallBtnStyle(), gap: 7, color: "var(--danger)", borderColor: "var(--border)" }}
         >
-          <span style={{ fontSize: 14, opacity: 0.8 }}>↺</span>
+          <span style={{ fontSize: 14 }}>↺</span>
           {t("settings_modal.appearance.reset_layout_btn")}
         </button>
       </Section>
@@ -356,7 +356,7 @@ function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetL
       <button onClick={onReset} style={{
         height: 32, padding: "0 12px", borderRadius: 7, cursor: "pointer",
         fontSize: 12, fontWeight: 400, flexShrink: 0,
-        background: "var(--bg-hover)", color: "var(--text-3)",
+        background: "var(--bg-hover)", color: "var(--danger)",
         border: "1px solid var(--border)", boxSizing: "border-box",
         display: "inline-flex", alignItems: "center",
       }}>
@@ -904,7 +904,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                       if (isEditing) { setDefForm(null); return; }
                       setDefForm({ path: f.path, game: f.game || "", srcLang: f.lang_from || "en", dstLang: f.lang_to || "fr" });
                     }}
-                    style={smallBtnStyle()}
+                    style={{ ...smallBtnStyle(), background: "transparent", color: "var(--accent)", borderColor: "var(--accent)" }}
                   >
                     {isEditing ? t("settings_modal.db.default_cancel") : t("settings_modal.db.default_edit")}
                   </button>
@@ -1194,7 +1194,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
               <button
                 onClick={() => onUpdate({ deeplApiKey: "" })}
                 title={t("deepl.clear_key")}
-                style={iconBtn()}
+                style={{ ...iconBtn(), color: "#ef4444", borderColor: "#ef4444" }}
               >
                 ×
               </button>
