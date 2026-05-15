@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
 import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS } from "../../types";
 
-type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "systeme";
+type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
 
 // ── Modal principal ───────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
     { id: "orthographe", labelKey: "settings_modal.tab_spellcheck",   icon: "✓" },
     { id: "database",    labelKey: "settings_modal.tab_database",     icon: "▤" },
     { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: "⋮" },
+    { id: "api",         labelKey: "settings_modal.tab_api",          icon: "⇄" },
     { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: "⚙" },
   ];
 
@@ -58,7 +59,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
         style={{
           background: "var(--bg-primary)",
           borderRadius: 12,
-          width: 700,
+          width: 780,
           height: 680,
           display: "flex", flexDirection: "column",
           border: "1px solid var(--border)",
@@ -119,6 +120,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
           {tab === "orthographe" && <SpellCheckTab  settings={settings} onUpdate={onUpdate} />}
           {tab === "database"    && <DatabaseTab    settings={settings} onUpdate={onUpdate} />}
           {tab === "divers"      && <DiversTab      settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
+          {tab === "api"         && <ApiTab         settings={settings} onUpdate={onUpdate} />}
           {tab === "systeme"     && <SystemeTab     settings={settings} onUpdate={onUpdate} />}
         </div>
 
@@ -1044,7 +1046,6 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
 
 function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
   const { t } = useTranslation();
-  const [showApiKey, setShowApiKey] = useState(false);
 
   const pickExportFolder = async () => {
     try {
@@ -1118,7 +1119,20 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
         </div>
       </Section>
 
-      {/* ── DeepL ─────────────────────────────────────────────────────── */}
+    </div>
+  );
+}
+
+// ── API & IA tab ──────────────────────────────────────────────────────────────
+
+function ApiTab({ settings, onUpdate }: TabProps) {
+  const { t } = useTranslation();
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* ── DeepL ───────────────────────────────────────────────────────── */}
       <Section label={t("deepl.section_title")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.5 }}>
           {t("deepl.section_desc")}{" "}
@@ -1134,7 +1148,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
         {/* Account type */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: "var(--text-2)", width: 100, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", width: 110, flexShrink: 0 }}>
             {t("deepl.api_type_label")}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
@@ -1145,7 +1159,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
         {/* API key */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 12, color: "var(--text-2)", width: 100, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", width: 110, flexShrink: 0 }}>
             {t("deepl.api_key_label")}
           </span>
           <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center" }}>
@@ -1154,7 +1168,6 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
               value={settings.deeplApiKey ?? ""}
               onChange={e => {
                 const val = e.target.value;
-                // Auto-detect free vs pro from the key suffix
                 const newType = val.trim().endsWith(":fx") ? "free" : (settings.deeplApiType ?? "free");
                 onUpdate({ deeplApiKey: val, deeplApiType: newType });
               }}

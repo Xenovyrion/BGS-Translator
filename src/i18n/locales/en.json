@@ -260,6 +260,7 @@
     "tab_spellcheck":  "Spell Check",
     "tab_database":    "Databases",
     "tab_misc":        "Misc",
+    "tab_api":         "API & AI",
     "tab_system":      "System",
     "appearance": {
       "theme_section":      "Theme",
