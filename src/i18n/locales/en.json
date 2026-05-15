@@ -613,7 +613,11 @@
     "error_no_api_key":       "No DeepL API key configured",
     "error_invalid_key":      "Invalid or expired API key",
     "error_quota":            "DeepL quota exceeded for this month",
-    "error_too_many_requests":"Too many requests — please retry in a few seconds"
+    "error_too_many_requests":"Too many requests — please retry in a few seconds",
+    "batch_btn":              "⇄ DeepL ({{count}} rows)",
+    "batch_title":            "Translate selected rows with DeepL (original → translation). <...> tags are automatically preserved.",
+    "batch_loading":          "Translating…",
+    "batch_ok":               "{{count}} rows translated with DeepL."
   },
   "spellcheck": {
     "section_title":        "Spell Check",

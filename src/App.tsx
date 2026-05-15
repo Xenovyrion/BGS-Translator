@@ -141,6 +141,7 @@ export default function App() {
   // null = modal closed, string = source file path shown in the ConvertToBgt modal
   const [convertBgtSource,   setConvertBgtSource]   = useState<string | null>(null);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
+  const [deeplBatchLoading,  setDeeplBatchLoading]  = useState(false);
 
   const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
     setNotification({ message, type, detail, key: Date.now(), duration });
@@ -560,6 +561,40 @@ export default function App() {
     } catch (e) { alert(t("db.error", { error: String(e) })); }
   }, [entries, selectedKeys, t]);
 
+  const handleDeeplBatch = useCallback(async () => {
+    if (!settings.deeplApiKey || deeplBatchLoading) return;
+    const selected = entries.filter(e => selectedKeys.has(String(e._idx)));
+    if (selected.length === 0) return;
+    setDeeplBatchLoading(true);
+    try {
+      const results = await invoke<string[]>("translate_deepl_batch_cmd", {
+        apiKey:     settings.deeplApiKey,
+        apiType:    settings.deeplApiType ?? "free",
+        texts:      selected.map(e => e.original),
+        targetLang: settings.targetLanguage,
+      });
+      let updated = 0;
+      results.forEach((translation, i) => {
+        if (translation && selected[i] !== undefined) {
+          updateTranslation(selected[i]._idx ?? i, translation);
+          updated++;
+        }
+      });
+      notify(t("deepl.batch_ok", { count: updated }), "success");
+    } catch (e) {
+      const msg = String(e);
+      const label =
+        msg === "deepl_invalid_key"       ? t("deepl.error_invalid_key")       :
+        msg === "deepl_quota_exceeded"    ? t("deepl.error_quota")             :
+        msg === "deepl_no_api_key"        ? t("deepl.error_no_api_key")        :
+        msg === "deepl_too_many_requests" ? t("deepl.error_too_many_requests") :
+        msg;
+      notify(label, "error");
+    } finally {
+      setDeeplBatchLoading(false);
+    }
+  }, [settings, entries, selectedKeys, updateTranslation, notify, t, deeplBatchLoading]);
+
   /* ── Global shortcuts (Ctrl+O, Ctrl+S, etc.) ────────────────────────────── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -656,6 +691,8 @@ export default function App() {
           onSetStatus={bulkSetStatus}
           onAddToDb={loadedDbInfo && !loadedDbInfo.read_only ? handleAddToDb : undefined}
           onClear={clearSelection}
+          onDeeplBatch={settings.deeplApiKey ? handleDeeplBatch : undefined}
+          deeplBatchLoading={deeplBatchLoading}
         />
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>

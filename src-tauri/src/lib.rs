@@ -81,6 +81,7 @@ pub fn run() {
             spellcheck::commands::spellcheck_cmd,
             spellcheck::commands::get_suggestions_cmd,
             deepl::commands::translate_deepl_cmd,
+            deepl::commands::translate_deepl_batch_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");

@@ -613,7 +613,11 @@
     "error_no_api_key":       "Aucune clé API DeepL configurée",
     "error_invalid_key":      "Clé API invalide ou expirée",
     "error_quota":            "Quota DeepL dépassé pour ce mois",
-    "error_too_many_requests":"Trop de requêtes — réessayez dans quelques secondes"
+    "error_too_many_requests":"Trop de requêtes — réessayez dans quelques secondes",
+    "batch_btn":              "⇄ DeepL ({{count}} lignes)",
+    "batch_title":            "Traduire les lignes sélectionnées avec DeepL (texte original → traduction). Les balises <...> sont préservées automatiquement.",
+    "batch_loading":          "Traduction en cours…",
+    "batch_ok":               "{{count}} lignes traduites avec DeepL."
   },
   "spellcheck": {
     "section_title":        "Vérification orthographique",
