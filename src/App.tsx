@@ -684,17 +684,15 @@ export default function App() {
           onFilterChange={setFilter}
           onSearchChange={setSearch}
           onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
-          selectedCount={selectedCount}
-          totalVisible={displayEntries.length}
-          onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
-          onClearSelection={selectedCount > 0 ? clearSelection : undefined}
         />
 
         <BulkActionBar
           count={selectedCount}
+          totalVisible={displayEntries.length}
           onSetStatus={bulkSetStatus}
           onAddToDb={loadedDbInfo && !loadedDbInfo.read_only ? handleAddToDb : undefined}
           onClear={clearSelection}
+          onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
           onDeeplBatch={settings.deeplApiKey ? handleDeeplBatch : undefined}
           deeplBatchLoading={deeplBatchLoading}
         />
@@ -760,7 +758,6 @@ export default function App() {
               validated={translatedCount}
               ignored={ignoredCount}
               filtered={displayEntries.length}
-              selectedCount={selectedCount}
               appVersion={appVersion}
               lastAutosave={lastAutosave}
               onChangelog={() => setShowChangelog(true)}

@@ -2,31 +2,44 @@ import { useTranslation } from "react-i18next";
 import type { EntryStatus } from "../../types";
 
 interface Props {
-  count:            number;
-  onSetStatus:      (status: EntryStatus) => void;
-  onAddToDb?:       () => void;
-  onClear:          () => void;
-  onDeeplBatch?:    () => void;
+  count:              number;
+  totalVisible:       number;
+  onSetStatus:        (status: EntryStatus) => void;
+  onAddToDb?:         () => void;
+  onClear:            () => void;
+  onSelectAll?:       () => void;
+  onDeeplBatch?:      () => void;
   deeplBatchLoading?: boolean;
 }
 
-export default function BulkActionBar({ count, onSetStatus, onAddToDb, onClear, onDeeplBatch, deeplBatchLoading }: Props) {
+export default function BulkActionBar({
+  count, totalVisible,
+  onSetStatus, onAddToDb, onClear, onSelectAll,
+  onDeeplBatch, deeplBatchLoading,
+}: Props) {
   const { t } = useTranslation();
 
   if (count < 2) return null;
 
+  const allSelected = totalVisible > 0 && count === totalVisible;
+
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "5px 12px",
+      display: "flex", alignItems: "center", gap: 6,
+      padding: "4px 12px",
       background: "rgba(99,102,241,0.12)",
       borderBottom: "1px solid rgba(99,102,241,0.3)",
       flexShrink: 0,
     }}>
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", marginRight: 4 }}>
+      {/* Selection counter */}
+      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", flexShrink: 0 }}>
         {t("bulk.selected", { count })}
       </span>
-      <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("bulk.bulk_actions")}</span>
+
+      <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", flexShrink: 0 }} />
+
+      {/* Status actions */}
+      <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>{t("bulk.bulk_actions")}</span>
       <BulkBtn label={t("bulk.validate")} color="#22c55e" onClick={() => onSetStatus("validated")} />
       <BulkBtn label={t("bulk.pending")}  color="#f59e0b" onClick={() => onSetStatus("pending")} />
       <BulkBtn label={t("bulk.ignore")}   color="#64748b" onClick={() => onSetStatus("ignored")} />
@@ -34,20 +47,22 @@ export default function BulkActionBar({ count, onSetStatus, onAddToDb, onClear, 
 
       {onAddToDb && (
         <>
-          <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", margin: "0 2px" }} />
+          <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", flexShrink: 0 }} />
           <BulkBtn label={t("bulk.add_db")} color="#6366f1" onClick={onAddToDb} />
         </>
       )}
 
+      {/* DeepL batch */}
       {onDeeplBatch && (
         <>
-          <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", margin: "0 2px" }} />
+          <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", flexShrink: 0 }} />
           <button
             onClick={deeplBatchLoading ? undefined : onDeeplBatch}
             disabled={deeplBatchLoading}
             title={t("deepl.batch_title")}
             style={{
-              padding: "3px 10px", borderRadius: 5,
+              height: 26, padding: "0 10px",
+              borderRadius: 5, boxSizing: "border-box",
               border: "1px solid #2563eb",
               cursor: deeplBatchLoading ? "default" : "pointer",
               fontSize: 11, fontWeight: 600,
@@ -56,29 +71,48 @@ export default function BulkActionBar({ count, onSetStatus, onAddToDb, onClear, 
               display: "flex", alignItems: "center", gap: 5,
               opacity: deeplBatchLoading ? 0.7 : 1,
               transition: "all 0.15s",
+              flexShrink: 0,
             }}
           >
-            {deeplBatchLoading ? (
-              <>
-                <span style={{ fontSize: 13 }}>⟳</span>
-                {t("deepl.batch_loading")}
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 13 }}>⇄</span>
-                {t("deepl.batch_btn", { count })}
-              </>
-            )}
+            {deeplBatchLoading
+              ? <><span style={{ fontSize: 13 }}>⟳</span>{t("deepl.batch_loading")}</>
+              : t("deepl.batch_btn", { count })
+            }
           </button>
         </>
       )}
 
-      <button
-        onClick={onClear}
-        style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
-      >
-        {t("bulk.deselect_all")}
-      </button>
+      {/* Right-side: select-all / deselect-all */}
+      <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+        {onSelectAll && !allSelected && (
+          <button
+            onClick={onSelectAll}
+            style={{
+              height: 26, padding: "0 10px", boxSizing: "border-box",
+              borderRadius: 5, cursor: "pointer", fontSize: 11,
+              background: "var(--bg-hover)",
+              color: "var(--text-2)",
+              border: "1px solid var(--border)",
+              flexShrink: 0,
+            }}
+          >
+            {t("filter.select_all_title", { count: totalVisible })}
+          </button>
+        )}
+        <button
+          onClick={onClear}
+          style={{
+            height: 26, padding: "0 10px", boxSizing: "border-box",
+            borderRadius: 5, cursor: "pointer", fontSize: 11,
+            background: "transparent",
+            color: "var(--text-3)",
+            border: "1px solid var(--border)",
+            flexShrink: 0,
+          }}
+        >
+          {t("bulk.deselect_all")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -88,9 +122,11 @@ function BulkBtn({ label, color, onClick }: { label: string; color: string; onCl
     <button
       onClick={onClick}
       style={{
-        padding: "3px 10px", borderRadius: 5, border: "none",
+        height: 26, padding: "0 10px",
+        borderRadius: 5, border: "none", boxSizing: "border-box",
         cursor: "pointer", fontSize: 11, fontWeight: 600,
         background: color, color: "#fff",
+        flexShrink: 0,
       }}
     >
       {label}

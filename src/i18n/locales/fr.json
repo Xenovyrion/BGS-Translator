@@ -298,6 +298,15 @@
       "op_lower":     "Convertir en minuscules",
       "op_strip_tags":"Supprimer les balises"
     },
+    "selection": {
+      "section":            "Sélection multiple (tableau)",
+      "hint":               "Ces interactions souris ne sont pas configurables.",
+      "single_click":       "Sélectionner une entrée",
+      "ctrl_click":         "Ajouter / retirer de la sélection",
+      "shift_click":        "Sélectionner une plage",
+      "select_all_action":  "Tout sélectionner (lignes visibles)",
+      "select_all_badge":   "Bouton dans la barre d'actions"
+    },
     "db": {
       "folder_section":           "Dossier des bases de données",
       "folder_placeholder":       "Chemin du dossier…",

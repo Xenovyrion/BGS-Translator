@@ -45,38 +45,40 @@ export default function GroupPanel({
 
       {/* Scroll list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {/* "All" row merged with the overall progress */}
+        {/* ── "All" row — more prominent than individual groups ── */}
         <button
           onClick={() => onSelectGroup(null)}
           style={{
-            display: "flex", flexDirection: "column", gap: 5,
-            width: "100%", padding: "9px 10px 8px",
-            background: selectedGroup === null ? "rgba(255,255,255,0.06)" : "transparent",
-            borderLeft: `3px solid ${selectedGroup === null ? "var(--accent)" : "transparent"}`,
+            display: "flex", flexDirection: "column", gap: 6,
+            width: "100%", padding: "10px 10px 9px",
+            background: selectedGroup === null
+              ? "rgba(99,102,241,0.18)"
+              : "rgba(99,102,241,0.07)",
+            borderLeft: `3px solid var(--accent)`,
             border: "none", borderTop: "none", borderRight: "none",
-            borderBottom: "1px solid var(--border)",
+            borderBottom: "2px solid rgba(99,102,241,0.35)",
             cursor: "pointer", textAlign: "left",
             flexShrink: 0,
           }}
         >
           {/* Ligne titre */}
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: "var(--accent)" }}>
-              {t("group.all")}
+            <span style={{ fontSize: 12, fontWeight: 800, fontFamily: "monospace", color: "var(--accent)", letterSpacing: "0.04em" }}>
+              {t("group.all").toUpperCase()}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {totalPending > 0 && (
                 <span style={{ fontSize: 10, color: "#f59e0b" }}>?{fmtN(totalPending)}</span>
               )}
-              <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+              <span style={{ fontSize: 10, color: "var(--text-2)" }}>
                 {fmtN(totalValidated)}/{fmtN(totalEntries)}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent)" }}>
                 {overallPercent}%
               </span>
             </div>
           </div>
-          {/* Progress bar — no inline label (% already shown above) */}
+          {/* Progress bar */}
           <GradientBar pct={overallPercent} color="var(--accent)" height={10} showLabel={false} />
         </button>
 
@@ -124,13 +126,13 @@ export default function GroupPanel({
 
 function GradientBar({ pct, color, height = 12, showLabel = true }: { pct: number; color: string; height?: number; showLabel?: boolean }) {
   return (
-    <div style={{ height, borderRadius: height / 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", position: "relative" }}>
+    <div style={{ height, borderRadius: height / 2, background: "rgba(255,255,255,0.13)", overflow: "hidden", position: "relative" }}>
       <div style={{
         height: "100%", width: `${pct}%`,
         borderRadius: height / 2,
         background: `linear-gradient(90deg, ${color}55 0%, ${color} 100%)`,
         transition: "width 0.3s",
-        minWidth: pct > 0 ? 3 : 0,
+        minWidth: pct > 0 ? 4 : 0,
       }} />
       {showLabel && pct >= 10 && (
         <span style={{

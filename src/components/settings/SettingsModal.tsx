@@ -362,6 +362,30 @@ function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetL
   );
 }
 
+/** Read-only row for non-configurable mouse interactions */
+function HintRow({ label, badge }: { label: string; badge: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{label}</span>
+      <span style={{
+        padding: "4px 12px", borderRadius: 6, fontSize: 12,
+        minWidth: 120, textAlign: "center", fontFamily: "monospace", fontWeight: 600,
+        background: "var(--bg-hover)",
+        color: "var(--text-3)",
+        border: "1px solid var(--border)",
+        display: "inline-block",
+        boxSizing: "border-box",
+        userSelect: "none",
+      }}>
+        {badge}
+      </span>
+      <span style={{ fontSize: 10, color: "var(--text-3)", fontStyle: "italic" }}>
+        🔒
+      </span>
+    </div>
+  );
+}
+
 function ShortcutsTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
   const sc  = { ...DEFAULT_SHORTCUTS,       ...(settings.shortcuts      ?? {}) };
@@ -418,6 +442,19 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
               resetLabel={resetLabel}
             />
           ))}
+        </div>
+      </Section>
+
+      {/* ── Multi-selection (read-only reference) ── */}
+      <Section label={t("settings_modal.selection.section")}>
+        <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 10px" }}>
+          {t("settings_modal.selection.hint")}
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <HintRow label={t("settings_modal.selection.single_click")}   badge="Clic" />
+          <HintRow label={t("settings_modal.selection.ctrl_click")}     badge="Ctrl + Clic" />
+          <HintRow label={t("settings_modal.selection.shift_click")}    badge="Shift + Clic" />
+          <HintRow label={t("settings_modal.selection.select_all_action")} badge={t("settings_modal.selection.select_all_badge")} />
         </div>
       </Section>
     </>

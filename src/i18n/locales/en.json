@@ -298,6 +298,15 @@
       "op_lower":     "Convert to lowercase",
       "op_strip_tags":"Remove tags"
     },
+    "selection": {
+      "section":            "Multi-selection (table)",
+      "hint":               "These mouse interactions are not configurable.",
+      "single_click":       "Select an entry",
+      "ctrl_click":         "Add / remove from selection",
+      "shift_click":        "Select a range",
+      "select_all_action":  "Select all (visible rows)",
+      "select_all_badge":   "Button in action bar"
+    },
     "db": {
       "folder_section":           "Database folder",
       "folder_placeholder":       "Folder path…",

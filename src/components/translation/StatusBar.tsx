@@ -9,7 +9,6 @@ interface Props {
   validated:      number;
   ignored:        number;
   filtered:       number;
-  selectedCount:  number;
   appVersion:     string;
   lastAutosave?:  Date | null;
   onChangelog:    () => void;
@@ -17,7 +16,7 @@ interface Props {
 
 export default function StatusBar({
   total, untranslated, pending, validated, ignored,
-  filtered, selectedCount,
+  filtered,
   appVersion, lastAutosave, onChangelog,
 }: Props) {
   const { t } = useTranslation();
@@ -77,11 +76,6 @@ export default function StatusBar({
         {filtered !== total && (
           <span style={{ fontStyle: "italic" }}>
             {t("statusbar.filtered", { count: fmtN(filtered) })}
-          </span>
-        )}
-        {selectedCount > 1 && (
-          <span style={{ fontWeight: 700, color: "var(--accent)" }}>
-            {t("statusbar.selected", { count: fmtN(selectedCount) })}
           </span>
         )}
       </span>
