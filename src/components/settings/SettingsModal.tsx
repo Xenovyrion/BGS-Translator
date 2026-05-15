@@ -1007,6 +1007,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
 
 function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
   const { t } = useTranslation();
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const pickExportFolder = async () => {
     try {
@@ -1078,6 +1079,104 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
           <PillBtn label={t("settings_modal.misc.autosession_on")}  active={settings.autoLoadSession === true}  onClick={() => onUpdate({ autoLoadSession: true  })} />
           <PillBtn label={t("settings_modal.misc.autosession_off")} active={settings.autoLoadSession !== true}   onClick={() => onUpdate({ autoLoadSession: false })} />
         </div>
+      </Section>
+
+      {/* ── DeepL ─────────────────────────────────────────────────────── */}
+      <Section label={t("deepl.section_title")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.5 }}>
+          {t("deepl.section_desc")}{" "}
+          <a
+            href="https://www.deepl.com/pro#developer"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "var(--accent)", textDecoration: "underline" }}
+          >
+            deepl.com
+          </a>
+        </p>
+
+        {/* Account type */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", width: 100, flexShrink: 0 }}>
+            {t("deepl.api_type_label")}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <PillBtn label={t("deepl.api_type_free")} active={(settings.deeplApiType ?? "free") !== "pro"} onClick={() => onUpdate({ deeplApiType: "free" })} />
+            <PillBtn label={t("deepl.api_type_pro")}  active={(settings.deeplApiType ?? "free") === "pro"} onClick={() => onUpdate({ deeplApiType: "pro"  })} />
+          </div>
+        </div>
+
+        {/* API key */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", width: 100, flexShrink: 0 }}>
+            {t("deepl.api_key_label")}
+          </span>
+          <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              type={showApiKey ? "text" : "password"}
+              value={settings.deeplApiKey ?? ""}
+              onChange={e => {
+                const val = e.target.value;
+                // Auto-detect free vs pro from the key suffix
+                const newType = val.trim().endsWith(":fx") ? "free" : (settings.deeplApiType ?? "free");
+                onUpdate({ deeplApiKey: val, deeplApiType: newType });
+              }}
+              placeholder={t("deepl.api_key_placeholder")}
+              spellCheck={false}
+              style={{
+                flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                background: "var(--bg-hover)", color: "var(--text-1)",
+                border: "1px solid var(--border)", outline: "none",
+                fontFamily: "monospace", boxSizing: "border-box",
+              }}
+            />
+            <button
+              onClick={() => setShowApiKey(v => !v)}
+              title={showApiKey ? t("deepl.hide_key") : t("deepl.show_key")}
+              style={{
+                height: 32, width: 32, flexShrink: 0, borderRadius: 6,
+                background: "var(--bg-hover)", border: "1px solid var(--border)",
+                cursor: "pointer", color: "var(--text-2)", fontSize: 14,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              {showApiKey ? "🙈" : "👁"}
+            </button>
+            {settings.deeplApiKey && (
+              <button
+                onClick={() => onUpdate({ deeplApiKey: "" })}
+                title={t("deepl.clear_key")}
+                style={{
+                  height: 32, width: 32, flexShrink: 0, borderRadius: 6,
+                  background: "var(--bg-hover)", border: "1px solid var(--border)",
+                  cursor: "pointer", color: "var(--text-3)", fontSize: 14,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
+        {(settings.deeplApiType ?? "free") === "free" && (
+          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, lineHeight: 1.4 }}>
+            ℹ {t("deepl.free_hint")}
+          </p>
+        )}
+        {settings.deeplApiKey && (
+          <div style={{
+            marginTop: 10, padding: "6px 10px", borderRadius: 6,
+            background: "var(--bg-hover)", border: "1px solid var(--border)",
+            fontSize: 11, color: "var(--text-2)", display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <span style={{ color: "#22c55e" }}>✓</span>
+            {t("deepl.key_configured")}
+            <span style={{ marginLeft: "auto", fontFamily: "monospace", color: "var(--text-3)" }}>
+              {(settings.deeplApiType ?? "free") === "pro" ? "Pro" : "Free"}
+            </span>
+          </div>
+        )}
       </Section>
 
     </div>

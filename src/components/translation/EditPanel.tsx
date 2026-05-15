@@ -36,6 +36,9 @@ interface Props {
   spellLang?:     string;
   spellRealtime?: boolean;
   spellDebounce?: number;
+  deeplApiKey?:   string;
+  deeplApiType?:  string;
+  deeplTargetLang?: string;
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600 },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr" },
   ref,
 ) {
   const { t } = useTranslation();
@@ -203,6 +206,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const [spellChecking,  setSpellChecking]  = useState(false);
   const [spellPopup,     setSpellPopup]     = useState<SpellPopup | null>(null);
   const spellPopupRef                       = useRef<HTMLDivElement>(null);
+  const [deeplLoading,   setDeeplLoading]   = useState(false);
+  const [deeplError,     setDeeplError]     = useState<string | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
@@ -397,6 +402,34 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     }
     onTranslate(entry._idx ?? 0, text);
   }, [allMatches, replaceQuery, entry.translated, entry._idx, onTranslate]);
+
+  const runDeepL = useCallback(async () => {
+    if (!deeplApiKey || !entry.original.trim()) return;
+    setDeeplLoading(true);
+    setDeeplError(null);
+    try {
+      const result = await invoke<string>("translate_deepl_cmd", {
+        apiKey:     deeplApiKey,
+        apiType:    deeplApiType,
+        text:       entry.original,
+        sourceLang: null,
+        targetLang: deeplTargetLang,
+      });
+      if (result) onTranslate(entry._idx ?? 0, result);
+    } catch (e) {
+      const msg = String(e);
+      const errorKey =
+        msg === "deepl_invalid_key"      ? t("deepl.error_invalid_key")      :
+        msg === "deepl_quota_exceeded"   ? t("deepl.error_quota")            :
+        msg === "deepl_no_api_key"       ? t("deepl.error_no_api_key")       :
+        msg === "deepl_too_many_requests"? t("deepl.error_too_many_requests") :
+        msg;
+      setDeeplError(errorKey);
+      setTimeout(() => setDeeplError(null), 4000);
+    } finally {
+      setDeeplLoading(false);
+    }
+  }, [deeplApiKey, deeplApiType, deeplTargetLang, entry.original, entry._idx, onTranslate, t]);
 
   const runSpellCheck = useCallback(async () => {
     if (!spellLang) return;
@@ -611,10 +644,41 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             {missingTags.length > 0 && (
               <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "#f59e0b", cursor: "help", flexShrink: 0 }}>⚠ {missingTags.length}</span>
             )}
+
+            {/* Spacer — pushes all action buttons to the right */}
+            <div style={{ flex: 1 }} />
+
+            {/* DeepL button */}
+            {deeplApiKey && (
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <ToolBtn
+                  onClick={runDeepL}
+                  disabled={deeplLoading}
+                  title={t("deepl.btn_translate")}
+                  style={{ background: deeplLoading ? undefined : "var(--bg-primary)" }}
+                >
+                  {deeplLoading
+                    ? <span style={{ fontSize: 11 }}>…</span>
+                    : <><span style={{ fontSize: 13, lineHeight: 1 }}>⇄</span><span style={{ fontSize: 10, fontWeight: 600 }}>DeepL</span></>
+                  }
+                </ToolBtn>
+                {deeplError && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 300,
+                    background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444",
+                    borderRadius: 6, padding: "5px 10px",
+                    fontSize: 11, color: "#ef4444", whiteSpace: "nowrap",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                  }}>
+                    {deeplError}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Spell check button */}
             {spellLang && (
               <ToolBtn
-                style={{ marginLeft: "auto" }}
                 onClick={runSpellCheck}
                 disabled={spellChecking}
                 active={spellErrors.length > 0}
@@ -624,8 +688,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 {!spellChecking && <span style={{ marginLeft: 2, fontSize: 10 }}>abc</span>}
               </ToolBtn>
             )}
+
             {/* Tools dropdown */}
-            <div ref={opsRef} style={{ position: "relative", marginLeft: spellLang ? undefined : "auto" }}>
+            <div ref={opsRef} style={{ position: "relative" }}>
               <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}>⚙ {t("edit.ops_btn")}</ToolBtn>
               {opsOpen && (
                 <div role="menu" style={{ position: "absolute", top: `calc(100% + 3px)`, right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 240, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>

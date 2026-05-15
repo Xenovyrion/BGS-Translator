@@ -706,6 +706,9 @@ export default function App() {
                 spellLang={settings.spellLang || undefined}
                 spellRealtime={settings.spellRealtime}
                 spellDebounce={settings.spellDebounce}
+                deeplApiKey={settings.deeplApiKey || undefined}
+                deeplApiType={settings.deeplApiType}
+                deeplTargetLang={settings.targetLanguage}
               />
             )}
 

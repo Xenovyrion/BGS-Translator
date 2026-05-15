@@ -596,6 +596,25 @@
       "fz_mono":        "Taille monospace"
     }
   },
+  "deepl": {
+    "section_title":          "DeepL — Traduction automatique",
+    "section_desc":           "Clé API DeepL pour la traduction automatique du texte original. Compte Free : 500 000 caractères/mois offerts.",
+    "api_key_label":          "Clé API",
+    "api_key_placeholder":    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx",
+    "api_type_label":         "Type de compte",
+    "api_type_free":          "Free",
+    "api_type_pro":           "Pro",
+    "free_hint":              "Les clés Free se terminent par \":fx\". Elles sont détectées automatiquement.",
+    "key_configured":         "Clé API configurée",
+    "show_key":               "Afficher la clé",
+    "hide_key":               "Masquer la clé",
+    "clear_key":              "Effacer la clé",
+    "btn_translate":          "Traduire avec DeepL (texte original → traduction)",
+    "error_no_api_key":       "Aucune clé API DeepL configurée",
+    "error_invalid_key":      "Clé API invalide ou expirée",
+    "error_quota":            "Quota DeepL dépassé pour ce mois",
+    "error_too_many_requests":"Trop de requêtes — réessayez dans quelques secondes"
+  },
   "spellcheck": {
     "section_title":        "Vérification orthographique",
     "section_desc":         "Sélectionnez un dictionnaire installé pour activer le correcteur orthographique dans le panneau d'édition.",

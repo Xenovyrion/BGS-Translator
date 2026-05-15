@@ -48,7 +48,7 @@ thiserror = "1"
 log       = "0.4"
 
 # Spell check — HTTP dictionary downloads (no OpenSSL, pure Rust TLS)
-reqwest = { version = "0.12", features = ["rustls-tls", "stream"], default-features = false }
+reqwest = { version = "0.12", features = ["rustls-tls", "stream", "json"], default-features = false }
 
 [profile.release]
 panic         = "abort"

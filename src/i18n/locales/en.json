@@ -596,6 +596,25 @@
       "fz_mono":        "Monospace size"
     }
   },
+  "deepl": {
+    "section_title":          "DeepL — Auto-translation",
+    "section_desc":           "DeepL API key for automatic translation of the original text. Free account: 500,000 characters/month included.",
+    "api_key_label":          "API Key",
+    "api_key_placeholder":    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx",
+    "api_type_label":         "Account type",
+    "api_type_free":          "Free",
+    "api_type_pro":           "Pro",
+    "free_hint":              "Free keys end with \":fx\" and are detected automatically.",
+    "key_configured":         "API key configured",
+    "show_key":               "Show key",
+    "hide_key":               "Hide key",
+    "clear_key":              "Clear key",
+    "btn_translate":          "Translate with DeepL (original text → translation)",
+    "error_no_api_key":       "No DeepL API key configured",
+    "error_invalid_key":      "Invalid or expired API key",
+    "error_quota":            "DeepL quota exceeded for this month",
+    "error_too_many_requests":"Too many requests — please retry in a few seconds"
+  },
   "spellcheck": {
     "section_title":        "Spell Check",
     "section_desc":         "Select an installed dictionary to enable spell checking in the edit panel.",

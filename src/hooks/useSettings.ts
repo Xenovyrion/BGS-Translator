@@ -36,6 +36,9 @@ export interface AppSettings {
   spellLang:      string;   // active dictionary lang code; "" = disabled
   spellRealtime:  boolean;  // check while typing
   spellDebounce:  number;   // debounce delay in ms for real-time mode
+  // DeepL auto-translation
+  deeplApiKey:    string;   // DeepL API key (free keys end with :fx)
+  deeplApiType:   string;   // "free" | "pro"
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -63,6 +66,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellLang:     "",
   spellRealtime: false,
   spellDebounce: 600,
+  deeplApiKey:   "",
+  deeplApiType:  "free",
 };
 
 export function useSettings() {

@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod database;
+pub mod deepl;
 pub mod formats;
 pub mod parser;
 pub mod spellcheck;
@@ -79,6 +80,7 @@ pub fn run() {
             spellcheck::commands::delete_dictionary_cmd,
             spellcheck::commands::spellcheck_cmd,
             spellcheck::commands::get_suggestions_cmd,
+            deepl::commands::translate_deepl_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");
