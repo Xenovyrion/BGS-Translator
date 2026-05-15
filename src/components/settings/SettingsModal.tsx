@@ -230,14 +230,9 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
         </p>
         <button
           onClick={() => { onResetLayout?.(); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 14px",
-            background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 8,
-            cursor: "pointer", color: "var(--text-1)", fontSize: 13, fontWeight: 500,
-          }}
+          style={{ ...smallBtnStyle(), gap: 7 }}
         >
-          <span style={{ fontSize: 15, opacity: 0.8 }}>↺</span>
+          <span style={{ fontSize: 14, opacity: 0.8 }}>↺</span>
           {t("settings_modal.appearance.reset_layout_btn")}
         </button>
       </Section>
@@ -336,12 +331,13 @@ function ShortcutKeyInput({ value, onChange, pressKeyLabel }: { value: ShortcutD
       onClick={() => setRecording(true)}
       onBlur={() => setRecording(false)}
       style={{
-        padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12,
+        height: 32, padding: "0 12px", borderRadius: 7,
+        cursor: "pointer", fontSize: 12, boxSizing: "border-box",
         minWidth: 120, textAlign: "center", fontFamily: "monospace", fontWeight: 600,
         background: recording ? "rgba(99,102,241,0.15)" : "var(--bg-hover)",
         color: recording ? "var(--accent)" : "var(--text-1)",
         border: recording ? "1px solid var(--accent)" : "1px solid var(--border)",
-        outline: "none",
+        outline: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
       }}
     >
       {recording ? pressKeyLabel : formatShortcut(value)}
@@ -376,13 +372,11 @@ function HintRow({ label, badge }: { label: string; badge: string }) {
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{label}</span>
       <span style={{
-        padding: "4px 12px", borderRadius: 6, fontSize: 12,
+        height: 32, padding: "0 12px", borderRadius: 7, fontSize: 12, boxSizing: "border-box",
         minWidth: 120, textAlign: "center", fontFamily: "monospace", fontWeight: 600,
-        background: "var(--bg-hover)",
-        color: "var(--text-3)",
+        background: "var(--bg-hover)", color: "var(--text-3)",
         border: "1px solid var(--border)",
-        display: "inline-block",
-        boxSizing: "border-box",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
         userSelect: "none",
       }}>
         {badge}
@@ -619,9 +613,11 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
                   onClick={() => deleteDic(d.lang)}
                   disabled={deleting === d.lang}
                   style={{
-                    padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer",
-                    border: "1px solid #ef4444", background: "none",
+                    height: 32, padding: "0 12px", borderRadius: 7, fontSize: 12,
+                    boxSizing: "border-box", cursor: "pointer",
+                    border: "1px solid #ef4444", background: "transparent",
                     color: "#ef4444", opacity: deleting === d.lang ? 0.5 : 1,
+                    display: "inline-flex", alignItems: "center", flexShrink: 0,
                   }}
                 >
                   {deleting === d.lang ? "…" : t("spellcheck.btn_delete")}
@@ -685,10 +681,11 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
                 onClick={() => download(d.lang)}
                 disabled={downloading === d.lang}
                 style={{
-                  padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer",
-                  border: "1px solid var(--accent)", background: "none",
+                  height: 32, padding: "0 12px", borderRadius: 7, fontSize: 12,
+                  boxSizing: "border-box", cursor: "pointer",
+                  border: "1px solid var(--accent)", background: "transparent",
                   color: "var(--accent)", opacity: downloading === d.lang ? 0.5 : 1,
-                  flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", flexShrink: 0,
                 }}
               >
                 {downloading === d.lang ? t("spellcheck.downloading") : t("spellcheck.btn_download")}
@@ -907,7 +904,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                       if (isEditing) { setDefForm(null); return; }
                       setDefForm({ path: f.path, game: f.game || "", srcLang: f.lang_from || "en", dstLang: f.lang_to || "fr" });
                     }}
-                    style={{ ...smallBtnStyle(), fontSize: 11 }}
+                    style={smallBtnStyle()}
                   >
                     {isEditing ? t("settings_modal.db.default_cancel") : t("settings_modal.db.default_edit")}
                   </button>
@@ -924,7 +921,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                         <select
                           value={defForm.game}
                           onChange={(e) => setDefForm(f => f ? { ...f, game: e.target.value } : f)}
-                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}
+                          style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}
                         >
                           <option value="">— {t("settings_modal.db.default_game")} —</option>
                           {KNOWN_GAMES.map(g => <option key={g} value={g}>{g}</option>)}
@@ -935,7 +932,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                           {t("settings_modal.db.default_src")}
                         </label>
                         <select value={defForm.srcLang} onChange={(e) => setDefForm(f => f ? { ...f, srcLang: e.target.value } : f)}
-                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
+                          style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
                           {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </div>
@@ -944,7 +941,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
                           {t("settings_modal.db.default_dst")}
                         </label>
                         <select value={defForm.dstLang} onChange={(e) => setDefForm(f => f ? { ...f, dstLang: e.target.value } : f)}
-                          style={{ height: 32, padding: "0 8px", borderRadius: 6, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
+                          style={{ height: 32, padding: "0 8px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", boxSizing: "border-box" }}>
                           {LANG_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </div>
@@ -1189,12 +1186,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
             <button
               onClick={() => setShowApiKey(v => !v)}
               title={showApiKey ? t("deepl.hide_key") : t("deepl.show_key")}
-              style={{
-                height: 32, width: 32, flexShrink: 0, borderRadius: 6,
-                background: "var(--bg-hover)", border: "1px solid var(--border)",
-                cursor: "pointer", color: "var(--text-2)", fontSize: 14,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
+              style={iconBtn()}
             >
               {showApiKey ? "🙈" : "👁"}
             </button>
@@ -1202,12 +1194,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
               <button
                 onClick={() => onUpdate({ deeplApiKey: "" })}
                 title={t("deepl.clear_key")}
-                style={{
-                  height: 32, width: 32, flexShrink: 0, borderRadius: 6,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  cursor: "pointer", color: "var(--text-3)", fontSize: 14,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
+                style={iconBtn()}
               >
                 ×
               </button>
@@ -1317,7 +1304,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
         <select
           value={settings.targetLanguage}
           onChange={(e) => onUpdate({ targetLanguage: e.target.value })}
-          style={{ padding: "7px 12px", borderRadius: 7, fontSize: 13, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", cursor: "pointer" }}
+          style={{ height: 32, padding: "0 10px", borderRadius: 7, fontSize: 12, background: "var(--bg-card)", color: "var(--text-1)", border: "1px solid var(--border)", cursor: "pointer", boxSizing: "border-box" }}
         >
           {TARGET_LANGUAGES.map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
