@@ -171,7 +171,7 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-      <Section label={t("settings_modal.appearance.theme_section")}>
+      <Section first label={t("settings_modal.appearance.theme_section")}>
         {/* Theme manager button */}
         <button
           onClick={onOpenThemeManager}
@@ -357,7 +357,12 @@ function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetL
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{label}</span>
       <ShortcutKeyInput value={value} onChange={onChangeDef} pressKeyLabel={pressKeyLabel} />
-      <button onClick={onReset} style={{ fontSize: 10, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}>
+      <button onClick={onReset} style={{
+        height: 28, padding: "0 10px", borderRadius: 6, cursor: "pointer",
+        fontSize: 10, fontWeight: 500, flexShrink: 0,
+        background: "var(--bg-hover)", color: "var(--text-3)",
+        border: "1px solid var(--border)", boxSizing: "border-box",
+      }}>
         {resetLabel}
       </button>
     </div>
@@ -415,8 +420,8 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
   const resetLabel = t("settings_modal.shortcuts.reset_default");
 
   return (
-    <>
-      <Section label={t("settings_modal.shortcuts.section")}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <Section first label={t("settings_modal.shortcuts.section")}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {(Object.keys(shortcutLabels) as Array<keyof KeyboardShortcuts>).map((k) => (
             <ShortcutRow
@@ -459,7 +464,7 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
           <HintRow label={t("settings_modal.selection.select_all_action")} badge={t("settings_modal.selection.select_all_badge")} />
         </div>
       </Section>
-    </>
+    </div>
   );
 }
 
@@ -526,7 +531,7 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Active dictionary */}
-      <Section label={t("spellcheck.section_title")}>
+      <Section first label={t("spellcheck.section_title")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
           {t("spellcheck.section_desc")}
         </p>
@@ -830,7 +835,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Database folder */}
-      <Section label={t("settings_modal.db.folder_section")}>
+      <Section first label={t("settings_modal.db.folder_section")}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="text"
@@ -1058,7 +1063,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Export folder */}
-      <Section label={t("settings_modal.misc.export_folder_section")}>
+      <Section first label={t("settings_modal.misc.export_folder_section")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
           {t("settings_modal.misc.export_folder_desc")}
         </p>
@@ -1133,7 +1138,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* ── DeepL ───────────────────────────────────────────────────────── */}
-      <Section label={t("deepl.section_title")}>
+      <Section first label={t("deepl.section_title")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.5 }}>
           {t("deepl.section_desc")}{" "}
           <a
@@ -1297,7 +1302,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Interface language */}
-      <Section label={t("settings_modal.sys.lang_section")}>
+      <Section first label={t("settings_modal.sys.lang_section")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10 }}>{t("settings_modal.sys.lang_hint")}</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {LANGUAGES.map(({ code, label }) => (
@@ -1452,13 +1457,19 @@ function iconBtn(): React.CSSProperties {
   };
 }
 
-function Section({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function Section({ label, children, first }: { label: React.ReactNode; children: React.ReactNode; first?: boolean }) {
   return (
-    <div>
+    <div style={{
+      paddingTop: first ? 0 : 20,
+      borderTop: first ? "none" : "1px solid var(--border)",
+    }}>
       <div style={{
-        fontSize: 11, fontWeight: 700, color: "var(--text-3)",
-        textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10,
+        fontSize: 11, fontWeight: 700, color: "var(--accent)",
+        textTransform: "uppercase", letterSpacing: "0.08em",
+        borderLeft: "3px solid var(--accent)",
+        paddingLeft: 8, marginBottom: 14,
         display: "flex", alignItems: "center",
+        lineHeight: 1,
       }}>
         {label}
       </div>
