@@ -358,10 +358,11 @@ function ShortcutRow({ label, value, onChangeDef, onReset, pressKeyLabel, resetL
       <span style={{ fontSize: 12, color: "var(--text-2)", width: 220 }}>{label}</span>
       <ShortcutKeyInput value={value} onChange={onChangeDef} pressKeyLabel={pressKeyLabel} />
       <button onClick={onReset} style={{
-        height: 28, padding: "0 10px", borderRadius: 6, cursor: "pointer",
-        fontSize: 10, fontWeight: 500, flexShrink: 0,
+        height: 32, padding: "0 12px", borderRadius: 7, cursor: "pointer",
+        fontSize: 12, fontWeight: 400, flexShrink: 0,
         background: "var(--bg-hover)", color: "var(--text-3)",
         border: "1px solid var(--border)", boxSizing: "border-box",
+        display: "inline-flex", alignItems: "center",
       }}>
         {resetLabel}
       </button>
@@ -1414,7 +1415,9 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
         <button
           onClick={handleReset}
           style={{
-            padding: "7px 16px", borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 500,
+            height: 32, padding: "0 16px", borderRadius: 7,
+            cursor: "pointer", fontSize: 12, fontWeight: 500,
+            boxSizing: "border-box", display: "inline-flex", alignItems: "center",
             background: resetConfirm ? "var(--danger)" : "var(--bg-hover)",
             color: resetConfirm ? "#fff" : "var(--danger)",
             border: `1px solid ${resetConfirm ? "var(--danger)" : "var(--border)"}`,
@@ -1430,26 +1433,34 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+/** Accent-filled or neutral-bordered action button — fixed height 32 px */
 function btnStyle(bg: string, outline = false): React.CSSProperties {
   return {
-    padding: "7px 16px", borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 500,
+    height: 32, padding: "0 16px", borderRadius: 7,
+    cursor: "pointer", fontSize: 12, fontWeight: 500,
     background: bg, color: outline ? "var(--text-1)" : "#fff",
-    border: outline ? "1px solid var(--border)" : "none", flexShrink: 0,
+    border: outline ? "1px solid var(--border)" : "none",
+    flexShrink: 0, boxSizing: "border-box",
+    display: "inline-flex", alignItems: "center",
   };
 }
 
+/** Secondary neutral action — same height / radius as btnStyle */
 function smallBtnStyle(): React.CSSProperties {
   return {
-    height: 32, padding: "0 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500,
+    height: 32, padding: "0 14px", borderRadius: 7,
+    cursor: "pointer", fontSize: 12, fontWeight: 500,
     background: "var(--bg-hover)", color: "var(--text-1)",
     border: "1px solid var(--border)", boxSizing: "border-box",
     display: "flex", alignItems: "center", flexShrink: 0,
   };
 }
 
+/** Square icon-only button — 32×32 to match action buttons */
 function iconBtn(): React.CSSProperties {
   return {
-    height: 32, width: 32, padding: 0, borderRadius: 6, cursor: "pointer", fontSize: 14,
+    height: 32, width: 32, padding: 0, borderRadius: 7,
+    cursor: "pointer", fontSize: 14,
     background: "var(--bg-hover)", color: "var(--text-1)",
     border: "1px solid var(--border)", flexShrink: 0,
     display: "flex", alignItems: "center", justifyContent: "center",
@@ -1483,11 +1494,13 @@ function PillBtn({ label, active, onClick }: { label: string; active: boolean; o
     <button
       onClick={onClick}
       style={{
-        padding: "7px 18px", borderRadius: 7, cursor: "pointer",
+        height: 34, padding: "0 18px", borderRadius: 7,
+        cursor: "pointer", boxSizing: "border-box",
         border: active ? "2px solid var(--accent)" : "2px solid var(--border)",
         background: active ? "var(--accent-dim)" : "var(--bg-card)",
         color: active ? "var(--accent)" : "var(--text-1)",
-        fontSize: 13, fontWeight: active ? 600 : 400, transition: "all 0.15s",
+        fontSize: 12, fontWeight: active ? 600 : 400, transition: "all 0.15s",
+        display: "inline-flex", alignItems: "center",
       }}
     >
       {label}
