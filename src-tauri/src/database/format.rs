@@ -52,7 +52,14 @@ fn scan_for_entry(data: &[u8], start: usize) -> Option<usize> {
 // ── Native .bgt format (bincode + zstd) ──────────────────────────────────────
 
 const BGT_MAGIC:   &[u8; 4] = b"BGTD";
-const BGT_VERSION: u8       = 1;
+const BGT_VERSION: u8       = 2;  // v2 adds form_id to DbEntry
+
+/// Parse a form_id string from .eet files (hex without prefix, e.g. "00012345").
+fn parse_form_id(s: &str) -> u32 {
+    let s = s.trim();
+    let hex = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+    u32::from_str_radix(hex, 16).unwrap_or_else(|_| s.parse().unwrap_or(0))
+}
 
 #[derive(Serialize, Deserialize)]
 struct BgtData {
@@ -83,7 +90,13 @@ pub fn save_bgt(db: &TranslationDb, path: &std::path::Path) -> Result<(), String
 pub fn load_bgt(path: &std::path::Path) -> Result<TranslationDb, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     if bytes.len() < 5 || &bytes[..4] != BGT_MAGIC {
-        return Err("Invalid .bgt format (bad magic bytes)".into());
+        return Err("Invalid .bgt format (bad magic bytes). Re-convert from source (.eet) to get a v2 file.".into());
+    }
+    if bytes[4] != BGT_VERSION {
+        return Err(format!(
+            "Unsupported .bgt version {} (expected {}). Re-convert from source (.eet).",
+            bytes[4], BGT_VERSION
+        ));
     }
     let decompressed = zstd::decode_all(&bytes[5..]).map_err(|e| e.to_string())?;
     let data: BgtData = bincode::deserialize(&decompressed).map_err(|e| e.to_string())?;
@@ -111,7 +124,12 @@ pub fn import_delimited(path: &std::path::Path, sep: char) -> Result<Vec<DbEntry
         let original   = cols[0].trim().to_string();
         let translated = cols[1].trim().to_string();
         if original.is_empty() || translated.is_empty() { continue; }
+        // CSV column order: original, translated, record_type, sub_type, editor_id[, form_id]
+        let form_id = cols.get(5)
+            .map(|s| parse_form_id(s.trim()))
+            .unwrap_or(0);
         entries.push(DbEntry {
+            form_id,
             original,
             translated,
             record_type: cols.get(2).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
@@ -124,15 +142,17 @@ pub fn import_delimited(path: &std::path::Path, sep: char) -> Result<Vec<DbEntry
 
 pub fn export_delimited(db: &TranslationDb, path: &std::path::Path, sep: char) -> Result<(), String> {
     let s   = sep;
-    let mut out = format!("Original{s}Translated{s}RecordType{s}SubType{s}EditorId\n");
+    let mut out = format!("Original{s}Translated{s}RecordType{s}SubType{s}EditorId{s}FormId\n");
     for e in db.entries() {
+        let form_id_str = if e.form_id != 0 { format!("{:08X}", e.form_id) } else { String::new() };
         out.push_str(&format!(
-            "{}{s}{}{s}{}{s}{}{s}{}\n",
+            "{}{s}{}{s}{}{s}{}{s}{}{s}{}\n",
             e.original,
             e.translated,
             e.record_type.as_deref().unwrap_or(""),
             e.sub_type.as_deref().unwrap_or(""),
             e.editor_id.as_deref().unwrap_or(""),
+            form_id_str,
         ));
     }
     std::fs::write(path, out).map_err(|e| e.to_string())
@@ -262,7 +282,7 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
 
         // ── Data fields (fixed structure) ─────────────────────────────────────
         let record_type = read_str!("record_type");
-        let _formid     = read_str!("formid");
+        let formid_str  = read_str!("formid");
         let editor_id   = read_str!("edid");
         let sub_type    = read_str!("sub_type");
         let original    = read_str!("original");
@@ -299,6 +319,7 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
         if original.is_empty() { continue; }
 
         entries.push(DbEntry {
+            form_id:     parse_form_id(&formid_str),
             original,
             translated,
             record_type: if record_type.is_empty() { None } else { Some(record_type) },

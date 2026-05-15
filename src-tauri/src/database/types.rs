@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbEntry {
+    pub form_id:     u32,            // 0 when source has no form_id (XML/CSV)
     pub original:    String,
     pub translated:  String,
     pub record_type: Option<String>,

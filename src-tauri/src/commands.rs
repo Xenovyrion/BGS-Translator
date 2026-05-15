@@ -2,7 +2,6 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 
 use crate::formats;
-use crate::database::{format::save_bgt, store::TranslationDb, types::DbEntry};
 use crate::parser::open_file;
 use crate::translation::{
     entry::TranslationEntry,
@@ -233,74 +232,6 @@ pub async fn export_session_csv_cmd(
     log::info!("[cmd] export_session_csv: {} ({} entries)", path, entries.len());
     let count = formats::session_csv::export(std::path::Path::new(&path), &entries)?;
     log::info!("[cmd] export_session_csv: {} entries written", count);
-    Ok(count)
-}
-
-/// Convert any supported external format to a .bgt database file.
-///
-/// Supported sources: .xml (auto-detected), .csv, .tsv, .eet
-#[tauri::command]
-pub async fn convert_to_bgt_cmd(
-    source_path: String,
-    output_path: String,
-    db_name:     String,
-    game:        String,
-    lang_from:   String,
-    lang_to:     String,
-    read_only:   bool,
-) -> Result<usize, String> {
-    log::info!("[cmd] convert_to_bgt: {} → {}", source_path, output_path);
-    let src = std::path::Path::new(&source_path);
-    let dst = std::path::Path::new(&output_path);
-
-    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-
-    let db_entries: Vec<DbEntry> = match ext.as_str() {
-        "xml" => {
-            let snippet = std::fs::read_to_string(src)
-                .map(|s| s.chars().take(512).collect::<String>())
-                .unwrap_or_default();
-            let imported = if snippet.contains("SSTXMLRessources") {
-                formats::xtranslator_xml::import(src)?
-            } else {
-                formats::esptranslator_xml::import(src)?
-            };
-            imported.into_iter().map(|e| DbEntry {
-                original:    e.original,
-                translated:  e.translated,
-                record_type: e.record_type,
-                sub_type:    e.sub_type,
-                editor_id:   e.editor_id,
-            }).collect()
-        }
-        "csv" | "tsv" => {
-            let imported = formats::session_csv::import(src)?;
-            imported.into_iter().map(|e| DbEntry {
-                original:    e.original,
-                translated:  e.translated,
-                record_type: e.record_type,
-                sub_type:    e.sub_type,
-                editor_id:   e.editor_id,
-            }).collect()
-        }
-        "eet" => {
-            let (_game_name, entries) = crate::database::format::load_eet(src)?;
-            entries
-        }
-        _ => return Err(format!("Unsupported format for conversion: .{}", ext)),
-    };
-
-    let count = db_entries.len();
-    let db = TranslationDb::from_entries(db_name, game, lang_from, lang_to, read_only, db_entries);
-
-    if let Some(parent) = dst.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-    }
-    save_bgt(&db, dst)?;
-
-    log::info!("[cmd] convert_to_bgt: {} entries saved to '{}'", count, output_path);
     Ok(count)
 }
 

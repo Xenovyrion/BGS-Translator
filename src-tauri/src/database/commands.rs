@@ -3,9 +3,12 @@ use tauri::State;
 use serde::Serialize;
 
 use crate::database::{
-    format::{load_any, load_eet, save_bgt, export_delimited},
+    format::{load_any, load_eet, load_bgt, save_bgt, export_delimited, import_delimited},
     store::TranslationDb,
     types::{DbEntry, DbInfo, ApplyResult, DbFileInfo},
+    personal_store::PersonalDb,
+    personal_format::{load_bgtx, save_bgtx},
+    types::PersonalDbEntry,
 };
 use crate::translation::entry::{EntryStatus, TranslationEntry};
 
@@ -46,7 +49,7 @@ pub async fn apply_db_cmd(
         .into_iter()
         .map(|mut e| {
             if e.translated.is_empty() {
-                if let Some(t) = db.lookup(&e.original, &e.record_type, &e.sub_type) {
+                if let Some(t) = db.lookup(e.form_id, &e.original, &e.record_type, &e.sub_type) {
                     if !t.is_empty() {
                         e.translated = t.to_owned();
                         e.status     = EntryStatus::Validated;
@@ -89,7 +92,7 @@ pub async fn apply_db_full_cmd(
         .into_iter()
         .map(|mut e| {
             if e.translated.is_empty() {
-                if let Some(t) = db.lookup(&e.original, &e.record_type, &e.sub_type) {
+                if let Some(t) = db.lookup(e.form_id, &e.original, &e.record_type, &e.sub_type) {
                     if !t.is_empty() {
                         e.translated = t.to_owned();
                         e.status     = EntryStatus::Validated;
@@ -120,6 +123,7 @@ pub async fn add_to_db_cmd(
         .into_iter()
         .filter(|e| !e.translated.is_empty())
         .map(|e| DbEntry {
+            form_id:     e.form_id,
             original:    e.original,
             translated:  e.translated,
             record_type: Some(e.record_type),
@@ -361,4 +365,118 @@ pub async fn create_db_cmd(
     log::info!("[db] Empty database created: '{}' ({} → {})", info.name, info.lang_from, info.lang_to);
     *state.0.lock().unwrap() = Some(db);
     Ok(info)
+}
+
+// ── Universal converter ───────────────────────────────────────────────────────
+//
+// Supported source formats (auto-detected by extension):
+//   .eet  — EET binary  (has form_id)
+//   .bgt  — BGT v2      (has form_id)
+//   .bgtx — BGTX        (has form_id)
+//   .csv  — comma-separated (form_id in optional column 6)
+//   .tsv  — tab-separated
+//   .xml  — xTranslator XML or ESP-ESM Translator XML (no form_id)
+
+#[derive(serde::Serialize)]
+pub struct ConvertResult {
+    pub path:        String,
+    pub entry_count: usize,
+}
+
+/// Load any supported source format and return a list of DbEntry.
+fn load_source_as_db_entries(src: &std::path::Path) -> Result<Vec<DbEntry>, String> {
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "eet" => {
+            let (_, entries) = load_eet(src)?;
+            Ok(entries)
+        }
+        "bgt" => {
+            let db = load_bgt(src)?;
+            Ok(db.entries().to_vec())
+        }
+        "bgtx" => {
+            let db = load_bgtx(src)?;
+            Ok(db.entries().iter().map(|e| DbEntry {
+                form_id:     e.form_id,
+                original:    e.original.clone(),
+                translated:  e.translated.clone(),
+                record_type: if e.record_type.is_empty() { None } else { Some(e.record_type.clone()) },
+                sub_type:    if e.sub_type.is_empty()    { None } else { Some(e.sub_type.clone()) },
+                editor_id:   if e.editor_id.is_empty()   { None } else { Some(e.editor_id.clone()) },
+            }).collect())
+        }
+        "csv" => import_delimited(src, ','),
+        "tsv" => import_delimited(src, '\t'),
+        "xml" => {
+            // Try xTranslator first, fall back to ESP-ESM Translator XML
+            use crate::formats::{xtranslator_xml, esptranslator_xml};
+            let imported = xtranslator_xml::import(src)
+                .or_else(|_| esptranslator_xml::import(src))?;
+            Ok(imported.into_iter().map(|e| DbEntry {
+                form_id:     0,
+                original:    e.original,
+                translated:  e.translated,
+                record_type: e.record_type,
+                sub_type:    e.sub_type,
+                editor_id:   e.editor_id,
+            }).collect())
+        }
+        _ => Err(format!("Unsupported source format: .{}", ext)),
+    }
+}
+
+/// Convert any supported source to a .bgt (reference database, v2).
+#[tauri::command]
+pub async fn convert_to_bgt_cmd(
+    src_path:  String,
+    out_path:  String,
+    name:      String,
+    game:      String,
+    lang_from: String,
+    lang_to:   String,
+) -> Result<ConvertResult, String> {
+    let src  = std::path::Path::new(&src_path);
+    let dest = std::path::Path::new(&out_path);
+
+    let entries = load_source_as_db_entries(src)?;
+    let count   = entries.len();
+    if count == 0 { return Err("No translatable entries found in source file.".into()); }
+
+    let db = TranslationDb::from_entries(name, game, lang_from, lang_to, false, entries);
+    save_bgt(&db, dest)?;
+    log::info!("[converter] .bgt: {} entries → '{}'", count, dest.display());
+    Ok(ConvertResult { path: out_path, entry_count: count })
+}
+
+/// Convert any supported source to a .bgtx (personal database).
+#[tauri::command]
+pub async fn convert_to_bgtx_cmd(
+    src_path:  String,
+    out_path:  String,
+    name:      String,
+    game:      String,
+    lang_from: String,
+    lang_to:   String,
+) -> Result<ConvertResult, String> {
+    let src  = std::path::Path::new(&src_path);
+    let dest = std::path::Path::new(&out_path);
+
+    let db_entries = load_source_as_db_entries(src)?;
+    let count      = db_entries.len();
+    if count == 0 { return Err("No translatable entries found in source file.".into()); }
+
+    let personal_entries: Vec<PersonalDbEntry> = db_entries.into_iter().map(|e| PersonalDbEntry {
+        form_id:     e.form_id,
+        original:    e.original,
+        translated:  e.translated,
+        record_type: e.record_type.unwrap_or_default(),
+        sub_type:    e.sub_type.unwrap_or_default(),
+        editor_id:   e.editor_id.unwrap_or_default(),
+    }).collect();
+
+    let db = PersonalDb::from_entries(name, dest.to_string_lossy().into_owned(), game, lang_from, lang_to, personal_entries);
+    save_bgtx(&db, dest)?;
+    log::info!("[converter] .bgtx: {} entries → '{}'", count, dest.display());
+    Ok(ConvertResult { path: out_path, entry_count: count })
 }
