@@ -561,7 +561,10 @@
     "delete_no":       "No",
     "saved":            "Session saved",
     "save_error_title":"Save error",
-    "load_latest":     "Load latest"
+    "load_latest":     "Load latest",
+    "banner_title":        "Session restored",
+    "banner_suffix_one":   "entry restored from session",
+    "banner_suffix_other": "entries restored from session"
   },
   "export": {
     "success":          "Translated file generated",

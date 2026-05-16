@@ -292,8 +292,11 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 ### Personal Translation Database (`.bgtx`)
 - Custom binary format (`BGTX` magic + zstd + bincode) for storing personal translation pairs across sessions
 - **Dual-index lookup**: primary match by `form_id + sub_type + original` (highest precision, handles multiple entries sharing the same record and field type); text-based fallback by original string (handles mods where IDs differ)
-- **Auto-apply pipeline**: on plugin open, the reference `.bgt` is applied first, then all `.bgtx` files in the personal folder are applied in alphabetical order — one combined notification reports total matches from both sources
-- **Active database**: designate one `.bgtx` as the write target; all files in the folder are always read during auto-apply
+- **Apply pipeline** (on plugin open and session load): reference `.bgt` is applied first, then personal `.bgtx` file(s); a single combined notification reports entries from each source (session restored / ref DB / personal DB)
+- **Active database**: designate one `.bgtx` as the write target — it is **always** applied on every plugin open, regardless of the Automatic / Manual mode setting
+- **Apply mode** (Settings → Database):
+  - *Automatic* — scan the entire personal databases folder and apply all `.bgtx` files found, in alphabetical order
+  - *Manual* — apply only the Active database; additional files in the folder are ignored until manually triggered
 - **Manual apply — all entries**: Database menu → *Appliquer BDD personnelle (toutes les entrées)*
 - **Manual apply — selection**: `↓ [DB name]` button in the bulk action bar (fills only empty translations in the selection)
 - **Save entry from Edit Panel**: `+ DB` button adds the currently edited entry directly to the active personal database
@@ -303,7 +306,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
   - Create new `.bgtx` databases (name, game, source/target language)
   - Activate / deactivate the write target
   - Delete a database (inline confirmation — no native dialog)
-  - Auto-apply toggle (Automatic / Manual)
+  - Apply mode toggle (Automatic / Manual)
 
 ### Translation Database (`.bgt`)
 - Custom binary format v2 (`BGTD` magic + version byte + zstd + bincode)
@@ -316,6 +319,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Bundled databases: Morrowind EN→FR, Oblivion EN→FR, Starfield EN→FR
 - Read-only protection for bundled databases
 - **Default database per game** — in Settings → Database, assign one `.bgt` file as the default for each game; auto-apply uses this file first and falls back to a directory scan only when no explicit default is set
+- **Smart auto-detection** — when no explicit default is set, the directory scan applies a three-tier priority: exact game header match → filename heuristic (e.g. `BDD_Starfield_EN-FR.bgt`) → partial substring match; results are alphabetically sorted for determinism
 
 ### Database Converter
 - Floating, draggable modal (stays open while working) — accessible from **Database → Convertisseur de bases de données…**

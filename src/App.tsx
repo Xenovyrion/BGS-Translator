@@ -211,21 +211,25 @@ export default function App() {
 
   useEffect(() => {
     if (!autoApplyResult) return;
-    const { refDb, personalDb } = autoApplyResult;
+    const { refDb, personalDb, session } = autoApplyResult;
 
-    if (refDb > 0 && personalDb > 0) {
-      // Both DBs matched — one combined notification
-      const refPart  = `${refDb.toLocaleString()} ${t("db.banner_suffix", { count: refDb })}${loadedDbInfo ? ` (${loadedDbInfo.name})` : ""}`;
-      const persPart = `${personalDb.toLocaleString()} ${t("personal_db.apply_banner_suffix", { count: personalDb })}`;
-      notify(`✓ ${t("db.banner_title")}`, "success", `${refPart} · ${persPart}`, 7000);
-    } else if (refDb > 0) {
-      const detail = `${refDb.toLocaleString()} ${t("db.banner_suffix", { count: refDb })}${loadedDbInfo ? ` — ${loadedDbInfo.name} (${loadedDbInfo.game})` : ""}`;
-      notify(`✓ ${t("db.banner_title")}`, "success", detail, 6000);
-    } else if (personalDb > 0) {
-      notify(
-        `✓ ${t("personal_db.apply_banner_title")}`, "success",
-        t("personal_db.apply_banner_desc", { count: personalDb }), 5000,
-      );
+    // Build each part independently, then join — handles any combination of sources
+    const parts: string[] = [];
+    if (session > 0) {
+      parts.push(`${session.toLocaleString()} ${t("session.banner_suffix", { count: session })}`);
+    }
+    if (refDb > 0) {
+      parts.push(`${refDb.toLocaleString()} ${t("db.banner_suffix", { count: refDb })}${loadedDbInfo ? ` (${loadedDbInfo.name})` : ""}`);
+    }
+    if (personalDb > 0) {
+      parts.push(`${personalDb.toLocaleString()} ${t("personal_db.apply_banner_suffix", { count: personalDb })}`);
+    }
+
+    if (parts.length > 0) {
+      const title = session > 0 && refDb === 0
+        ? `✓ ${t("session.banner_title")}`
+        : `✓ ${t("db.banner_title")}`;
+      notify(title, "success", parts.join(" · "), parts.length > 1 ? 7000 : 5000);
     }
 
     clearAutoApplyResult();

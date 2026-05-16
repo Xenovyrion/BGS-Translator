@@ -561,7 +561,10 @@
     "delete_no":       "Non",
     "saved":            "Session sauvegardée",
     "save_error_title":"Erreur de sauvegarde",
-    "load_latest":     "Charger dernière session"
+    "load_latest":     "Charger dernière session",
+    "banner_title":        "Session restaurée",
+    "banner_suffix_one":   "entrée restaurée depuis la session",
+    "banner_suffix_other": "entrées restaurées depuis la session"
   },
   "export": {
     "success":          "Fichier traduit généré",

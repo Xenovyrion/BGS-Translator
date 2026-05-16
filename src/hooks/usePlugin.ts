@@ -61,7 +61,7 @@ export function usePlugin({
   const [selectedKeys, setSelectedKeys]   = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig]       = useState<SortConfig | null>({ column: "form_id", dir: "asc" });
   const [columnFilters, setColumnFilters] = useState<Partial<Record<string, string>>>({});
-  const [autoApplyResult, setAutoApplyResult]       = useState<{ refDb: number; personalDb: number } | null>(null);
+  const [autoApplyResult, setAutoApplyResult]       = useState<{ refDb: number; personalDb: number; session: number } | null>(null);
   const [dbNotFound, setDbNotFound]                 = useState<string | null>(null);
   const [loadedDbInfo, setLoadedDbInfo]             = useState<DbInfo | null>(null);
 
@@ -120,18 +120,20 @@ export function usePlugin({
 
       setLoadedDbInfo(dbInfo);
 
-      // ── Step 2: Apply ALL personal DBs in the folder (if auto-apply is on) ──
+      // ── Step 2: Apply personal DB(s) ────────────────────────────────────────
+      // "Automatique": scan + apply every .bgtx in the folder.
+      // "Manuel"     : apply only the active .bgtx (the explicit write target).
+      // Either way, the active DB is always applied — mode only controls whether
+      // the whole folder is scanned for additional databases.
       let personalMatched = 0;
-      if (personalDbAutoApply) {
-        try {
-          // Scan for all .bgtx files — pass the folder derived from personalDbPath if set
-          const folder = personalDbPath
-            ? personalDbPath.replace(/[/\\][^/\\]+$/, "") // parent dir of active DB
-            : null;
+      const folder = personalDbPath
+        ? personalDbPath.replace(/[/\\][^/\\]+$/, "") // parent dir of active DB
+        : null;
+      try {
+        if (personalDbAutoApply && folder) {
           const bgtxFiles = await invoke<Array<{ path: string; entry_count: number }>>(
             "scan_personal_dbs_cmd", { customDir: folder }
           );
-
           for (const f of bgtxFiles) {
             if (f.entry_count === 0) continue;
             const personal = await invoke<{ matched: number; total: number; entries: TranslationEntry[] }>(
@@ -142,12 +144,21 @@ export function usePlugin({
               personalMatched += personal.matched;
             }
           }
-        } catch { /* Personal DB not available — silently skip */ }
-      }
+        } else if (personalDbPath) {
+          // Manuel mode: apply only the active DB
+          const personal = await invoke<{ matched: number; total: number; entries: TranslationEntry[] }>(
+            "apply_personal_db_cmd", { path: personalDbPath, entries: out }
+          );
+          if (personal.matched > 0) {
+            out = personal.entries.map((e, i) => ({ ...e, _idx: i }));
+            personalMatched = personal.matched;
+          }
+        }
+      } catch { /* Personal DB not available — silently skip */ }
 
       // ── Single combined notification at end of pipeline ──────────────────
       if (applied.matched > 0 || personalMatched > 0) {
-        setAutoApplyResult({ refDb: applied.matched, personalDb: personalMatched });
+        setAutoApplyResult({ refDb: applied.matched, personalDb: personalMatched, session: 0 });
       }
 
       return out;
@@ -232,17 +243,24 @@ export function usePlugin({
         entries:      indexed,
       };
 
+      // Count how many entries already have a translation from the session
+      const sessionCount = indexed.filter(e => !!e.translated).length;
+
       setPluginInfo(info);
       setEntries(indexed);
 
-      // Try to load a matching DB silently (needed for "Add to DB" feature)
+      // Try to load a matching DB silently (needed for "Add to DB" feature).
+      // Bug fix: honour user's explicit defaultDbs first, same as tryAutoLoadDb.
       const game = detectGame(session.plugin_info.masters);
       if (game) {
         try {
-          const dbPath = await invoke<string | null>("find_db_for_game_cmd", {
-            game,
-            customDir: dbFolder || null,
-          });
+          const explicit = defaultDbs[game.toLowerCase()];
+          const dbPath   = explicit
+            ? explicit.path
+            : await invoke<string | null>("find_db_for_game_cmd", {
+                game,
+                customDir: dbFolder || null,
+              });
           if (dbPath) {
             const dbInfo = await invoke<DbInfo>("load_db_cmd", { path: dbPath });
             setLoadedDbInfo(dbInfo);
@@ -250,17 +268,18 @@ export function usePlugin({
         } catch { /* DB not available — silently skip */ }
       }
 
-      // Apply ALL personal DBs in folder (if auto-apply is on)
-      if (personalDbAutoApply) {
-        try {
-          const folder = personalDbPath
-            ? personalDbPath.replace(/[/\\][^/\\]+$/, "")
-            : null;
+      // Apply personal DB(s) — same logic as tryAutoLoadDb:
+      // "Automatique" → scan entire folder; "Manuel" → active DB only.
+      let personalMatched = 0;
+      const personalFolder = personalDbPath
+        ? personalDbPath.replace(/[/\\][^/\\]+$/, "")
+        : null;
+      try {
+        let current = indexed;
+        if (personalDbAutoApply && personalFolder) {
           const bgtxFiles = await invoke<Array<{ path: string; entry_count: number }>>(
-            "scan_personal_dbs_cmd", { customDir: folder }
+            "scan_personal_dbs_cmd", { customDir: personalFolder }
           );
-          let current = indexed;
-          let totalMatched = 0;
           for (const f of bgtxFiles) {
             if (f.entry_count === 0) continue;
             const personal = await invoke<{ matched: number; total: number; entries: TranslationEntry[] }>(
@@ -268,22 +287,34 @@ export function usePlugin({
             );
             if (personal.matched > 0) {
               current = personal.entries.map((e, i) => ({ ...e, _idx: i }));
-              totalMatched += personal.matched;
+              personalMatched += personal.matched;
             }
           }
-          if (totalMatched > 0) {
-            setEntries(current);
-            setPluginInfo((prev) => prev ? { ...prev, entries: current } : null);
-            setAutoApplyResult({ refDb: 0, personalDb: totalMatched });
+        } else if (personalDbPath) {
+          const personal = await invoke<{ matched: number; total: number; entries: TranslationEntry[] }>(
+            "apply_personal_db_cmd", { path: personalDbPath, entries: current }
+          );
+          if (personal.matched > 0) {
+            current = personal.entries.map((e, i) => ({ ...e, _idx: i }));
+            personalMatched = personal.matched;
           }
-        } catch { /* Personal DB not available — silently skip */ }
+        }
+        if (personalMatched > 0) {
+          setEntries(current);
+          setPluginInfo((prev) => prev ? { ...prev, entries: current } : null);
+        }
+      } catch { /* Personal DB not available — silently skip */ }
+
+      // Always emit notification so the user knows what was restored
+      if (sessionCount > 0 || personalMatched > 0) {
+        setAutoApplyResult({ refDb: 0, personalDb: personalMatched, session: sessionCount });
       }
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  }, [resetState]);
+  }, [resetState, defaultDbs, personalDbPath, personalDbAutoApply]);
 
   // ── Individual updates (by _idx) ─────────────────────────────────────────
 

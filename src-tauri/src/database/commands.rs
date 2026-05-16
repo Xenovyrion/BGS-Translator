@@ -242,21 +242,52 @@ pub async fn find_db_for_game_cmd(
     let dir = resolve_db_dir(custom_dir.as_deref())?;
     let game_lower = game.to_lowercase();
 
+    // Two-pass scan: exact header match first, then filename heuristic, then substring.
+    // This prevents a .bgt whose header game field is wrong from shadowing a
+    // correctly-named file (e.g. all bundled DBs having "Starfield" in the header).
+    let mut exact_match:    Option<String> = None;
+    let mut filename_match: Option<String> = None;
+    let mut substring_match: Option<String> = None;
+
     let rd = std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
-    for entry in rd.flatten() {
+    let mut entries: Vec<_> = rd.flatten().collect();
+    // Sort by filename for deterministic results
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in entries {
         let p = entry.path();
         let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
         if ext != "bgt" { continue; }
+
+        // Level 1: exact game header match
         if let Some(g) = crate::database::format::peek_bgt_game(&p) {
             let g_lower = g.to_lowercase();
-            if g_lower.contains(&game_lower) || game_lower.contains(&g_lower) {
-                log::info!("[db] Auto-detected DB '{}' for game '{}'", p.display(), game);
-                return Ok(Some(p.to_string_lossy().into_owned()));
+            if g_lower == game_lower {
+                exact_match = Some(p.to_string_lossy().into_owned());
+                break; // can't do better
+            }
+            if exact_match.is_none() {
+                if g_lower.contains(&game_lower) || game_lower.contains(&g_lower) {
+                    substring_match.get_or_insert_with(|| p.to_string_lossy().into_owned());
+                }
+            }
+        }
+
+        // Level 2: filename contains the game name (fallback for wrong header)
+        if filename_match.is_none() {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+            if stem.contains(&game_lower) {
+                filename_match = Some(p.to_string_lossy().into_owned());
             }
         }
     }
-    log::info!("[db] No matching DB found for game '{}'", game);
-    Ok(None)
+
+    let result = exact_match.or(filename_match).or(substring_match);
+    match &result {
+        Some(p) => log::info!("[db] Auto-detected DB '{}' for game '{}'", p, game),
+        None    => log::info!("[db] No matching DB found for game '{}'", game),
+    }
+    Ok(result)
 }
 
 /// Returns (and creates if needed) the path for autosaving a session for the given plugin.
