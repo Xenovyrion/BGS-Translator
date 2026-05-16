@@ -218,7 +218,7 @@
     "deselect_all_title":  "Deselect all",
     "n_selected":          "{{count}} / {{total}} selected",
     "selection_hint":      "Ctrl+Click: add to selection • Shift+Click: select range • ☑: select all",
-    "fuzzy_only":          "🔍 Suggestions"
+    "fuzzy_only":          "Suggestions"
   },
   "bulk": {
     "selected":              "{{count}} rows selected —",
@@ -235,7 +235,7 @@
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Add to my personal database (highest priority)",
     "deselect_all":          "Deselect all",
-    "apply_fuzzy":           "🔍 Apply suggestions",
+    "apply_fuzzy":           "Apply suggestions",
     "apply_fuzzy_title":     "Apply automatic suggestions to selected entries"
   },
   "fuzzy": {
@@ -541,8 +541,8 @@
       "log_placeholder":       "Log file path…",
       "log_pick_title":        "Choose log folder",
       "log_reset_title":       "Reset to default path",
-      "log_open_folder":       "📂 Open folder",
-      "log_view_file":         "📄 View logs",
+      "log_open_folder":       "Open folder",
+      "log_view_file":         "View logs",
       "log_copy":              "⧉ Copy path",
       "log_copied":            "✓ Copied!",
       "debug_section":         "Debug mode",
@@ -792,7 +792,7 @@
     "error_invalid_key":      "Invalid or expired API key",
     "error_quota":            "DeepL quota exceeded for this month",
     "error_too_many_requests":"Too many requests — please retry in a few seconds",
-    "batch_btn":              "⇄ DeepL ({{count}} rows)",
+    "batch_btn":              "DeepL ({{count}} rows)",
     "batch_title":            "Translate selected rows with DeepL (original → translation). <...> tags are automatically preserved.",
     "batch_loading":          "Translating…",
     "batch_ok":               "{{count}} rows translated with DeepL."

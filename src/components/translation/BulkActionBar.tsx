@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { EntryStatus } from "../../types";
-import { IconRefresh, IconSearch } from "../../icons";
+import { IconRefresh, IconSearch, IconReplace } from "../../icons";
 
 interface Props {
   count:                  number;
@@ -103,7 +103,7 @@ export default function BulkActionBar({
           >
             {deeplBatchLoading
               ? <><IconRefresh size={12} />{t("deepl.batch_loading")}</>
-              : t("deepl.batch_btn", { count })
+              : <><IconReplace size={12} />{t("deepl.batch_btn", { count })}</>
             }
           </button>
         </>

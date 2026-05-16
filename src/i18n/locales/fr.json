@@ -218,7 +218,7 @@
     "deselect_all_title":  "Désélectionner tout",
     "n_selected":          "{{count}} / {{total}} sélectionnées",
     "selection_hint":      "Ctrl+Clic : ajouter à la sélection • Shift+Clic : sélectionner une plage • ☑ : tout sélectionner",
-    "fuzzy_only":          "🔍 Suggestions"
+    "fuzzy_only":          "Suggestions"
   },
   "bulk": {
     "selected":              "{{count}} lignes sélectionnées —",
@@ -235,7 +235,7 @@
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Ajouter à ma base de données personnelle (prioritaire)",
     "deselect_all":          "Désélectionner tout",
-    "apply_fuzzy":           "🔍 Appliquer les suggestions",
+    "apply_fuzzy":           "Appliquer les suggestions",
     "apply_fuzzy_title":     "Appliquer les suggestions automatiques sur les entrées sélectionnées"
   },
   "fuzzy": {
@@ -541,8 +541,8 @@
       "log_placeholder":       "Chemin du fichier de log…",
       "log_pick_title":        "Choisir le dossier de logs",
       "log_reset_title":       "Réinitialiser au chemin par défaut",
-      "log_open_folder":       "📂 Ouvrir le dossier",
-      "log_view_file":         "📄 Voir les logs",
+      "log_open_folder":       "Ouvrir le dossier",
+      "log_view_file":         "Voir les logs",
       "log_copy":              "⧉ Copier le chemin",
       "log_copied":            "✓ Copié !",
       "debug_section":         "Mode débogage",
@@ -792,7 +792,7 @@
     "error_invalid_key":      "Clé API invalide ou expirée",
     "error_quota":            "Quota DeepL dépassé pour ce mois",
     "error_too_many_requests":"Trop de requêtes — réessayez dans quelques secondes",
-    "batch_btn":              "⇄ DeepL ({{count}} lignes)",
+    "batch_btn":              "DeepL ({{count}} lignes)",
     "batch_title":            "Traduire les lignes sélectionnées avec DeepL (texte original → traduction). Les balises <...> sont préservées automatiquement.",
     "batch_loading":          "Traduction en cours…",
     "batch_ok":               "{{count}} lignes traduites avec DeepL."

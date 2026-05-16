@@ -715,6 +715,78 @@ export function IconSpellCheck({ style }: Pick<IconProps, "style">) {
   );
 }
 
+// ── LOCK ──────────────────────────────────────────────────────────────────────
+
+export function IconLock({ set, size = 16, style }: IconProps) {
+  const s = useSet(set);
+  if (s === "material") return (
+    <Svg {...M(size, style)}>
+      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+    </Svg>
+  );
+  if (s === "classic") return (
+    <Svg {...Cl(size, style)}>
+      <rect x="3" y="11" width="18" height="11" rx="2" fill="currentColor" fillOpacity="0.1"/>
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      <circle cx="12" cy="16" r="1" fill="currentColor"/>
+    </Svg>
+  );
+  return (
+    <Svg {...Mn(size, style)}>
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      <circle cx="12" cy="16" r="1" fill="currentColor"/>
+    </Svg>
+  );
+}
+
+// ── EXTERNAL LINK / OPEN ───────────────────────────────────────────────────────
+
+export function IconExternalLink({ set, size = 16, style }: IconProps) {
+  const s = useSet(set);
+  if (s === "material") return (
+    <Svg {...M(size, style)}>
+      <path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+    </Svg>
+  );
+  return (
+    <Svg {...(s === "classic" ? Cl(size, style) : Mn(size, style))}>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+      <polyline points="15 3 21 3 21 9"/>
+      <line x1="10" y1="14" x2="21" y2="3"/>
+    </Svg>
+  );
+}
+
+// ── FILE / LOG ─────────────────────────────────────────────────────────────────
+
+export function IconFile({ set, size = 16, style }: IconProps) {
+  const s = useSet(set);
+  if (s === "material") return (
+    <Svg {...M(size, style)}>
+      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+    </Svg>
+  );
+  if (s === "classic") return (
+    <Svg {...Cl(size, style)}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="currentColor" fillOpacity="0.1"/>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="17" x2="16" y2="17"/>
+    </Svg>
+  );
+  return (
+    <Svg {...Mn(size, style)}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="17" x2="16" y2="17"/>
+    </Svg>
+  );
+}
+
 // ── SPINNER ───────────────────────────────────────────────────────────────────
 
 /** Animated spinner — same for all icon sets. */

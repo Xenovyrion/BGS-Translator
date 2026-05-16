@@ -12,6 +12,7 @@ import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS } fro
 import {
   IconSettings, IconClose, IconFolder,
   IconReplace, IconCheck, IconDatabase, IconSort, IconRefresh, IconSearch,
+  IconLock, IconFile,
 } from "../../icons";
 import type { ReactNode } from "react";
 
@@ -386,8 +387,8 @@ function HintRow({ label, badge }: { label: string; badge: string }) {
       }}>
         {badge}
       </span>
-      <span style={{ fontSize: 10, color: "var(--text-3)", fontStyle: "italic" }}>
-        🔒
+      <span style={{ color: "var(--text-3)", opacity: 0.6, display: "flex", alignItems: "center" }}>
+        <IconLock size={12} />
       </span>
     </div>
   );
@@ -1703,8 +1704,12 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={openLogsFolder} style={smallBtnStyle()}>{t("settings_modal.sys.log_open_folder")}</button>
-          <button onClick={viewLogFile} style={smallBtnStyle()}>{t("settings_modal.sys.log_view_file")}</button>
+          <button onClick={openLogsFolder} style={{ ...smallBtnStyle(), display: "flex", alignItems: "center", gap: 5 }}>
+            <IconFolder size={13} /> {t("settings_modal.sys.log_open_folder")}
+          </button>
+          <button onClick={viewLogFile} style={{ ...smallBtnStyle(), display: "flex", alignItems: "center", gap: 5 }}>
+            <IconFile size={13} /> {t("settings_modal.sys.log_view_file")}
+          </button>
         </div>
       </Section>
 
