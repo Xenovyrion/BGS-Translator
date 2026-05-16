@@ -435,6 +435,7 @@ pub async fn convert_to_bgt_cmd(
     game:      String,
     lang_from: String,
     lang_to:   String,
+    read_only: bool,
 ) -> Result<ConvertResult, String> {
     let src  = std::path::Path::new(&src_path);
     let dest = std::path::Path::new(&out_path);
@@ -443,7 +444,7 @@ pub async fn convert_to_bgt_cmd(
     let count   = entries.len();
     if count == 0 { return Err("No translatable entries found in source file.".into()); }
 
-    let db = TranslationDb::from_entries(name, game, lang_from, lang_to, false, entries);
+    let db = TranslationDb::from_entries(name, game, lang_from, lang_to, read_only, entries);
     save_bgt(&db, dest)?;
     log::info!("[converter] .bgt: {} entries → '{}'", count, dest.display());
     Ok(ConvertResult { path: out_path, entry_count: count })

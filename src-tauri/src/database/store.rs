@@ -8,8 +8,10 @@ pub struct TranslationDb {
     pub lang_to:   String,
     pub read_only: bool,
     entries:    Vec<DbEntry>,
-    // Level 1 — ID-based: (form_id, sub_type) → translated  (skipped when form_id == 0)
-    by_id:      AHashMap<(u32, String), String>,
+    // Level 1 — ID-based: (form_id, sub_type, original) → translated  (skipped when form_id == 0)
+    // Using original as part of the key handles records where the same form_id + sub_type
+    // appear multiple times with different text (e.g. quest journal CNAM stages).
+    by_id:      AHashMap<(u32, String, String), String>,
     // Level 2 — Contextual: "record_type|sub_type|original" → translated
     contextual: AHashMap<String, String>,
     // Level 3 — Plain-text fallback: "original" → translated
@@ -27,10 +29,11 @@ impl TranslationDb {
         let mut text_only  = AHashMap::with_capacity(entries.len());
 
         for e in &entries {
-            // Level 1: ID index (only when form_id is known and sub_type is present)
+            // Level 1: (form_id, sub_type, original) — disambiguates quest stages sharing
+            // the same form_id and sub_type but carrying different original text.
             if e.form_id != 0 {
                 if let Some(st) = &e.sub_type {
-                    by_id.entry((e.form_id, st.clone()))
+                    by_id.entry((e.form_id, st.clone(), e.original.clone()))
                         .or_insert_with(|| e.translated.clone());
                 }
             }
@@ -46,15 +49,17 @@ impl TranslationDb {
         TranslationDb { name, game, lang_from, lang_to, read_only, entries, by_id, contextual, text_only }
     }
 
-    /// 3-level lookup: form_id → contextual → plain-text.
+    /// 3-level lookup: (form_id + sub_type + original) → contextual → plain-text.
     pub fn lookup(&self, form_id: u32, original: &str, record_type: &str, sub_type: &str) -> Option<&str> {
-        // Level 1: exact ID match (most precise)
+        // Level 1: exact match — identifies the record by ID *and* its specific text variant.
+        // This correctly handles multiple CNAM stages on the same quest record.
         if form_id != 0 {
-            if let Some(t) = self.by_id.get(&(form_id, sub_type.to_owned())) {
+            if let Some(t) = self.by_id.get(&(form_id, sub_type.to_owned(), original.to_owned())) {
                 return Some(t.as_str());
             }
         }
-        // Level 2: contextual (record_type + sub_type + original)
+        // Level 2: contextual (record_type + sub_type + original) — used for sources
+        // without form_id (XML, CSV) that still carry record type information.
         let ctx_key = format!("{}|{}|{}", record_type, sub_type, original);
         if let Some(t) = self.contextual.get(&ctx_key) {
             return Some(t.as_str());
@@ -78,7 +83,7 @@ impl TranslationDb {
         for e in new_entries {
             if e.form_id != 0 {
                 if let Some(st) = &e.sub_type {
-                    self.by_id.insert((e.form_id, st.clone()), e.translated.clone());
+                    self.by_id.insert((e.form_id, st.clone(), e.original.clone()), e.translated.clone());
                 }
             }
             if let (Some(rt), Some(st)) = (&e.record_type, &e.sub_type) {

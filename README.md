@@ -89,7 +89,7 @@ BGS-Translator/
 │   │   │   └── SettingsPanel.tsx     # Settings content (theme, shortcuts, spell check…)
 │   │   ├── shared/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
-│   │   │   ├── ConvertToBgtModal.tsx      # Format conversion dialog
+│   │   │   ├── ConvertToBgtModal.tsx      # Floating draggable database converter (any format → .bgt/.bgtx)
 │   │   │   ├── GlobalFindReplaceModal.tsx # Floating global find & replace window
 │   │   │   ├── LogPanel.tsx               # Activity / debug log panel
 │   │   │   ├── NotificationBanner.tsx     # Inline success/error notification bar
@@ -127,12 +127,12 @@ BGS-Translator/
 │   │   ├── updater.rs                # Auto-update commands
 │   │   ├── database/
 │   │   │   ├── commands.rs           # Tauri commands for reference database operations
-│   │   │   ├── format.rs             # .bgt binary format (bincode + zstd)
+│   │   │   ├── format.rs             # .bgt v2 binary format (bincode + zstd, form_id per entry)
 │   │   │   ├── mod.rs
 │   │   │   ├── personal_commands.rs  # Tauri commands for personal database (.bgtx)
 │   │   │   ├── personal_format.rs    # .bgtx binary format (magic + zstd + bincode)
 │   │   │   ├── personal_store.rs     # PersonalDb dual-index store (ID + text)
-│   │   │   ├── store.rs              # In-memory reference database store (AHashMap)
+│   │   │   ├── store.rs              # In-memory reference database store (3-level AHashMap index)
 │   │   │   └── types.rs              # DbEntry, DbInfo, PersonalDbEntry, PersonalDbInfo…
 │   │   ├── formats/
 │   │   │   ├── mod.rs
@@ -291,7 +291,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Personal Translation Database (`.bgtx`)
 - Custom binary format (`BGTX` magic + zstd + bincode) for storing personal translation pairs across sessions
-- **Dual-index lookup**: primary match by `form_id + sub_type` (highest precision); text-based fallback by original string (handles mods where IDs differ)
+- **Dual-index lookup**: primary match by `form_id + sub_type + original` (highest precision, handles multiple entries sharing the same record and field type); text-based fallback by original string (handles mods where IDs differ)
 - **Auto-apply pipeline**: on plugin open, the reference `.bgt` is applied first, then all `.bgtx` files in the personal folder are applied in alphabetical order — one combined notification reports total matches from both sources
 - **Active database**: designate one `.bgtx` as the write target; all files in the folder are always read during auto-apply
 - **Manual apply — all entries**: Database menu → *Appliquer BDD personnelle (toutes les entrées)*
@@ -306,14 +306,26 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
   - Auto-apply toggle (Automatic / Manual)
 
 ### Translation Database (`.bgt`)
-- Custom binary format (bincode + zstd) for storing translation pairs
-- Each entry stores: original, translated, record type, subrecord type, editor ID
+- Custom binary format v2 (`BGTD` magic + version byte + zstd + bincode)
+- Each entry stores: **form_id**, original, translated, record type, subrecord type, editor ID
+- **3-level lookup** for maximum match accuracy:
+  - **Level 1** — `(form_id, sub_type, original)`: identifies the exact record *and* its specific text variant; correctly handles records where the same form_id + sub_type appears multiple times with different text (e.g. quest journal CNAM stages)
+  - **Level 2** — `(record_type, sub_type, original)`: contextual match for sources without form_id (XML, CSV)
+  - **Level 3** — `original`: plain-text fallback
 - **Auto-apply**: match entries from the database against the open plugin and apply translations automatically — reports matched / total counts
 - Bundled databases: Morrowind EN→FR, Oblivion EN→FR, Starfield EN→FR
 - Read-only protection for bundled databases
-- Database folder and `.eet` → `.bgt` conversion managed in **Settings → Database**
 - **Default database per game** — in Settings → Database, assign one `.bgt` file as the default for each game; auto-apply uses this file first and falls back to a directory scan only when no explicit default is set
-- Export/convert database accessible from the **File** menu
+
+### Database Converter
+- Floating, draggable modal (stays open while working) — accessible from **Database → Convertisseur de bases de données…**
+- **Universal source support**: `.eet` (ESP-ESM Translator), `.bgt` v2 (reference database), `.bgtx` (personal database), `.csv`, `.tsv`, `.xml` (xTranslator or ESP-ESM Translator — auto-detected)
+- **Output format**: `.bgt` (reference database, shared) or `.bgtx` (personal database)
+- Configurable: database name, game, source language, target language, output folder
+- For `.bgt` output: read-only toggle (read-only = auto-applied at plugin open; editable = loaded manually)
+- **form_id fully preserved** through conversion — `.eet` and existing `.bgt`/`.bgtx` sources retain their form IDs, enabling Level 1 precision matching after conversion
+- CSV/TSV import supports an optional 6th column (`FormId`, hex format) exported by BGS Translator itself
+- Inline result feedback (entry count on success, error message on failure) without closing the modal
 
 ### Sessions
 - Save the current translation state (all entries + statuses) to a named session file
@@ -334,7 +346,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Import from xTranslator XML** (`.xml`) or **ESP-ESM Translator XML** (`.xml`)
 - **Import from CSV** (`.csv`)
 - **Export to xTranslator XML**, **ESP-ESM Translator XML**, or **CSV** — accessible from the **File** menu
-- **Export / convert database** (`.bgt`, CSV, TSV) — accessible from the **File** menu
+- **Export database** (CSV, TSV) — accessible from the **File** menu; exported CSV includes a `FormId` column (hex) for round-trip conversion
 - Positional matching within each `form_id + sub_type` group preserves correct per-entry pairing even when multiple subrecords share the same type
 - Protected entries: `pending` (active work) and `ignored` (explicit decision) are never overwritten
 - Keyboard shortcut: `Ctrl+I`

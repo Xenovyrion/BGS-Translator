@@ -119,12 +119,12 @@ pub fn import_delimited(path: &std::path::Path, sep: char) -> Result<Vec<DbEntry
             let lower = line.to_lowercase();
             if lower.starts_with("original") || lower.starts_with("source") { continue; }
         }
-        let cols: Vec<&str> = line.splitn(5, sep).collect();
+        // Split into all columns (no limit): original, translated, record_type, sub_type, editor_id, form_id
+        let cols: Vec<&str> = line.split(sep).collect();
         if cols.len() < 2 { continue; }
         let original   = cols[0].trim().to_string();
         let translated = cols[1].trim().to_string();
         if original.is_empty() || translated.is_empty() { continue; }
-        // CSV column order: original, translated, record_type, sub_type, editor_id[, form_id]
         let form_id = cols.get(5)
             .map(|s| parse_form_id(s.trim()))
             .unwrap_or(0);

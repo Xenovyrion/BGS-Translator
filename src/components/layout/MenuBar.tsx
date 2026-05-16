@@ -41,7 +41,7 @@ interface Props {
   onExportXtXml?:     () => void;
   onExportEtXml?:     () => void;
   onExportCsv?:       () => void;
-  onConvertToBgt?:         () => void;
+  onOpenConverter?:        () => void;
   onGlobalFind?:           () => void;
   globalFindShortcut?:     string;
   onApplyPersonalDb?:      () => void;
@@ -57,7 +57,7 @@ export default function MenuBar({
   showColumnFilters, onToggleColumnFilters,
   onImportXtXml, onImportEtXml, onImportCsv,
   onExportXtXml, onExportEtXml, onExportCsv,
-  onConvertToBgt,
+  onOpenConverter,
   onGlobalFind, globalFindShortcut,
   onApplyPersonalDb, hasActivePersonalDb,
 }: Props) {
@@ -126,14 +126,7 @@ export default function MenuBar({
         { separator: true },
         { label: t("menu.db_apply_personal"), disabled: !pluginLoaded || loading || !hasActivePersonalDb, onClick: onApplyPersonalDb ? () => { close(); onApplyPersonalDb!(); } : undefined },
         { separator: true },
-        {
-          label: t("menu.db_convert_section"),
-          submenu: [
-            { label: t("menu.db_convert_xml"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
-            { label: t("menu.db_convert_csv"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
-            { label: t("menu.db_convert_eet"), onClick: onConvertToBgt ? () => { close(); onConvertToBgt!(); } : undefined },
-          ],
-        },
+        { label: t("menu.db_converter"), onClick: onOpenConverter ? () => { close(); onOpenConverter!(); } : undefined },
       ],
     },
     {

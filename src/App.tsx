@@ -150,8 +150,7 @@ export default function App() {
   const [appVersion,         setAppVersion]         = useState("0.1.0");
   const [lastAutosave,       setLastAutosave]       = useState<Date | null>(null);
   const [notification,       setNotification]       = useState<Notification | null>(null);
-  // null = modal closed, string = source file path shown in the ConvertToBgt modal
-  const [convertBgtSource,   setConvertBgtSource]   = useState<string | null>(null);
+  const [showDbConverter,    setShowDbConverter]    = useState(false);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
   const [deeplBatchLoading,  setDeeplBatchLoading]  = useState(false);
 
@@ -426,57 +425,30 @@ export default function App() {
     }
   }, [pluginInfo, entries, notify, t]);
 
-  // ── Convert to .bgt ──────────────────────────────────────────────────────
+  // ── DB Converter ─────────────────────────────────────────────────────────
 
-  const handleConvertToBgt = useCallback(async () => {
-    const selected = await open({
-      filters: [{ name: "XML / CSV / EET", extensions: ["xml", "csv", "tsv", "eet"] }],
-      title: t("format.convert_title"),
-      multiple: false,
-    });
-    if (!selected || typeof selected !== "string") return;
-    // Fetch (or refresh) default databases dir
+  const handleOpenConverter = useCallback(async () => {
+    // Refresh default databases dir each time the modal opens
     try {
       const dir = await invoke<string>("get_databases_dir_cmd", { customDir: null });
       setDefaultDbDir(dir);
-    } catch {
-      setDefaultDbDir("");
-    }
-    setConvertBgtSource(selected);
-  }, [t]);
+    } catch { setDefaultDbDir(""); }
+    setShowDbConverter(true);
+  }, []);
 
-  const handleConvertConfirm = useCallback(async (opts: {
-    dbName: string; game: string; langFrom: string; langTo: string;
-    outputFolder: string; readOnly: boolean;
-  }) => {
-    if (!convertBgtSource) return;
-    const sourcePath = convertBgtSource;
-    setConvertBgtSource(null);
-
-    // Build output path from chosen output folder
-    const folder     = opts.outputFolder.replace(/\\/g, "/").replace(/\/$/, "");
-    const outputPath = (folder ? folder + "/" : "") + opts.dbName + ".bgt";
-
-    try {
-      const count = await invoke<number>("convert_to_bgt_cmd", {
-        sourcePath,
-        outputPath,
-        dbName:   opts.dbName,
-        game:     opts.game,
-        langFrom: opts.langFrom,
-        langTo:   opts.langTo,
-        readOnly: opts.readOnly,
-      });
-      notify(
-        `✓ ${t("convert_bgt.success", { count, name: opts.dbName })}`,
-        "success",
-        undefined,
-        6000,
-      );
-    } catch (e) {
-      notify(`⚠ ${t("convert_bgt.error", { error: String(e) })}`, "error", String(e), 10000);
-    }
-  }, [convertBgtSource, notify, t]);
+  const handleConvertConfirm = useCallback(async (opts: import("./components/shared/ConvertToBgtModal").ConvertOpts) => {
+    interface ConvertResult { path: string; entry_count: number }
+    const cmd = opts.format === "bgtx" ? "convert_to_bgtx_cmd" : "convert_to_bgt_cmd";
+    const args = opts.format === "bgtx"
+      ? { srcPath: opts.sourcePath, outPath: opts.outputPath, name: opts.dbName, game: opts.game, langFrom: opts.langFrom, langTo: opts.langTo }
+      : { srcPath: opts.sourcePath, outPath: opts.outputPath, name: opts.dbName, game: opts.game, langFrom: opts.langFrom, langTo: opts.langTo, readOnly: opts.readOnly };
+    const result = await invoke<ConvertResult>(cmd, args);
+    notify(
+      `✓ ${t("db_converter.success", { count: result.entry_count, name: opts.dbName, ext: opts.format })}`,
+      "success", undefined, 6000,
+    );
+    return { entryCount: result.entry_count };
+  }, [notify, t]);
 
   const handleExport = useCallback(async () => {
     if (!pluginInfo) return;
@@ -733,7 +705,7 @@ export default function App() {
         onExportXtXml={pluginInfo ? handleExportXtXml : undefined}
         onExportEtXml={pluginInfo ? handleExportEtXml : undefined}
         onExportCsv={pluginInfo   ? handleExportCsv   : undefined}
-        onConvertToBgt={handleConvertToBgt}
+        onOpenConverter={handleOpenConverter}
         onGlobalFind={pluginInfo ? () => setShowGlobalFind(true) : undefined}
         globalFindShortcut={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
         onApplyPersonalDb={pluginInfo ? handleApplyPersonalDbAll : undefined}
@@ -911,13 +883,13 @@ export default function App() {
         />
       )}
 
-      <ConvertToBgtModal
-        isOpen={!!convertBgtSource}
-        sourceFile={convertBgtSource ?? ""}
-        defaultOutputDir={defaultDbDir}
-        onClose={() => setConvertBgtSource(null)}
-        onConfirm={handleConvertConfirm}
-      />
+      {showDbConverter && (
+        <ConvertToBgtModal
+          defaultOutputDir={defaultDbDir}
+          onClose={() => setShowDbConverter(false)}
+          onConvert={handleConvertConfirm}
+        />
+      )}
 
       {showGlobalFind && pluginInfo && (
         <GlobalFindReplaceModal
