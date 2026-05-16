@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { TranslationEntry } from "../../types";
+import { IconClose } from "../../icons";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ export default function GlobalFindReplaceModal({
             {shortcutLabel}
           </span>
         )}
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 15, lineHeight: 1, padding: "0 2px" }}>✕</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "0 2px", display: "flex", alignItems: "center" }}><IconClose size={15} /></button>
       </div>
 
       {/* Fields */}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { IconClose, IconSearch } from "../../icons";
 
 import type {
   DiffStats, PluginDiffResult, RecordDiff,
@@ -205,19 +206,19 @@ export default function CompareModal({
           flexShrink: 0,
           background: "var(--bg-menubar)",
         }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", flex: 1 }}>
-            🔍 {t("compare.title")}
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+            <IconSearch size={15} /> {t("compare.title")}
           </span>
           <button
             onClick={onClose}
             style={{
               background: "transparent", border: "none",
-              color: "var(--text-2)", fontSize: 18, cursor: "pointer",
+              color: "var(--text-2)", cursor: "pointer",
               width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
               borderRadius: 4,
             }}
           >
-            ✕
+            <IconClose size={18} />
           </button>
         </div>
 
@@ -253,10 +254,10 @@ export default function CompareModal({
             </div>
             {/* Session info */}
             {pathOld && (
-              <div style={{ fontSize: 10, color: "var(--text-2)", opacity: 0.7 }}>
-                {sessionId
-                  ? `💾 ${t("compare.session_found")}: ${sessionId.split("__")[0]}`
-                  : t("compare.session_none")}
+              <div style={{ fontSize: 10, color: "var(--text-2)", opacity: 0.7, display: "flex", alignItems: "center", gap: 4 }}>
+                {sessionId ? (
+                  <><IconSearch size={9} /> {t("compare.session_found")}: {sessionId.split("__")[0]}</>
+                ) : t("compare.session_none")}
               </div>
             )}
           </div>

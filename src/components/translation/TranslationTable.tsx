@@ -7,6 +7,7 @@ import { entryKey } from "../../hooks/usePlugin";
 import type { ColumnWidths } from "../../hooks/useLayout";
 import { startDrag } from "../../hooks/useLayout";
 import { TaggedText } from "../shared/TaggedText";
+import { IconSearch } from "../../icons";
 
 const STATUS_COLORS: Record<EntryStatus, string> = {
   untranslated: "#ef4444",
@@ -381,8 +382,9 @@ const TableRow = memo(function TableRow({
                 background: `${fuzzyScoreColor(fuzzyMatch.score)}22`,
                 border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}55`,
                 borderRadius: 4, padding: "1px 4px",
+                display: "flex", alignItems: "center", gap: 2,
               }}>
-              🔍 {fuzzyScoreLabel(fuzzyMatch.score)}
+              <IconSearch size={9} /> {fuzzyScoreLabel(fuzzyMatch.score)}
             </span>
             <span style={{ color: fuzzyScoreColor(fuzzyMatch.score), opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.95em", fontStyle: "italic", flex: 1 }}
               title={`Suggestion: ${fuzzyMatch.suggested}`}>

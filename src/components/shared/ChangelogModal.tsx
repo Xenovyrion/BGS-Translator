@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
+import { IconClose } from "../../icons";
 
 // GitHub repository URL — update this once the repo is public.
 // On error (404, network), falls back to "No release notes available."
@@ -54,7 +55,7 @@ export default function ChangelogModal({ appVersion, onClose }: Props) {
               {t("changelog.subtitle")} <strong style={{ color: "var(--accent)" }}>v{appVersion}</strong>
             </p>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, padding: "2px 4px", lineHeight: 1, borderRadius: 4 }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "2px 4px", borderRadius: 4, display: "flex", alignItems: "center" }}><IconClose size={18} /></button>
         </div>
 
         {/* ── Body ── */}

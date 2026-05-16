@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import type { RecordDiff, FieldDiff, ChangeKind } from "../../types";
+import { IconSave, IconDatabase } from "../../icons";
 
 // ── Colours per change kind ───────────────────────────────────────────────────
 
@@ -541,10 +542,10 @@ function FieldRow({
         }}
       >
         {field.translation_source === "session" && (
-          <span title={t("compare.source_session")} style={{ fontSize: 9, opacity: 0.7, flexShrink: 0 }}>💾</span>
+          <span title={t("compare.source_session")} style={{ opacity: 0.7, flexShrink: 0, display: "flex" }}><IconSave size={9} /></span>
         )}
         {field.translation_source === "ref_db" && (
-          <span title={t("compare.source_db")} style={{ fontSize: 9, opacity: 0.7, flexShrink: 0 }}>🗄</span>
+          <span title={t("compare.source_db")} style={{ opacity: 0.7, flexShrink: 0, display: "flex" }}><IconDatabase size={9} /></span>
         )}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{field.translation ?? "—"}</span>
       </div>

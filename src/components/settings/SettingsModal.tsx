@@ -9,6 +9,11 @@ import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
 import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS } from "../../types";
+import {
+  IconSettings, IconClose, IconFolder,
+  IconReplace, IconCheck, IconDatabase, IconSort, IconRefresh, IconSearch,
+} from "../../icons";
+import type { ReactNode } from "react";
 
 type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
@@ -28,14 +33,14 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("apparence");
 
-  const TABS: Array<{ id: Tab; labelKey: string; icon: string }> = [
-    { id: "apparence",   labelKey: "settings_modal.tab_appearance",   icon: "✦" },
-    { id: "raccourcis",  labelKey: "settings_modal.tab_shortcuts",    icon: "⌨" },
-    { id: "orthographe", labelKey: "settings_modal.tab_spellcheck",   icon: "✓" },
-    { id: "database",    labelKey: "settings_modal.tab_database",     icon: "▤" },
-    { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: "⋮" },
-    { id: "api",         labelKey: "settings_modal.tab_api",          icon: "⇄" },
-    { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: "⚙" },
+  const TABS: Array<{ id: Tab; labelKey: string; icon: ReactNode }> = [
+    { id: "apparence",   labelKey: "settings_modal.tab_appearance",   icon: <IconSearch size={13} /> },
+    { id: "raccourcis",  labelKey: "settings_modal.tab_shortcuts",    icon: <IconSort size={13} /> },
+    { id: "orthographe", labelKey: "settings_modal.tab_spellcheck",   icon: <IconCheck size={13} /> },
+    { id: "database",    labelKey: "settings_modal.tab_database",     icon: <IconDatabase size={13} /> },
+    { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: <IconRefresh size={13} /> },
+    { id: "api",         labelKey: "settings_modal.tab_api",          icon: <IconReplace size={13} /> },
+    { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: <IconSettings size={13} /> },
   ];
 
   useEffect(() => {
@@ -75,13 +80,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}>
-          <span style={{ fontSize: 16, marginRight: 10, opacity: 0.7 }}>⚙</span>
+          <span style={{ marginRight: 10, opacity: 0.7, display: "flex", alignItems: "center" }}><IconSettings size={16} /></span>
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", flex: 1 }}>{t("settings_modal.title")}</span>
           <button
             onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, lineHeight: 1, padding: 0 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 0, display: "flex", alignItems: "center" }}
           >
-            ×
+            <IconClose size={18} />
           </button>
         </div>
 
@@ -893,7 +898,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
               border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
             }}
           />
-          <button onClick={pickDbFolder} title={t("settings_modal.db.folder_pick_title")} style={iconBtn()}>📁</button>
+          <button onClick={pickDbFolder} title={t("settings_modal.db.folder_pick_title")} style={iconBtn()}><IconFolder size={14} /></button>
           <button onClick={() => onUpdate({ dbFolder: "" })} title={t("settings_modal.db.folder_reset_title")} style={iconBtn()}>↺</button>
           <button onClick={openActiveDir} title={t("settings_modal.db.folder_open_explorer")} style={smallBtnStyle()}>{t("settings_modal.db.folder_open")}</button>
         </div>
@@ -1119,7 +1124,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
               border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
             }}
           />
-          <button onClick={pickPersonalDbFolder} title={t("settings_modal.personal_db.folder_pick_title")} style={iconBtn()}>📁</button>
+          <button onClick={pickPersonalDbFolder} title={t("settings_modal.personal_db.folder_pick_title")} style={iconBtn()}><IconFolder size={14} /></button>
           <button onClick={() => onUpdate({ personalDbFolder: "" })} title={t("settings_modal.db.folder_reset_title")} style={iconBtn()}>↺</button>
           <button onClick={openPersonalDir} style={smallBtnStyle()}>{t("settings_modal.db.folder_open")}</button>
         </div>
@@ -1352,7 +1357,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
               border: "1px solid var(--border)", outline: "none", fontFamily: "monospace", boxSizing: "border-box",
             }}
           />
-          <button onClick={pickExportFolder} title={t("settings_modal.misc.export_folder_pick_title")} style={iconBtn()}>📁</button>
+          <button onClick={pickExportFolder} title={t("settings_modal.misc.export_folder_pick_title")} style={iconBtn()}><IconFolder size={14} /></button>
           <button
             onClick={() => onUpdate({ exportFolder: defaultExportDir || "" })}
             title={t("settings_modal.misc.export_folder_reset_title")}
@@ -1693,7 +1698,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
               border: "1px solid var(--border)", fontFamily: "monospace", outline: "none", boxSizing: "border-box",
             }}
           />
-          <button onClick={pickLogFolder} title={t("settings_modal.sys.log_pick_title")} style={iconBtn()}>📁</button>
+          <button onClick={pickLogFolder} title={t("settings_modal.sys.log_pick_title")} style={iconBtn()}><IconFolder size={14} /></button>
           <button onClick={() => onUpdate({ logFolder: "" })} title={t("settings_modal.sys.log_reset_title")} style={iconBtn()}>↺</button>
         </div>
 

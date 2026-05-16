@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { IconSave } from "../../icons";
 
 const fmtN = (n: number) => n.toLocaleString("fr-FR");
 
@@ -68,9 +69,9 @@ export default function StatusBar({
       {/* ── Droite ───────────────────────────────────────────── */}
       <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
         {lastAutosave && (
-          <span style={{ fontStyle: "italic", opacity: 0.7 }}
+          <span style={{ fontStyle: "italic", opacity: 0.7, display: "flex", alignItems: "center", gap: 3 }}
             title={lastAutosave.toLocaleString()}>
-            💾 {lastAutosave.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            <IconSave size={11} /> {lastAutosave.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
         {filtered !== total && (

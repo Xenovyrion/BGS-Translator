@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { IconClose } from "../../icons";
 
 interface Props {
   version: string;
@@ -42,8 +43,8 @@ export default function UpdateBanner({ version, notes, onDismiss }: Props) {
           </div>
           <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 500 }}>v{version}</div>
         </div>
-        <button onClick={onDismiss} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, padding: "2px 4px" }}>
-          ✕
+        <button onClick={onDismiss} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "2px 4px", display: "flex", alignItems: "center" }}>
+          <IconClose size={14} />
         </button>
       </div>
 

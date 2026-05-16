@@ -843,10 +843,12 @@ export function usePlugin({
     setEntries(prev => prev.map(e => {
       if (e._idx === undefined) return e;
       if (!selectedKeys.has(entryKey(e))) return e;
-      if (e.status !== "untranslated") return e;
       const match = fuzzyMatches.get(e._idx);
       if (!match) return e;
+      // Always dismiss the suggestion from the map (even if already translated).
+      // Only actually apply + count if the entry was untranslated.
       toRemove.push(e._idx);
+      if (e.status !== "untranslated") return e;
       applied++;
       return { ...e, translated: match.suggested, status: "validated" as EntryStatus };
     }));

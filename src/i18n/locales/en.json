@@ -218,7 +218,7 @@
     "deselect_all_title":  "Deselect all",
     "n_selected":          "{{count}} / {{total}} selected",
     "selection_hint":      "Ctrl+Click: add to selection • Shift+Click: select range • ☑: select all",
-    "fuzzy_only":          "🔍 Fuzzy"
+    "fuzzy_only":          "🔍 Suggestions"
   },
   "bulk": {
     "selected":              "{{count}} rows selected —",
@@ -235,21 +235,21 @@
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Add to my personal database (highest priority)",
     "deselect_all":          "Deselect all",
-    "apply_fuzzy":           "🔍 Apply Fuzzy",
-    "apply_fuzzy_title":     "Apply fuzzy suggestions to selected entries"
+    "apply_fuzzy":           "🔍 Apply suggestions",
+    "apply_fuzzy_title":     "Apply automatic suggestions to selected entries"
   },
   "fuzzy": {
-    "badge_title":           "Fuzzy suggestion — {{score}}% similarity · Source: {{src}}",
+    "badge_title":           "Auto suggestion — {{score}}% similarity · Source: {{src}}",
     "accept":                "Accept",
     "dismiss":               "Dismiss",
-    "scan_done":             "{{count}} fuzzy suggestion(s) found",
+    "scan_done":             "{{count}} suggestion(s) found",
     "scan_none":             "No suggestion found for this entry",
     "scan_no_sources":       "No sources available — translate some entries first",
-    "scan_running":          "Searching for fuzzy matches…",
-    "bulk_applied":          "{{count}} fuzzy translation(s) applied",
+    "scan_running":          "Searching for suggestions…",
+    "bulk_applied":          "{{count}} suggestion(s) applied",
     "origin_session":        "session",
     "origin_personal_db":    "personal DB",
-    "settings_title":        "Fuzzy Matching",
+    "settings_title":        "Auto Suggestions",
     "settings_desc":         "Searches for similar translations for untranslated entries. Useful when updating a mod where a few words have changed.",
     "auto_enabled":          "Enable automatically on plugin load",
     "threshold_jw":          "Short string threshold (≤ 60 chars) — Jaro-Winkler",

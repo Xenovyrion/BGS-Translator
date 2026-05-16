@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { FilterMode } from "../../types";
+import { IconFilter, IconSearch as IconSuggestion } from "../../icons";
 
 interface Props {
   filter:               FilterMode;
@@ -91,7 +92,7 @@ export default function FilterBar({
       {onToggleFuzzyOnly && fuzzyMatchCount > 0 && (
         <button
           onClick={onToggleFuzzyOnly}
-          title={`${fuzzyMatchCount} suggestion(s) fuzzy`}
+          title={`${fuzzyMatchCount} suggestion(s) automatique(s)`}
           style={{
             height: 26, padding: "0 10px",
             borderRadius: 5, cursor: "pointer",
@@ -105,7 +106,7 @@ export default function FilterBar({
             display: "flex", alignItems: "center", gap: 4,
           }}
         >
-          {t("filter.fuzzy_only")}
+          <IconSuggestion size={11} /> {t("filter.fuzzy_only")}
           <span style={{
             background: filterFuzzyOnly ? "rgba(255,255,255,0.3)" : "rgba(249,115,22,0.2)",
             borderRadius: 8, padding: "0 5px", fontSize: 10, fontWeight: 700,
@@ -136,9 +137,10 @@ export default function FilterBar({
           border: showColumnFilters ? "none" : "1px solid var(--border)",
           fontWeight: showColumnFilters ? 700 : 400,
           flexShrink: 0, boxSizing: "border-box",
+          display: "flex", alignItems: "center", gap: 4,
         }}
       >
-        ⊟ {t("filter.column_filters")}
+        <IconFilter size={12} /> {t("filter.column_filters")}
       </button>
     </div>
   );

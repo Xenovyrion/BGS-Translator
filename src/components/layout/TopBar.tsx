@@ -1,3 +1,5 @@
+import { IconSettings } from "../../icons";
+
 interface Props {
   pluginName:    string | null;
   onOpenPlugin:  () => void;
@@ -74,9 +76,9 @@ export default function TopBar({ pluginName, onOpenPlugin, onSettings, onSave, o
       <button
         onClick={onSettings}
         title="Paramètres"
-        style={{ padding: "4px 10px", borderRadius: 5, fontSize: 11, cursor: "pointer", background: "var(--bg-hover)", color: "var(--text-2)", border: "1px solid var(--border)" }}
+        style={{ padding: "4px 10px", borderRadius: 5, fontSize: 11, cursor: "pointer", background: "var(--bg-hover)", color: "var(--text-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 4 }}
       >
-        ⚙ Paramètres
+        <IconSettings size={12} /> Paramètres
       </button>
 
       {/* Version */}

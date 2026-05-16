@@ -5,6 +5,11 @@ import { startDrag } from "../../hooks/useLayout";
 import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch } from "../../types";
 import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
+import {
+  IconCopy, IconSearch, IconCheck, IconClose, IconReplace,
+  IconArrowUp, IconArrowDown, IconCaseSensitive, IconSpellCheck,
+  IconSettings as IconGear, IconSpinner,
+} from "../../icons";
 
 interface SpellError {
   word: string;
@@ -59,24 +64,6 @@ const TA_PAD_V  = 5;
 const TA_PAD_H  = 7;
 // Uniform height for every tool button in the panel
 const BTN_H     = 22;
-
-// ── Icons ──────────────────────────────────────────────────────────────────
-function CopyIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-      <rect x="5" y="5" width="9" height="9" rx="1.5"/>
-      <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5V9.5A1.5 1.5 0 0 0 3.5 11H5"/>
-    </svg>
-  );
-}
-function SearchIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-      <circle cx="6.5" cy="6.5" r="4.5"/>
-      <line x1="10.5" y1="10.5" x2="14" y2="14"/>
-    </svg>
-  );
-}
 
 // ── Text-segment utilities ─────────────────────────────────────────────────
 type Segment = { text: string; isTag: boolean; isMatch: boolean; isCurrent: boolean; isSpellError: boolean };
@@ -579,14 +566,14 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           })}
         </div>
         <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 8, flexShrink: 0 }}>{t("edit.hint")}</span>
-        <button onClick={onClose} title={t("edit.close_title")} style={{ marginLeft: 4, width: 20, height: 20, borderRadius: 4, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-3)", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+        <button onClick={onClose} title={t("edit.close_title")} style={{ marginLeft: 4, width: 20, height: 20, borderRadius: 4, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-3)", display: "flex", alignItems: "center", justifyContent: "center" }}><IconClose size={14} /></button>
       </div>
 
       {/* ── Find / Replace bar ────────────────────────────────────────── */}
       {findVisible && (
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", borderBottom: "1px solid var(--border)", background: "var(--bg-hover)", padding: "5px 10px", gap: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <SearchIcon />
+            <IconSearch size={12} />
             <input
               ref={findInputRef}
               value={findQuery}
@@ -595,14 +582,14 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               placeholder={t("edit.find_placeholder")}
               style={{ flex: 1, height: BTN_H, padding: "0 7px", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontSize: 12, outline: "none", boxSizing: "border-box", minWidth: 0 }}
             />
-            <ToolBtn active={findCase} onClick={() => setFindCase(c => !c)} title={t("edit.find_case")}>Aa</ToolBtn>
-            <ToolBtn onClick={() => setMatchIdx(i => i - 1)} disabled={matchCount === 0} title="Match précédent (Maj+Entrée)">↑</ToolBtn>
-            <ToolBtn onClick={() => setMatchIdx(i => i + 1)} disabled={matchCount === 0} title="Match suivant (Entrée)">↓</ToolBtn>
+            <ToolBtn active={findCase} onClick={() => setFindCase(c => !c)} title={t("edit.find_case")}><IconCaseSensitive /></ToolBtn>
+            <ToolBtn onClick={() => setMatchIdx(i => i - 1)} disabled={matchCount === 0} title="Match précédent (Maj+Entrée)"><IconArrowUp size={11} /></ToolBtn>
+            <ToolBtn onClick={() => setMatchIdx(i => i + 1)} disabled={matchCount === 0} title="Match suivant (Entrée)"><IconArrowDown size={11} /></ToolBtn>
             <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, minWidth: 52, textAlign: "right" }}>
               {findQuery ? (matchCount === 0 ? t("edit.find_no_result") : `${clampedIdx + 1} / ${matchCount}`) : ""}
             </span>
-            <ToolBtn onClick={() => setReplaceVisible(r => !r)} active={replaceVisible} title={t("edit.toggle_replace") + " (Ctrl+H)"} style={{ marginLeft: 4 }}>⇄</ToolBtn>
-            <ToolBtn onClick={closeFind} title="Fermer (Échap)">×</ToolBtn>
+            <ToolBtn onClick={() => setReplaceVisible(r => !r)} active={replaceVisible} title={t("edit.toggle_replace") + " (Ctrl+H)"} style={{ marginLeft: 4 }}><IconReplace size={12} /></ToolBtn>
+            <ToolBtn onClick={closeFind} title="Fermer (Échap)"><IconClose size={12} /></ToolBtn>
           </div>
           {replaceVisible && (
             <div style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: 18 }}>
@@ -639,8 +626,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             background: `${fuzzyScoreColor(fuzzyMatch.score)}22`,
             border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}55`,
             borderRadius: 4, padding: "1px 5px",
+            display: "flex", alignItems: "center", gap: 3,
           }}>
-            🔍 {fuzzyScoreLabel(fuzzyMatch.score)}
+            <IconSearch size={10} /> {fuzzyScoreLabel(fuzzyMatch.score)}
           </span>
 
           {/* Suggestion text */}
@@ -669,10 +657,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               borderRadius: 4, border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}`,
               cursor: "pointer", fontSize: 11, fontWeight: 600,
               background: fuzzyScoreColor(fuzzyMatch.score), color: "#fff",
-              boxSizing: "border-box",
+              boxSizing: "border-box", display: "flex", alignItems: "center", gap: 4,
             }}
           >
-            ✓ {t("fuzzy.accept")}
+            <IconCheck size={12} /> {t("fuzzy.accept")}
           </button>
 
           {/* Dismiss */}
@@ -683,10 +671,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               borderRadius: 4, border: "1px solid var(--border)",
               cursor: "pointer", fontSize: 11,
               background: "transparent", color: "var(--text-3)",
-              boxSizing: "border-box",
+              boxSizing: "border-box", display: "flex", alignItems: "center", gap: 4,
             }}
           >
-            × {t("fuzzy.dismiss")}
+            <IconClose size={12} /> {t("fuzzy.dismiss")}
           </button>
         </div>
       )}
@@ -702,7 +690,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             <span style={metaStyle}>{fmtN(entry.original.length)} {t("edit.chars")}</span>
             {origMulti && <><span style={dotStyle}>·</span><span style={metaStyle}>{fmtN(origLines.length)} {t("edit.lines")}</span></>}
             <ToolBtn style={{ marginLeft: "auto" }} onClick={() => copyText(entry.original, "original")} title={t("edit.copy_original")}>
-              {copiedSide === "original" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><CopyIcon />{t("edit.copy")}</>}
+              {copiedSide === "original" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
             </ToolBtn>
           </div>
           <div style={{ flex: 1 }}>
@@ -748,7 +736,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 title={t("fuzzy.badge_title", { score: fuzzyMatch ? Math.round(fuzzyMatch.score * 100) : 0, src: fuzzyMatch?.origin ?? "" })}
                 style={fuzzyMatch ? { color: fuzzyScoreColor(fuzzyMatch.score), borderColor: fuzzyScoreColor(fuzzyMatch.score) } : undefined}
               >
-                🔍{fuzzyScanning ? "…" : (fuzzyMatch ? ` ${fuzzyScoreLabel(fuzzyMatch.score)}` : "")}
+                {fuzzyScanning ? <IconSpinner size={11} /> : <IconSearch size={12} />}
+                {!fuzzyScanning && fuzzyMatch && ` ${fuzzyScoreLabel(fuzzyMatch.score)}`}
               </ToolBtn>
             )}
 
@@ -762,8 +751,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                   style={{ background: deeplLoading ? undefined : "var(--bg-primary)" }}
                 >
                   {deeplLoading
-                    ? <span style={{ fontSize: 11 }}>…</span>
-                    : <><span style={{ fontSize: 13, lineHeight: 1 }}>⇄</span><span style={{ fontSize: 10, fontWeight: 600 }}>DeepL</span></>
+                    ? <IconSpinner size={11} />
+                    : <><IconReplace size={13} /><span style={{ fontSize: 10, fontWeight: 600 }}>DeepL</span></>
                   }
                 </ToolBtn>
                 {deeplError && (
@@ -788,14 +777,16 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 active={spellErrors.length > 0}
                 title={t("spellcheck.btn_check")}
               >
-                {spellChecking ? "…" : `✓ ${spellErrors.length > 0 ? spellErrors.length : ""}`}
-                {!spellChecking && <span style={{ marginLeft: 2, fontSize: 10 }}>abc</span>}
+                {spellChecking
+                ? <IconSpinner size={11} />
+                : <><IconCheck size={11} />{spellErrors.length > 0 && <span style={{ fontSize: 10 }}>{spellErrors.length}</span>}</>}
+                {!spellChecking && <IconSpellCheck />}
               </ToolBtn>
             )}
 
             {/* Tools dropdown */}
             <div ref={opsRef} style={{ position: "relative" }}>
-              <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}>⚙ {t("edit.ops_btn")}</ToolBtn>
+              <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}><IconGear size={12} /> {t("edit.ops_btn")}</ToolBtn>
               {opsOpen && (
                 <div role="menu" style={{ position: "absolute", top: `calc(100% + 3px)`, right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 240, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
                   {([ ["trim","op_trim"],["upper","op_upper"],["lower","op_lower"],["strip-tags","op_strip_tags"] ] as [string, string][]).map(([op, i18Key]) => {
@@ -826,7 +817,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               )}
             </div>
             <ToolBtn onClick={() => copyText(entry.translated ?? "", "translation")} title={t("edit.copy_translation")}>
-              {copiedSide === "translation" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><CopyIcon />{t("edit.copy")}</>}
+              {copiedSide === "translation" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
             </ToolBtn>
           </div>
 

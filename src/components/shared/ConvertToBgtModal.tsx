@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
+import { IconClose } from "../../icons";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -186,8 +187,8 @@ export default function ConvertToBgtModal({ defaultOutputDir, onClose, onConvert
         </span>
         <button
           onClick={onClose}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 15, lineHeight: 1, padding: "0 2px" }}
-        >✕</button>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "0 2px", display: "flex", alignItems: "center" }}
+        ><IconClose size={15} /></button>
       </div>
 
       {/* ── Body ── */}

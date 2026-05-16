@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { View } from "../../types";
+import { IconHome, IconSession, IconSettings } from "../../icons";
+import type { ReactNode } from "react";
 
 interface Props {
   currentView:   View;
@@ -10,10 +12,10 @@ interface Props {
 export default function Sidebar({ currentView, pluginName, onViewChange }: Props) {
   const { t } = useTranslation();
 
-  const items: Array<{ view: View; icon: string; label: string; disabled?: boolean }> = [
-    { view: "home",        icon: "⌂",  label: "Accueil" },
-    { view: "translation", icon: "⌨",  label: t("nav.translation"), disabled: !pluginName },
-    { view: "settings",    icon: "⚙",  label: t("nav.settings") },
+  const items: Array<{ view: View; icon: ReactNode; label: string; disabled?: boolean }> = [
+    { view: "home",        icon: <IconHome size={16} />,     label: "Accueil" },
+    { view: "translation", icon: <IconSession size={16} />,  label: t("nav.translation"), disabled: !pluginName },
+    { view: "settings",    icon: <IconSettings size={16} />, label: t("nav.settings") },
   ];
 
   return (
@@ -54,7 +56,7 @@ export default function Sidebar({ currentView, pluginName, onViewChange }: Props
               textAlign: "left",
             }}
           >
-            <span style={{ fontSize: 14, opacity: disabled ? 0.4 : 1 }}>{icon}</span>
+            <span style={{ opacity: disabled ? 0.4 : 1, display: "flex", alignItems: "center" }}>{icon}</span>
             {label}
           </button>
         ))}

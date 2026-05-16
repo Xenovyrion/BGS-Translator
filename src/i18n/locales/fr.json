@@ -218,7 +218,7 @@
     "deselect_all_title":  "Désélectionner tout",
     "n_selected":          "{{count}} / {{total}} sélectionnées",
     "selection_hint":      "Ctrl+Clic : ajouter à la sélection • Shift+Clic : sélectionner une plage • ☑ : tout sélectionner",
-    "fuzzy_only":          "🔍 Fuzzy"
+    "fuzzy_only":          "🔍 Suggestions"
   },
   "bulk": {
     "selected":              "{{count}} lignes sélectionnées —",
@@ -235,21 +235,21 @@
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Ajouter à ma base de données personnelle (prioritaire)",
     "deselect_all":          "Désélectionner tout",
-    "apply_fuzzy":           "🔍 Appliquer Fuzzy",
-    "apply_fuzzy_title":     "Appliquer les suggestions fuzzy sur les entrées sélectionnées"
+    "apply_fuzzy":           "🔍 Appliquer les suggestions",
+    "apply_fuzzy_title":     "Appliquer les suggestions automatiques sur les entrées sélectionnées"
   },
   "fuzzy": {
-    "badge_title":           "Suggestion fuzzy — similarité {{score}}% · Source : {{src}}",
+    "badge_title":           "Suggestion automatique — similarité {{score}}% · Source : {{src}}",
     "accept":                "Accepter",
     "dismiss":               "Ignorer",
-    "scan_done":             "{{count}} suggestion(s) fuzzy trouvée(s)",
+    "scan_done":             "{{count}} suggestion(s) trouvée(s)",
     "scan_none":             "Aucune suggestion trouvée pour cette entrée",
     "scan_no_sources":       "Aucune source disponible — traduisez d'abord quelques entrées",
-    "scan_running":          "Recherche de correspondances fuzzy…",
-    "bulk_applied":          "{{count}} traduction(s) fuzzy appliquée(s)",
+    "scan_running":          "Recherche de suggestions…",
+    "bulk_applied":          "{{count}} suggestion(s) appliquée(s)",
     "origin_session":        "session",
     "origin_personal_db":    "BDD personnelle",
-    "settings_title":        "Matching Fuzzy",
+    "settings_title":        "Suggestions automatiques",
     "settings_desc":         "Recherche des traductions similaires pour les entrées non traduites. Utile lors d'une mise à jour de mod où quelques mots ont changé.",
     "auto_enabled":          "Activer automatiquement au chargement du plugin",
     "threshold_jw":          "Seuil strings courtes (≤ 60 car.) — Jaro-Winkler",

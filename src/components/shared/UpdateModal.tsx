@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { IconClose } from "../../icons";
 
 interface Props {
   version: string;
@@ -61,8 +62,8 @@ export default function UpdateModal({ version, notes, onClose }: Props) {
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, padding: "2px 4px", lineHeight: 1, borderRadius: 4 }}>
-            ✕
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "2px 4px", borderRadius: 4, display: "flex", alignItems: "center" }}>
+            <IconClose size={18} />
           </button>
         </div>
 

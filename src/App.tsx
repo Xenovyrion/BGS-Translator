@@ -14,6 +14,7 @@ import { DEFAULT_SHORTCUTS, formatShortcut } from "./types";
 import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
+import { IconSetContext } from "./icons";
 
 import MenuBar          from "./components/layout/MenuBar";
 import ConvertToBgtModal from "./components/shared/ConvertToBgtModal";
@@ -749,6 +750,7 @@ export default function App() {
   /* ── Render ──────────────────────────────────────────────────────────────── */
 
   return (
+    <IconSetContext.Provider value={activeIconSet}>
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--bg-primary)", overflow: "hidden", fontFamily: "var(--font-ui, system-ui, sans-serif)" }}>
 
       {/* ── Menu bar ──────────────────────────────────────────────────────── */}
@@ -1003,5 +1005,6 @@ export default function App() {
         />
       )}
     </div>
+    </IconSetContext.Provider>
   );
 }

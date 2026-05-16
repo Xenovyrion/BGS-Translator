@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { IconClose } from "../../icons";
 
 export type NotifType = "success" | "error";
 
@@ -63,9 +64,10 @@ export function NotificationBanner({ notification, onDismiss }: Props) {
           style={{
             marginLeft: "auto", flexShrink: 0,
             background: "none", border: "none",
-            cursor: "pointer", color: "var(--text-3)", fontSize: 14, lineHeight: 1,
+            cursor: "pointer", color: "var(--text-3)",
+            display: "flex", alignItems: "center",
           }}
-        >×</button>
+        ><IconClose size={14} /></button>
       </div>
 
       {/* Timer bar — shrinks from right toward left */}
