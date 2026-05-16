@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type StoredProviderConfig } from "../types";
 
 export interface DefaultDbEntry {
   path:    string;
@@ -36,9 +36,12 @@ export interface AppSettings {
   spellLang:      string;   // active dictionary lang code; "" = disabled
   spellRealtime:  boolean;  // check while typing
   spellDebounce:  number;   // debounce delay in ms for real-time mode
-  // DeepL auto-translation
-  deeplApiKey:    string;   // DeepL API key (free keys end with :fx)
+  // DeepL auto-translation (legacy — kept for migration, use providerConfigs instead)
+  deeplApiKey:    string;
   deeplApiType:   string;   // "free" | "pro"
+  // Translation provider system
+  activeProviderId:  string;                             // ID of the active provider
+  providerConfigs:   Record<string, StoredProviderConfig>; // per-provider config
   // Personal DB
   personalDbFolder:   string;  // folder containing .bgtx files (empty = default personal_dbs/)
   activePersonalDbPath: string; // path of the active personal DB (empty = none)
@@ -74,6 +77,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellDebounce: 600,
   deeplApiKey:   "",
   deeplApiType:  "free",
+  activeProviderId:  "deepl",
+  providerConfigs:   {},
   personalDbFolder:     "",
   activePersonalDbPath: "",
   personalDbAutoApply:  true,
@@ -86,9 +91,19 @@ export function useSettings() {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
+        // Migrate legacy deeplApiKey/deeplApiType into providerConfigs.deepl
+        const providerConfigs: Record<string, StoredProviderConfig> = { ...(parsed.providerConfigs ?? {}) };
+        if (!providerConfigs.deepl?.apiKey && parsed.deeplApiKey) {
+          providerConfigs.deepl = {
+            ...providerConfigs.deepl,
+            apiKey:  parsed.deeplApiKey,
+            variant: parsed.deeplApiType ?? "free",
+          };
+        }
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          providerConfigs,
           // Merge nested objects so new keys added in later versions always have a default
           shortcuts:     { ...DEFAULT_SHORTCUTS,       ...(parsed.shortcuts      ?? {}) },
           editShortcuts: { ...DEFAULT_EDIT_SHORTCUTS,  ...(parsed.editShortcuts  ?? {}) },

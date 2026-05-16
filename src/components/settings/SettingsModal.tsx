@@ -7,7 +7,7 @@ import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
-import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
+import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig } from "../../types";
 import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS } from "../../types";
 import {
   IconSettings, IconClose, IconFolder,
@@ -1411,109 +1411,141 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
 function ApiTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [providers,        setProviders]        = useState<ProviderMeta[]>([]);
+  const [selectedId,       setSelectedId]       = useState<string>(settings.activeProviderId ?? "deepl");
+  const [showKey,          setShowKey]          = useState(false);
+
+  useEffect(() => {
+    invoke<ProviderMeta[]>("get_providers_cmd").then(setProviders).catch(() => {});
+  }, []);
+
+  const activeId  = settings.activeProviderId ?? "deepl";
+  const cfg       = (settings.providerConfigs ?? {})[selectedId] ?? {};
+
+  function updateCfg(patch: Partial<StoredProviderConfig>) {
+    onUpdate({
+      providerConfigs: {
+        ...(settings.providerConfigs ?? {}),
+        [selectedId]: { ...cfg, ...patch },
+      },
+    });
+  }
+
+  function activate(id: string) {
+    setSelectedId(id);
+    onUpdate({ activeProviderId: id });
+  }
+
+  const groups: Array<{ key: string; ids: string[] }> = [
+    { key: "group_official", ids: ["deepl", "microsoft"] },
+    { key: "group_free",     ids: ["libretranslate", "mymemory"] },
+    { key: "group_browser",  ids: ["launcher_deepl", "launcher_google", "launcher_bing"] },
+    { key: "group_custom",   ids: ["custom"] },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
 
-      {/* ══ APIs ════════════════════════════════════════════════════════════ */}
-      <SubGroup first label="APIs">
-
-      {/* DeepL */}
-      <Section first label={t("deepl.section_title")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.5 }}>
-          {t("deepl.section_desc")}{" "}
-          <a
-            href="https://www.deepl.com/pro#developer"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "var(--accent)", textDecoration: "underline" }}
-          >
-            deepl.com
-          </a>
+      {/* ══ Provider selector ═══════════════════════════════════════════════ */}
+      <SubGroup first label={t("providers.section_title")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+          {t("providers.section_desc")}
         </p>
 
-        {/* Account type */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: "var(--text-2)", width: 110, flexShrink: 0 }}>
-            {t("deepl.api_type_label")}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <PillBtn label={t("deepl.api_type_free")} active={(settings.deeplApiType ?? "free") !== "pro"} onClick={() => onUpdate({ deeplApiType: "free" })} />
-            <PillBtn label={t("deepl.api_type_pro")}  active={(settings.deeplApiType ?? "free") === "pro"} onClick={() => onUpdate({ deeplApiType: "pro"  })} />
-          </div>
-        </div>
+        {groups.map(group => {
+          const groupProviders = group.ids
+            .map(id => providers.find(p => p.id === id))
+            .filter(Boolean) as ProviderMeta[];
+          if (!groupProviders.length) return null;
+          return (
+            <div key={group.key} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                {t(`providers.${group.key}`)}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {groupProviders.map(p => {
+                  const isActive   = p.id === activeId;
+                  const isSelected = p.id === selectedId;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => { setSelectedId(p.id); setShowKey(false); }}
+                      style={{
+                        height: 30, padding: "0 12px",
+                        borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                        background: isSelected ? "var(--accent)" : "var(--bg-hover)",
+                        color: isSelected ? "#fff" : "var(--text-2)",
+                        border: isSelected
+                          ? "1px solid var(--accent)"
+                          : isActive
+                          ? "1px solid #22c55e"
+                          : "1px solid var(--border)",
+                        display: "flex", alignItems: "center", gap: 6,
+                        transition: "all 0.12s",
+                      }}
+                    >
+                      {p.name}
+                      {isActive && !isSelected && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "#22c55e", textTransform: "uppercase" }}>
+                          {t("providers.active_badge")}
+                        </span>
+                      )}
+                      {isActive && isSelected && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase" }}>
+                          {t("providers.active_badge")}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
 
-        {/* API key */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 12, color: "var(--text-2)", width: 110, flexShrink: 0 }}>
-            {t("deepl.api_key_label")}
-          </span>
-          <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center" }}>
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={settings.deeplApiKey ?? ""}
-              onChange={e => {
-                const val = e.target.value;
-                const newType = val.trim().endsWith(":fx") ? "free" : (settings.deeplApiType ?? "free");
-                onUpdate({ deeplApiKey: val, deeplApiType: newType });
-              }}
-              placeholder={t("deepl.api_key_placeholder")}
-              spellCheck={false}
-              style={{
-                flex: 1, height: 32, padding: "0 10px", borderRadius: 7, fontSize: 12,
-                background: "var(--bg-hover)", color: "var(--text-1)",
-                border: "1px solid var(--border)", outline: "none",
-                fontFamily: "monospace", boxSizing: "border-box",
-              }}
-            />
-            <button
-              onClick={() => setShowApiKey(v => !v)}
-              title={showApiKey ? t("deepl.hide_key") : t("deepl.show_key")}
-              style={iconBtn()}
-            >
-              {showApiKey ? "🙈" : "👁"}
-            </button>
-            {settings.deeplApiKey && (
-              <button
-                onClick={() => onUpdate({ deeplApiKey: "" })}
-                title={t("deepl.clear_key")}
-                style={{ ...iconBtn(), color: "#ef4444", borderColor: "#ef4444" }}
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
-        {(settings.deeplApiType ?? "free") === "free" && (
-          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, lineHeight: 1.4 }}>
-            ℹ {t("deepl.free_hint")}
-          </p>
-        )}
-        {settings.deeplApiKey && (
+        {/* ── Config panel for selected provider ── */}
+        {providers.length > 0 && (
           <div style={{
-            marginTop: 10, padding: "6px 10px", borderRadius: 6,
-            background: "var(--bg-hover)", border: "1px solid var(--border)",
-            fontSize: 11, color: "var(--text-2)", display: "flex", alignItems: "center", gap: 6,
+            marginTop: 12,
+            padding: "14px 16px",
+            borderRadius: 8,
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
           }}>
-            <span style={{ color: "#22c55e" }}>✓</span>
-            {t("deepl.key_configured")}
-            <span style={{ marginLeft: "auto", fontFamily: "monospace", color: "var(--text-3)" }}>
-              {(settings.deeplApiType ?? "free") === "pro" ? "Pro" : "Free"}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)" }}>
+                {providers.find(p => p.id === selectedId)?.name ?? selectedId}
+              </span>
+              {selectedId !== activeId && (
+                <button
+                  onClick={() => activate(selectedId)}
+                  style={{
+                    height: 24, padding: "0 10px", borderRadius: 5, cursor: "pointer",
+                    fontSize: 10, fontWeight: 700, background: "#22c55e", color: "#fff",
+                    border: "none", marginLeft: "auto",
+                  }}
+                >
+                  {t("providers.activate_btn")}
+                </button>
+              )}
+              {selectedId === activeId && (
+                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "#22c55e" }}>
+                  ✓ {t("providers.active_badge")}
+                </span>
+              )}
+            </div>
+
+            <ProviderConfigPanel
+              providerId={selectedId}
+              meta={providers.find(p => p.id === selectedId)}
+              cfg={cfg}
+              showKey={showKey}
+              onShowKey={setShowKey}
+              onUpdate={updateCfg}
+            />
           </div>
         )}
-      </Section>
-
-      </SubGroup>{/* /APIs */}
-
-      {/* ══ IA ══════════════════════════════════════════════════════════════ */}
-      <SubGroup label="IA">
-        <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
-          — Options IA à venir (résumé, reformulation, suggestions contextuelles…)
-        </p>
-      </SubGroup>{/* /IA */}
+      </SubGroup>
 
       {/* ══ Autres réglages ═════════════════════════════════════════════════ */}
       <SubGroup label={t("settings_modal.tab_auto_other")}>
@@ -1590,6 +1622,156 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 
       </SubGroup>{/* /Autres réglages */}
 
+    </div>
+  );
+}
+
+// ── Provider config panel (shown inside ApiTab) ───────────────────────────────
+
+function ProviderConfigPanel({
+  providerId, meta, cfg, showKey, onShowKey, onUpdate,
+}: {
+  providerId: string;
+  meta:       ProviderMeta | undefined;
+  cfg:        StoredProviderConfig;
+  showKey:    boolean;
+  onShowKey:  (v: boolean) => void;
+  onUpdate:   (patch: Partial<StoredProviderConfig>) => void;
+}) {
+  const { t } = useTranslation();
+  if (!meta) return null;
+
+  // Browser launcher — no config needed
+  if (meta.is_launcher) {
+    return (
+      <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
+        {t("providers.launcher_info")}
+      </p>
+    );
+  }
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, height: 30, padding: "0 10px", borderRadius: 6, fontSize: 11,
+    background: "var(--bg-hover)", color: "var(--text-1)",
+    border: "1px solid var(--border)", outline: "none",
+    fontFamily: "monospace", boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, color: "var(--text-3)", width: 100, flexShrink: 0,
+  };
+
+  const row = (label: string, child: React.ReactNode) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <span style={labelStyle}>{label}</span>
+      {child}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* DeepL: variant (free/pro) */}
+      {providerId === "deepl" && row(
+        t("providers.variant_label"),
+        <div style={{ display: "flex", gap: 6 }}>
+          <PillBtn label={t("deepl.api_type_free")} active={(cfg.variant ?? "free") !== "pro"} onClick={() => onUpdate({ variant: "free" })} />
+          <PillBtn label={t("deepl.api_type_pro")}  active={(cfg.variant ?? "free") === "pro"}  onClick={() => onUpdate({ variant: "pro"  })} />
+        </div>,
+      )}
+
+      {/* Microsoft: region (optional) */}
+      {providerId === "microsoft" && row(
+        t("providers.region_label"),
+        <input
+          style={inputStyle}
+          value={cfg.variant ?? ""}
+          onChange={e => onUpdate({ variant: e.target.value })}
+          placeholder={t("providers.region_hint_ms")}
+          spellCheck={false}
+        />,
+      )}
+
+      {/* LibreTranslate: custom endpoint */}
+      {providerId === "libretranslate" && row(
+        t("providers.endpoint_label"),
+        <input
+          style={inputStyle}
+          value={cfg.endpoint ?? ""}
+          onChange={e => onUpdate({ endpoint: e.target.value })}
+          placeholder={t("providers.endpoint_hint_libre")}
+          spellCheck={false}
+        />,
+      )}
+
+      {/* Custom provider fields */}
+      {providerId === "custom" && (
+        <>
+          {row(t("providers.endpoint_label"),
+            <input style={inputStyle} value={cfg.endpoint ?? ""} onChange={e => onUpdate({ endpoint: e.target.value })} placeholder="https://api.example.com/translate" spellCheck={false} />,
+          )}
+          {row(t("providers.auth_header_label"),
+            <input style={inputStyle} value={cfg.authHeader ?? ""} onChange={e => onUpdate({ authHeader: e.target.value })} placeholder={t("providers.custom_auth_hint")} spellCheck={false} />,
+          )}
+          {row(t("providers.request_template_label"),
+            <input style={inputStyle} value={cfg.requestTemplate ?? ""} onChange={e => onUpdate({ requestTemplate: e.target.value })} placeholder={t("providers.custom_template_hint")} spellCheck={false} />,
+          )}
+          {row(t("providers.response_path_label"),
+            <input style={inputStyle} value={cfg.responsePath ?? ""} onChange={e => onUpdate({ responsePath: e.target.value })} placeholder={t("providers.custom_path_hint")} spellCheck={false} />,
+          )}
+        </>
+      )}
+
+      {/* API Key field — shown for all non-launcher providers */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={labelStyle}>{t("providers.api_key_label")}</span>
+        <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type={showKey ? "text" : "password"}
+            value={cfg.apiKey ?? ""}
+            onChange={e => {
+              const val = e.target.value;
+              // Auto-detect DeepL free key
+              const patch: Partial<StoredProviderConfig> = { apiKey: val };
+              if (providerId === "deepl" && val.trim().endsWith(":fx")) patch.variant = "free";
+              onUpdate(patch);
+            }}
+            placeholder={providerId === "deepl" ? t("deepl.api_key_placeholder") : ""}
+            spellCheck={false}
+            style={inputStyle}
+          />
+          <button onClick={() => onShowKey(!showKey)} title={showKey ? t("providers.hide_key") : t("providers.show_key")} style={iconBtn()}>
+            {showKey ? "🙈" : "👁"}
+          </button>
+          {cfg.apiKey && (
+            <button onClick={() => onUpdate({ apiKey: "" })} title={t("providers.clear_key")} style={{ ...iconBtn(), color: "#ef4444", borderColor: "#ef4444" }}>
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!meta.requires_key && (
+        <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4, lineHeight: 1.4 }}>
+          ℹ {t("providers.optional_key")}
+        </p>
+      )}
+
+      {/* Key configured badge */}
+      {cfg.apiKey && (
+        <div style={{
+          marginTop: 8, padding: "5px 10px", borderRadius: 6,
+          background: "var(--bg-hover)", border: "1px solid var(--border)",
+          fontSize: 11, color: "var(--text-2)", display: "flex", alignItems: "center", gap: 6,
+        }}>
+          <span style={{ color: "#22c55e" }}>✓</span>
+          {t("providers.key_configured")}
+          {providerId === "deepl" && (
+            <span style={{ marginLeft: "auto", fontFamily: "monospace", color: "var(--text-3)" }}>
+              {(cfg.variant ?? "free") === "pro" ? "Pro" : "Free"}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ pub mod deepl;
 pub mod formats;
 pub mod fuzzy;
 pub mod parser;
+pub mod providers;
 pub mod spellcheck;
 pub mod translation;
 pub mod updater;
@@ -85,6 +86,10 @@ pub fn run() {
             spellcheck::commands::get_suggestions_cmd,
             deepl::commands::translate_deepl_cmd,
             deepl::commands::translate_deepl_batch_cmd,
+            providers::commands::get_providers_cmd,
+            providers::commands::translate_one_cmd,
+            providers::commands::translate_batch_cmd,
+            providers::commands::open_browser_translator_cmd,
             compare::commands::check_plugin_diff_cmd,
             compare::commands::compute_plugin_diff_cmd,
             fuzzy::commands::get_fuzzy_matches_cmd,

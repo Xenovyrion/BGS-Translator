@@ -265,6 +265,35 @@ export function fuzzyScoreLabel(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
+// ── Translation providers ─────────────────────────────────────────────────────
+
+export type ProviderKind = "official_api" | "free_api" | "browser_launcher" | "custom";
+
+/** Metadata about a built-in provider (received from Rust via get_providers_cmd). */
+export interface ProviderMeta {
+  id:             string;
+  name:           string;
+  kind:           ProviderKind;
+  requires_key:   boolean;
+  supports_batch: boolean;
+  is_launcher:    boolean;
+}
+
+/** Per-provider config stored in localStorage (camelCase, sent as-is to Rust). */
+export interface StoredProviderConfig {
+  apiKey?:          string;
+  variant?:         string;   // deepl: "free"/"pro" | microsoft: region code
+  endpoint?:        string;   // libretranslate self-hosted, custom URL
+  authHeader?:      string;   // custom: "Authorization: Bearer {api_key}"
+  requestTemplate?: string;   // custom: JSON body template
+  responsePath?:    string;   // custom: "translations[0].text"
+}
+
+/** Full provider config sent to Rust — extends StoredProviderConfig with id. */
+export interface ProviderConfig extends StoredProviderConfig {
+  id: string;
+}
+
 /** Returns true when a keyboard event matches a ShortcutDef. */
 export function matchShortcut(
   e: { key: string; ctrlKey: boolean; metaKey?: boolean; altKey: boolean; shiftKey: boolean },

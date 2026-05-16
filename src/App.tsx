@@ -11,7 +11,7 @@ import { usePlugin } from "./hooks/usePlugin";
 import { usePersonalDb } from "./hooks/usePersonalDb";
 import { useLayout } from "./hooks/useLayout";
 import { DEFAULT_SHORTCUTS, formatShortcut } from "./types";
-import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem } from "./types";
+import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem, ProviderMeta, ProviderConfig } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
 import { IconSetContext } from "./icons";
@@ -161,7 +161,8 @@ export default function App() {
   const [showCompare,        setShowCompare]        = useState(false);
   const [compareSessions,    setCompareSessions]    = useState<SessionListItem[]>([]);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
-  const [deeplBatchLoading,  setDeeplBatchLoading]  = useState(false);
+  const [translateBatchLoading, setTranslateBatchLoading] = useState(false);
+  const [providerMetas,      setProviderMetas]      = useState<ProviderMeta[]>([]);
 
   const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
     setNotification({ message, type, detail, key: Date.now(), duration });
@@ -183,6 +184,11 @@ export default function App() {
       document.removeEventListener("contextmenu", noCtxMenu);
       window.removeEventListener("keydown", noFind, { capture: true });
     };
+  }, []);
+
+  /* Load provider catalog on startup */
+  useEffect(() => {
+    invoke<ProviderMeta[]>("get_providers_cmd").then(setProviderMetas).catch(() => {});
   }, []);
 
   /* App version + update check on startup */
@@ -693,16 +699,24 @@ export default function App() {
     clearSelection();
   }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t, clearSelection]);
 
-  const handleDeeplBatch = useCallback(async () => {
-    if (!settings.deeplApiKey || deeplBatchLoading) return;
+  // Build the active provider config from settings
+  const activeProviderMeta = providerMetas.find(p => p.id === (settings.activeProviderId ?? "deepl"));
+  const activeProviderConfig: ProviderConfig | undefined =
+    settings.activeProviderId
+      ? { id: settings.activeProviderId, ...(settings.providerConfigs?.[settings.activeProviderId] ?? {}) }
+      : undefined;
+
+  const handleTranslateBatch = useCallback(async () => {
+    if (!activeProviderConfig || translateBatchLoading) return;
+    if (activeProviderMeta?.is_launcher) return; // launchers don't support batch
     const selected = entries.filter(e => selectedKeys.has(String(e._idx)));
     if (selected.length === 0) return;
-    setDeeplBatchLoading(true);
+    setTranslateBatchLoading(true);
     try {
-      const results = await invoke<string[]>("translate_deepl_batch_cmd", {
-        apiKey:     settings.deeplApiKey,
-        apiType:    settings.deeplApiType ?? "free",
+      const results = await invoke<string[]>("translate_batch_cmd", {
+        config:     activeProviderConfig,
         texts:      selected.map(e => e.original),
+        sourceLang: null,
         targetLang: settings.targetLanguage,
       });
       let updated = 0;
@@ -712,21 +726,29 @@ export default function App() {
           updated++;
         }
       });
-      notify(t("deepl.batch_ok", { count: updated }), "success");
+      notify(t("providers.batch_ok", { count: updated, name: activeProviderMeta?.name ?? activeProviderConfig.id }), "success");
       clearSelection();
     } catch (e) {
       const msg = String(e);
       const label =
-        msg === "deepl_invalid_key"       ? t("deepl.error_invalid_key")       :
-        msg === "deepl_quota_exceeded"    ? t("deepl.error_quota")             :
-        msg === "deepl_no_api_key"        ? t("deepl.error_no_api_key")        :
-        msg === "deepl_too_many_requests" ? t("deepl.error_too_many_requests") :
+        msg === "deepl_invalid_key"            ? t("deepl.error_invalid_key")              :
+        msg === "deepl_quota_exceeded"         ? t("deepl.error_quota")                    :
+        msg === "deepl_no_api_key"             ? t("deepl.error_no_api_key")               :
+        msg === "deepl_too_many_requests"      ? t("deepl.error_too_many_requests")        :
+        msg === "microsoft_no_api_key"         ? t("providers.error_microsoft_no_key")     :
+        msg === "microsoft_invalid_key"        ? t("providers.error_microsoft_invalid_key"):
+        msg === "microsoft_quota_exceeded"     ? t("providers.error_microsoft_quota")      :
+        msg === "microsoft_too_many_requests"  ? t("providers.error_microsoft_rate")       :
+        msg === "libretranslate_forbidden"     ? t("providers.error_libretranslate_forbidden") :
+        msg === "libretranslate_too_many_requests" ? t("providers.error_libretranslate_rate") :
+        msg === "libretranslate_server_error"  ? t("providers.error_libretranslate_server"):
+        msg === "mymemory_quota_exceeded"      ? t("providers.error_mymemory_quota")       :
         msg;
       notify(label, "error");
     } finally {
-      setDeeplBatchLoading(false);
+      setTranslateBatchLoading(false);
     }
-  }, [settings, entries, selectedKeys, updateTranslation, notify, t, deeplBatchLoading, clearSelection]);
+  }, [activeProviderConfig, activeProviderMeta, translateBatchLoading, entries, selectedKeys, updateTranslation, notify, t, clearSelection, settings.targetLanguage]);
 
   /* ── Global shortcuts (Ctrl+O, Ctrl+S, etc.) ────────────────────────────── */
   useEffect(() => {
@@ -835,8 +857,8 @@ export default function App() {
           personalDbName={personalDbInfoLoaded?.name ?? undefined}
           onClear={clearSelection}
           onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
-          onDeeplBatch={settings.deeplApiKey ? handleDeeplBatch : undefined}
-          deeplBatchLoading={deeplBatchLoading}
+          onDeeplBatch={activeProviderConfig && !activeProviderMeta?.is_launcher ? handleTranslateBatch : undefined}
+          deeplBatchLoading={translateBatchLoading}
           onApplyFuzzy={pluginInfo ? handleApplyFuzzySelection : undefined}
           fuzzyMatchCount={fuzzyMatchCount}
         />
@@ -890,9 +912,10 @@ export default function App() {
                 spellLang={settings.spellLang || undefined}
                 spellRealtime={settings.spellRealtime}
                 spellDebounce={settings.spellDebounce}
-                deeplApiKey={settings.deeplApiKey || undefined}
-                deeplApiType={settings.deeplApiType}
-                deeplTargetLang={settings.targetLanguage}
+                providerConfig={activeProviderConfig}
+                providerName={activeProviderMeta?.name}
+                providerIsLauncher={activeProviderMeta?.is_launcher}
+                targetLang={settings.targetLanguage}
                 onAddToPersonalDb={settings.activePersonalDbPath ? handleAddSingleToPersonalDb : undefined}
                 personalDbName={personalDbInfoLoaded?.name ?? undefined}
                 fuzzyMatch={selectedEntry._idx !== undefined ? fuzzyMatches.get(selectedEntry._idx) : undefined}

@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "../../hooks/useLayout";
-import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch } from "../../types";
+import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch, ProviderConfig } from "../../types";
 import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
 import {
@@ -41,9 +41,14 @@ interface Props {
   spellLang?:         string;
   spellRealtime?:     boolean;
   spellDebounce?:     number;
-  deeplApiKey?:       string;
-  deeplApiType?:      string;
-  deeplTargetLang?:   string;
+  /** Full provider config (id + per-provider fields) — used for translation button. */
+  providerConfig?:      ProviderConfig;
+  /** Human-readable name of the active provider (for button label). */
+  providerName?:        string;
+  /** True when the provider opens the browser instead of returning text. */
+  providerIsLauncher?:  boolean;
+  /** Target language code (e.g. "fr"). */
+  targetLang?:          string;
   onAddToPersonalDb?: () => void;    // Add single entry to personal DB
   personalDbName?:    string;        // Name of the active personal DB (for tooltip)
   /** Fuzzy suggestion for this entry (if any) */
@@ -174,7 +179,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr", onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, providerConfig, providerName, providerIsLauncher = false, targetLang = "fr", onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
   ref,
 ) {
   const { t } = useTranslation();
@@ -202,8 +207,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const [spellChecking,  setSpellChecking]  = useState(false);
   const [spellPopup,     setSpellPopup]     = useState<SpellPopup | null>(null);
   const spellPopupRef                       = useRef<HTMLDivElement>(null);
-  const [deeplLoading,   setDeeplLoading]   = useState(false);
-  const [deeplError,     setDeeplError]     = useState<string | null>(null);
+  const [translateLoading, setTranslateLoading] = useState(false);
+  const [translateError,   setTranslateError]   = useState<string | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
@@ -399,33 +404,63 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     onTranslate(entry._idx ?? 0, text);
   }, [allMatches, replaceQuery, entry.translated, entry._idx, onTranslate]);
 
-  const runDeepL = useCallback(async () => {
-    if (!deeplApiKey || !entry.original.trim()) return;
-    setDeeplLoading(true);
-    setDeeplError(null);
+  const runTranslation = useCallback(async () => {
+    if (!providerConfig || !entry.original.trim()) return;
+    setTranslateLoading(true);
+    setTranslateError(null);
     try {
-      const result = await invoke<string>("translate_deepl_cmd", {
-        apiKey:     deeplApiKey,
-        apiType:    deeplApiType,
-        text:       entry.original,
-        sourceLang: null,
-        targetLang: deeplTargetLang,
-      });
-      if (result) onTranslate(entry._idx ?? 0, result);
+      if (providerIsLauncher) {
+        // Browser launcher — open the browser with the text pre-filled
+        const result = await invoke<{ opened: boolean; text_in_url: boolean }>(
+          "open_browser_translator_cmd", {
+            service:    providerConfig.id,
+            text:       entry.original,
+            sourceLang: "auto",
+            targetLang: targetLang,
+          }
+        );
+        if (result.opened && !result.text_in_url) {
+          // Text was too long for URL — copy to clipboard and notify
+          await navigator.clipboard.writeText(entry.original).catch(() => {});
+          setTranslateError(t("providers.launcher_long_text"));
+          setTimeout(() => setTranslateError(null), 5000);
+        }
+      } else {
+        // API provider — call translate_one_cmd
+        const result = await invoke<string>("translate_one_cmd", {
+          config:     providerConfig,
+          text:       entry.original,
+          sourceLang: null,
+          targetLang: targetLang,
+        });
+        if (result) onTranslate(entry._idx ?? 0, result);
+      }
     } catch (e) {
       const msg = String(e);
       const errorKey =
-        msg === "deepl_invalid_key"      ? t("deepl.error_invalid_key")      :
-        msg === "deepl_quota_exceeded"   ? t("deepl.error_quota")            :
-        msg === "deepl_no_api_key"       ? t("deepl.error_no_api_key")       :
-        msg === "deepl_too_many_requests"? t("deepl.error_too_many_requests") :
+        msg === "deepl_invalid_key"            ? t("deepl.error_invalid_key")              :
+        msg === "deepl_quota_exceeded"         ? t("deepl.error_quota")                    :
+        msg === "deepl_no_api_key"             ? t("deepl.error_no_api_key")               :
+        msg === "deepl_too_many_requests"      ? t("deepl.error_too_many_requests")        :
+        msg === "microsoft_no_api_key"         ? t("providers.error_microsoft_no_key")     :
+        msg === "microsoft_invalid_key"        ? t("providers.error_microsoft_invalid_key"):
+        msg === "microsoft_quota_exceeded"     ? t("providers.error_microsoft_quota")      :
+        msg === "microsoft_too_many_requests"  ? t("providers.error_microsoft_rate")       :
+        msg === "libretranslate_forbidden"     ? t("providers.error_libretranslate_forbidden") :
+        msg === "libretranslate_too_many_requests" ? t("providers.error_libretranslate_rate") :
+        msg === "libretranslate_server_error"  ? t("providers.error_libretranslate_server"):
+        msg === "mymemory_quota_exceeded"      ? t("providers.error_mymemory_quota")       :
+        msg === "custom_no_endpoint"           ? t("providers.error_custom_no_endpoint")   :
+        msg === "custom_no_request_template"   ? t("providers.error_custom_no_template")   :
+        msg.startsWith("custom_invalid_request_template") ? t("providers.error_custom_invalid_template") :
+        msg.startsWith("custom_path_not_found")           ? t("providers.error_custom_path") :
         msg;
-      setDeeplError(errorKey);
-      setTimeout(() => setDeeplError(null), 4000);
+      setTranslateError(errorKey);
+      setTimeout(() => setTranslateError(null), 4000);
     } finally {
-      setDeeplLoading(false);
+      setTranslateLoading(false);
     }
-  }, [deeplApiKey, deeplApiType, deeplTargetLang, entry.original, entry._idx, onTranslate, t]);
+  }, [providerConfig, providerIsLauncher, targetLang, entry.original, entry._idx, onTranslate, t]);
 
   const runSpellCheck = useCallback(async () => {
     if (!spellLang) return;
@@ -741,21 +776,25 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               </ToolBtn>
             )}
 
-            {/* DeepL button */}
-            {deeplApiKey && (
+            {/* Translation provider button */}
+            {providerConfig && (
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <ToolBtn
-                  onClick={runDeepL}
-                  disabled={deeplLoading}
-                  title={t("deepl.btn_translate")}
-                  style={{ background: deeplLoading ? undefined : "var(--bg-primary)" }}
+                  onClick={runTranslation}
+                  disabled={translateLoading}
+                  title={providerIsLauncher
+                    ? t("providers.btn_open_browser", { name: providerName ?? providerConfig.id })
+                    : t("providers.btn_translate",    { name: providerName ?? providerConfig.id })}
+                  style={{ background: translateLoading ? undefined : "var(--bg-primary)" }}
                 >
-                  {deeplLoading
+                  {translateLoading
                     ? <IconSpinner size={11} />
-                    : <><IconReplace size={13} /><span style={{ fontSize: 10, fontWeight: 600 }}>DeepL</span></>
+                    : <><IconReplace size={13} /><span style={{ fontSize: 10, fontWeight: 600 }}>
+                        {(providerName ?? providerConfig.id).slice(0, 7)}
+                      </span></>
                   }
                 </ToolBtn>
-                {deeplError && (
+                {translateError && (
                   <div style={{
                     position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 300,
                     background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444",
@@ -763,7 +802,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                     fontSize: 11, color: "#ef4444", whiteSpace: "nowrap",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                   }}>
-                    {deeplError}
+                    {translateError}
                   </div>
                 )}
               </div>
