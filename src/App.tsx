@@ -17,6 +17,7 @@ import type { IconSetId } from "./themes";
 
 import MenuBar          from "./components/layout/MenuBar";
 import ConvertToBgtModal from "./components/shared/ConvertToBgtModal";
+import CompareModal      from "./components/compare/CompareModal";
 import GlobalFindReplaceModal from "./components/shared/GlobalFindReplaceModal";
 import ToolBar     from "./components/layout/ToolBar";
 import FilterBar   from "./components/translation/FilterBar";
@@ -151,6 +152,8 @@ export default function App() {
   const [lastAutosave,       setLastAutosave]       = useState<Date | null>(null);
   const [notification,       setNotification]       = useState<Notification | null>(null);
   const [showDbConverter,    setShowDbConverter]    = useState(false);
+  const [showCompare,        setShowCompare]        = useState(false);
+  const [compareSessions,    setCompareSessions]    = useState<SessionListItem[]>([]);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
   const [deeplBatchLoading,  setDeeplBatchLoading]  = useState(false);
 
@@ -454,6 +457,51 @@ export default function App() {
     return { entryCount: result.entry_count };
   }, [notify, t]);
 
+  // ── Compare handler ──────────────────────────────────────────────────────
+
+  const handleOpenCompare = useCallback(async () => {
+    // Pre-fetch the session list so CompareModal can auto-detect the old plugin's session
+    try {
+      const list = await invoke<SessionListItem[]>("list_sessions_cmd");
+      setCompareSessions(list);
+    } catch { setCompareSessions([]); }
+    setShowCompare(true);
+  }, []);
+
+  /** Apply a single recovered translation to the current session. */
+  const handleRecoverDiff = useCallback((
+    formId: number, subType: string, textNew: string | null, translation: string,
+  ) => {
+    if (!textNew) return;
+    const entry = entries.find(
+      e => e.form_id === formId && e.sub_type === subType && e.original === textNew,
+    );
+    if (!entry || entry._idx === undefined) return;
+    updateTranslation(entry._idx, translation);
+    setStatus(entry._idx, "pending");
+    notify(t("compare.recover_success"), "success", undefined, 3000);
+  }, [entries, updateTranslation, setStatus, notify, t]);
+
+  /** Apply all recovered translations at once (bulk) — single notification. */
+  const handleRecoverAllDiff = useCallback((
+    recoveries: Array<{ formId: number; subType: string; textNew: string | null; translation: string }>,
+  ) => {
+    let applied = 0;
+    for (const { formId, subType, textNew, translation } of recoveries) {
+      if (!textNew) continue;
+      const entry = entries.find(
+        e => e.form_id === formId && e.sub_type === subType && e.original === textNew,
+      );
+      if (!entry || entry._idx === undefined) continue;
+      updateTranslation(entry._idx, translation);
+      setStatus(entry._idx, "pending");
+      applied++;
+    }
+    if (applied > 0) {
+      notify(t("compare.recover_all_success", { count: applied }), "success", undefined, 4000);
+    }
+  }, [entries, updateTranslation, setStatus, notify, t]);
+
   const handleExport = useCallback(async () => {
     if (!pluginInfo) return;
 
@@ -710,6 +758,7 @@ export default function App() {
         onExportEtXml={pluginInfo ? handleExportEtXml : undefined}
         onExportCsv={pluginInfo   ? handleExportCsv   : undefined}
         onOpenConverter={handleOpenConverter}
+        onOpenCompare={handleOpenCompare}
         onGlobalFind={pluginInfo ? () => setShowGlobalFind(true) : undefined}
         globalFindShortcut={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
         onApplyPersonalDb={pluginInfo ? handleApplyPersonalDbAll : undefined}
@@ -892,6 +941,17 @@ export default function App() {
           defaultOutputDir={defaultDbDir}
           onClose={() => setShowDbConverter(false)}
           onConvert={handleConvertConfirm}
+        />
+      )}
+
+      {showCompare && (
+        <CompareModal
+          activePluginPath={pluginInfo?.plugin_path ?? null}
+          activePluginName={pluginInfo?.plugin_name ?? null}
+          sessions={compareSessions}
+          onClose={() => setShowCompare(false)}
+          onRecover={handleRecoverDiff}
+          onRecoverAll={handleRecoverAllDiff}
         />
       )}
 

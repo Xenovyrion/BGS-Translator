@@ -112,7 +112,7 @@ pub struct SessionListItem {
     pub saved_at:         String,  // ISO 8601
 }
 
-fn get_sessions_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_sessions_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
         .join("sessions");

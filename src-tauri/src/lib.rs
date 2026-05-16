@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod compare;
 pub mod database;
 pub mod deepl;
 pub mod formats;
@@ -83,6 +84,8 @@ pub fn run() {
             spellcheck::commands::get_suggestions_cmd,
             deepl::commands::translate_deepl_cmd,
             deepl::commands::translate_deepl_batch_cmd,
+            compare::commands::check_plugin_diff_cmd,
+            compare::commands::compute_plugin_diff_cmd,
             database::personal_commands::create_personal_db_cmd,
             database::personal_commands::scan_personal_dbs_cmd,
             database::personal_commands::peek_personal_db_cmd,

@@ -79,6 +79,10 @@ BGS-Translator/
 │   └── BDD_Starfield_EN-FR.bgt
 ├── src/                              # React/TypeScript frontend
 │   ├── components/
+│   │   ├── compare/
+│   │   │   ├── CompareModal.tsx      # Plugin diff modal (file pickers, actions, filters)
+│   │   │   ├── DiffStatsBar.tsx      # Added / removed / modified / recoverable counters
+│   │   │   └── DiffTable.tsx         # Virtualised diff table with sort + resizable columns
 │   │   ├── layout/
 │   │   │   ├── MenuBar.tsx           # Top menu bar (File, Edit, View…)
 │   │   │   ├── Sidebar.tsx           # Left sidebar (groups / database list)
@@ -148,6 +152,9 @@ BGS-Translator/
 │   │   │   ├── strings_file.rs       # .strings / .dlstrings / .ilstrings loader
 │   │   │   ├── subrecord.rs          # Subrecord iteration
 │   │   │   └── types.rs              # Translatable record/subrecord definitions
+│   │   ├── compare/
+│   │   │   ├── mod.rs                # Diff algorithm — two-phase (stats + full records)
+│   │   │   └── commands.rs           # Tauri commands: check_plugin_diff_cmd, compute_plugin_diff_cmd
 │   │   ├── spellcheck/
 │   │   │   ├── mod.rs                # FFI bindings + safe Spellchecker wrapper
 │   │   │   ├── commands.rs           # Tauri commands (list/download/delete/check/suggest)
@@ -362,6 +369,26 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - 3 icon sets: Minimal, Material, Classic
 - Record-type colour coding (customisable per type)
 - Interface language: English, French (auto-detected from system locale)
+
+### Plugin Comparison (Diff)
+- Compare any two versions of the same plugin side by side — designed for the **mod-update workflow**
+- **Two-phase diff**: quick *Check* first (stats only, near-instant) then full *Compare* (complete field-level diff)
+- **Four change kinds**: `added` · `removed` · `modified` · `unchanged` — colour-coded throughout the UI
+- **Field-level granularity**: each record expands to reveal individual subfield changes (FULL, DESC, NAM1, etc.)
+- **Translation recovery**: when comparing a plugin you already translated against its updated version, previously translated strings are automatically matched and shown as recoverable (✨)
+  - **Recover single field** — one-click button per field row; applies the old translation to the current session and shows a notification
+  - **Recover all** — bulk-applies all recoverable translations in the current view with a single notification showing the applied count
+- **Session auto-detection**: when you select Plugin A, the app automatically looks for an existing saved session with the same plugin name and uses it as the translation source
+- **Recovery mode badge**: when Plugin B matches the currently open plugin, a green badge confirms recovery mode is active
+- **Sortable columns**: click any column header to sort by change type, record type, Form ID or Editor ID; click again to reverse
+- **Resizable columns**: drag column dividers to adjust widths; layout persists in `localStorage`
+- **Filter bar** (shown after diff is loaded):
+  - Toggle chips for each change kind (added / removed / modified / unchanged)
+  - "Recoverable only" checkbox to focus on translatable entries
+  - Full-text search across Editor ID, Form ID and field text
+- **Stats bar**: real-time counts of added / removed / modified / unchanged records + total recoverable fields
+- Accessible from **Database → Comparer les plugins…** or the toolbar button
+- Uses theme font and size CSS variables (`--font-ui`, `--fz-table`, `--font-mono`, etc.) for visual consistency
 
 ### Global Find & Replace
 - Floating, draggable window (stays open while working — no backdrop blocking the table)

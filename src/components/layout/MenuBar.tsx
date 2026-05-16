@@ -42,6 +42,7 @@ interface Props {
   onExportEtXml?:     () => void;
   onExportCsv?:       () => void;
   onOpenConverter?:        () => void;
+  onOpenCompare?:          () => void;
   onGlobalFind?:           () => void;
   globalFindShortcut?:     string;
   onApplyPersonalDb?:      () => void;
@@ -58,6 +59,7 @@ export default function MenuBar({
   onImportXtXml, onImportEtXml, onImportCsv,
   onExportXtXml, onExportEtXml, onExportCsv,
   onOpenConverter,
+  onOpenCompare,
   onGlobalFind, globalFindShortcut,
   onApplyPersonalDb, hasActivePersonalDb,
 }: Props) {
@@ -148,6 +150,8 @@ export default function MenuBar({
     {
       id: "outils", label: t("menu.tools"),
       items: [
+        { label: t("menu.tools_compare"), onClick: onOpenCompare ? () => { close(); onOpenCompare!(); } : undefined },
+        { separator: true },
         { label: t("menu.tools_settings"), shortcut: "Ctrl+,", onClick: () => { close(); onSettings(); } },
       ],
     },

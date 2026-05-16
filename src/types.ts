@@ -155,6 +155,45 @@ export interface PersonalDbFileInfo {
   entry_count: number;
 }
 
+// ── Compare / Diff types ──────────────────────────────────────────────────────
+
+export type ChangeKind = "added" | "removed" | "modified" | "unchanged";
+export type TranslationSource = "session" | "ref_db";
+
+export interface FieldDiff {
+  sub_type:           string;
+  text_old:           string | null;
+  text_new:           string | null;
+  translation:        string | null;
+  translation_source: TranslationSource | null;
+  change_kind:        ChangeKind;
+}
+
+export interface RecordDiff {
+  form_id:           number;
+  editor_id:         string;
+  record_type:       string;
+  change_kind:       ChangeKind;
+  fields:            FieldDiff[];
+  recoverable_count: number;
+}
+
+export interface DiffStats {
+  added:               number;
+  removed:             number;
+  modified:            number;
+  unchanged:           number;
+  recoverable:         number;
+  total_fields_changed: number;
+}
+
+export interface PluginDiffResult {
+  file_old: string;
+  file_new: string;
+  stats:    DiffStats;
+  records:  RecordDiff[];
+}
+
 /** Returns true when a keyboard event matches a ShortcutDef. */
 export function matchShortcut(
   e: { key: string; ctrlKey: boolean; metaKey?: boolean; altKey: boolean; shiftKey: boolean },
