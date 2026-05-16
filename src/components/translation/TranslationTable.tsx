@@ -1,7 +1,8 @@
 import { memo, useEffect, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import type { TranslationEntry, EntryStatus, SortConfig } from "../../types";
+import type { TranslationEntry, EntryStatus, SortConfig, FuzzyMatch } from "../../types";
+import { fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
 import { entryKey } from "../../hooks/usePlugin";
 import type { ColumnWidths } from "../../hooks/useLayout";
 import { startDrag } from "../../hooks/useLayout";
@@ -46,6 +47,7 @@ interface Props {
   columnWidths:      ColumnWidths;
   textSplit:         number;
   recordColors:      Record<string, string>;
+  fuzzyMatches?:     Map<number, FuzzyMatch>;
   onRowClick:        (entry: TranslationEntry, ctrlKey: boolean, shiftKey: boolean) => void;
   onToggleSort:      (col: SortCol) => void;
   onColumnFilter:    (col: string, value: string) => void;
@@ -60,6 +62,7 @@ export default function TranslationTable({
   alternateRows = true,
   rowHover = true,
   columnWidths, textSplit, recordColors,
+  fuzzyMatches,
   onRowClick, onToggleSort, onColumnFilter, onKeyDown,
   onColumnResize, onTextSplit,
   tableRef,
@@ -273,8 +276,8 @@ export default function TranslationTable({
                 alternateRows={alternateRows}
                 rowHover={rowHover}
                 recordColors={recordColors}
+                fuzzyMatch={entry._idx !== undefined ? fuzzyMatches?.get(entry._idx) : undefined}
                 onRowClick={onRowClick}
-                notTranslatedLabel={t("table.not_translated")}
               />
             );
           })}
@@ -299,12 +302,12 @@ interface RowProps {
   alternateRows:      boolean;
   rowHover:           boolean;
   recordColors:       Record<string, string>;
+  fuzzyMatch?:        FuzzyMatch;
   onRowClick:         (entry: TranslationEntry, ctrlKey: boolean, shiftKey: boolean) => void;
-  notTranslatedLabel: string;
 }
 
 const TableRow = memo(function TableRow({
-  entry, idx, isPrimary, isSelected, alternateRows, rowHover, recordColors, onRowClick, notTranslatedLabel,
+  entry, idx, isPrimary, isSelected, alternateRows, rowHover, recordColors, fuzzyMatch, onRowClick,
 }: RowProps) {
   const [hovered, setHovered] = useState(false);
   const statusColor = STATUS_COLORS[entry.status];
@@ -359,8 +362,36 @@ const TableRow = memo(function TableRow({
       <td style={{ padding: "3px 6px", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }} title={entry.original}>
         <TaggedText text={entry.original} />
       </td>
-      <td style={{ padding: "3px 6px", color: entry.translated ? "var(--text-1)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0, fontStyle: entry.translated ? "normal" : "italic" }} title={entry.translated || notTranslatedLabel}>
-        {entry.translated ? <TaggedText text={entry.translated} /> : "–"}
+      <td style={{ padding: "3px 6px", overflow: "hidden", maxWidth: 0 }}>
+        {entry.translated ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+            <span style={{ color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
+              title={entry.translated}>
+              <TaggedText text={entry.translated} />
+            </span>
+          </div>
+        ) : fuzzyMatch ? (
+          /* Untranslated but has a fuzzy suggestion → show coloured badge */
+          <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+            <span
+              title={`${fuzzyScoreLabel(fuzzyMatch.score)} — ${fuzzyMatch.matched_src}`}
+              style={{
+                flexShrink: 0, fontSize: 9, fontWeight: 700,
+                color: fuzzyScoreColor(fuzzyMatch.score),
+                background: `${fuzzyScoreColor(fuzzyMatch.score)}22`,
+                border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}55`,
+                borderRadius: 4, padding: "1px 4px",
+              }}>
+              🔍 {fuzzyScoreLabel(fuzzyMatch.score)}
+            </span>
+            <span style={{ color: fuzzyScoreColor(fuzzyMatch.score), opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.95em", fontStyle: "italic", flex: 1 }}
+              title={`Suggestion: ${fuzzyMatch.suggested}`}>
+              {fuzzyMatch.suggested}
+            </span>
+          </div>
+        ) : (
+          <span style={{ color: "var(--text-3)", fontStyle: "italic" }}>–</span>
+        )}
       </td>
     </tr>
   );

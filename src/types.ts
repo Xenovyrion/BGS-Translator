@@ -194,6 +194,77 @@ export interface PluginDiffResult {
   records:  RecordDiff[];
 }
 
+// ── Fuzzy matching types ──────────────────────────────────────────────────────
+
+/** A (original, translated) pair passed to the fuzzy engine as a source. */
+export interface FuzzySourceEntry {
+  original:   string;
+  translated: string;
+  /** `"session"` | `"personal_db"` */
+  origin:     string;
+}
+
+/** A single entry for which a fuzzy match is requested. */
+export interface FuzzyRequest {
+  form_id:  number;
+  sub_type: string;
+  original: string;
+}
+
+/** The best fuzzy match found for one {@link FuzzyRequest}. */
+export interface FuzzyMatch {
+  /** Echoed from the request for `(form_id, sub_type, original)` correlation. */
+  form_id:     number;
+  sub_type:    string;
+  /** Echoed query string — used as disambiguation key for quest stages. */
+  original:    string;
+  /** Suggested translation text. */
+  suggested:   string;
+  /** Similarity score 0–1. */
+  score:       number;
+  /** Source that produced this match: `"session"` | `"personal_db"` | `"ref_db"`. */
+  origin:      FuzzyOrigin;
+  /** The source string that was matched (shown to the user for context). */
+  matched_src: string;
+  /** Algorithm used: `"jaro_winkler"` | `"levenshtein"`. */
+  algorithm:   "jaro_winkler" | "levenshtein";
+}
+
+export type FuzzyOrigin = "session" | "personal_db" | "ref_db";
+
+/** Fuzzy settings stored in localStorage (mirrored in useSettings). */
+export interface FuzzySettings {
+  /** Enable automatic fuzzy scan after plugin load. */
+  auto_enabled:   boolean;
+  /** Jaro-Winkler threshold for short strings (0–1). Default 0.78. */
+  threshold_jw:   number;
+  /** Levenshtein threshold for long strings (0–1). Default 0.65. */
+  threshold_lev:  number;
+  /** Which sources to include. */
+  use_session:    boolean;
+  use_personal_db: boolean;
+}
+
+export const DEFAULT_FUZZY_SETTINGS: FuzzySettings = {
+  auto_enabled:    true,
+  threshold_jw:    0.78,
+  threshold_lev:   0.65,
+  use_session:     true,
+  use_personal_db: true,
+};
+
+/** Returns a CSS color for a fuzzy score (green → yellow → orange). */
+export function fuzzyScoreColor(score: number): string {
+  if (score >= 0.90) return "#22c55e"; // green
+  if (score >= 0.75) return "#eab308"; // yellow
+  return "#f97316";                    // orange
+}
+
+/** Returns a short human-readable label for a fuzzy score percentage. */
+export function fuzzyScoreLabel(score: number): string {
+  return `${Math.round(score * 100)}%`;
+}
+
 /** Returns true when a keyboard event matches a ShortcutDef. */
 export function matchShortcut(
   e: { key: string; ctrlKey: boolean; metaKey?: boolean; altKey: boolean; shiftKey: boolean },

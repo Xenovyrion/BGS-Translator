@@ -94,12 +94,17 @@ export default function App() {
     autoApplyResult, clearAutoApplyResult,
     dbNotFound, clearDbNotFound,
     loadedDbInfo,
+    // Fuzzy
+    fuzzyMatches, fuzzyScanning, filterFuzzyOnly, setFilterFuzzyOnly,
+    runFuzzySingle, acceptFuzzy, dismissFuzzy, applyFuzzyToSelection,
+    fuzzyMatchCount,
   } = usePlugin({
     propagateIdentical:  settings.propagateIdentical  !== false,
     dbApplyValidates:    settings.dbApplyValidates     !== false,
     defaultDbs:          settings.defaultDbs           ?? {},
     personalDbPath:      settings.activePersonalDbPath ?? "",
     personalDbAutoApply: settings.personalDbAutoApply  !== false,
+    fuzzySettings:       settings.fuzzy,
   });
 
   const {
@@ -629,7 +634,8 @@ export default function App() {
         5000,
       );
     }
-  }, [entries, selectedKeys, settings.activePersonalDbPath, settings.targetLanguage, addToPersonalDb, notify, t, pluginInfo]);
+    clearSelection();
+  }, [entries, selectedKeys, settings.activePersonalDbPath, settings.targetLanguage, addToPersonalDb, notify, t, pluginInfo, clearSelection]);
 
   /** Add the currently open single entry to the active personal DB. */
   const handleAddSingleToPersonalDb = useCallback(async () => {
@@ -644,6 +650,14 @@ export default function App() {
         t("personal_db.add_success_desc", { count: 1, db: info.name }), 4000);
     }
   }, [selectedEntry, settings.activePersonalDbPath, settings.targetLanguage, addToPersonalDb, notify, t]);
+
+  /** Apply fuzzy suggestions to the current selection. */
+  const handleApplyFuzzySelection = useCallback(() => {
+    const count = applyFuzzyToSelection();
+    if (count > 0) {
+      notify(t("fuzzy.bulk_applied", { count }), "success", undefined, 4000);
+    }
+  }, [applyFuzzyToSelection, notify, t]);
 
   /** Apply personal DB to all entries (global, from menu). */
   const handleApplyPersonalDbAll = useCallback(async () => {
@@ -675,7 +689,8 @@ export default function App() {
       notify(`${t("personal_db.apply_banner_title")}`, "success",
         t("personal_db.apply_no_match"), 4000);
     }
-  }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t]);
+    clearSelection();
+  }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t, clearSelection]);
 
   const handleDeeplBatch = useCallback(async () => {
     if (!settings.deeplApiKey || deeplBatchLoading) return;
@@ -697,6 +712,7 @@ export default function App() {
         }
       });
       notify(t("deepl.batch_ok", { count: updated }), "success");
+      clearSelection();
     } catch (e) {
       const msg = String(e);
       const label =
@@ -709,7 +725,7 @@ export default function App() {
     } finally {
       setDeeplBatchLoading(false);
     }
-  }, [settings, entries, selectedKeys, updateTranslation, notify, t, deeplBatchLoading]);
+  }, [settings, entries, selectedKeys, updateTranslation, notify, t, deeplBatchLoading, clearSelection]);
 
   /* ── Global shortcuts (Ctrl+O, Ctrl+S, etc.) ────────────────────────────── */
   useEffect(() => {
@@ -803,6 +819,9 @@ export default function App() {
           onFilterChange={setFilter}
           onSearchChange={setSearch}
           onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
+          filterFuzzyOnly={filterFuzzyOnly}
+          onToggleFuzzyOnly={() => setFilterFuzzyOnly((v) => !v)}
+          fuzzyMatchCount={fuzzyMatchCount}
         />
 
         <BulkActionBar
@@ -816,6 +835,8 @@ export default function App() {
           onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
           onDeeplBatch={settings.deeplApiKey ? handleDeeplBatch : undefined}
           deeplBatchLoading={deeplBatchLoading}
+          onApplyFuzzy={pluginInfo ? handleApplyFuzzySelection : undefined}
+          fuzzyMatchCount={fuzzyMatchCount}
         />
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -849,6 +870,7 @@ export default function App() {
               onTextSplit={setTextSplit}
               recordColors={resolvedRecordColors}
               tableRef={tableRef}
+              fuzzyMatches={fuzzyMatches}
             />
 
             {selectedEntry && selectedCount < 2 && (
@@ -871,6 +893,21 @@ export default function App() {
                 deeplTargetLang={settings.targetLanguage}
                 onAddToPersonalDb={settings.activePersonalDbPath ? handleAddSingleToPersonalDb : undefined}
                 personalDbName={personalDbInfoLoaded?.name ?? undefined}
+                fuzzyMatch={selectedEntry._idx !== undefined ? fuzzyMatches.get(selectedEntry._idx) : undefined}
+                onAcceptFuzzy={selectedEntry._idx !== undefined ? () => acceptFuzzy(selectedEntry._idx!) : undefined}
+                onDismissFuzzy={selectedEntry._idx !== undefined ? () => dismissFuzzy(selectedEntry._idx!) : undefined}
+                onRunFuzzy={settings.fuzzy && selectedEntry._idx !== undefined
+                  ? async () => {
+                      const { match, reason } = await runFuzzySingle(selectedEntry, settings.fuzzy!);
+                      if (reason === "no_sources") {
+                        notify(t("fuzzy.scan_no_sources"), "success", undefined, 3000);
+                      } else if (!match) {
+                        notify(t("fuzzy.scan_none"), "success", undefined, 3000);
+                      }
+                      // match found → bandeau appears automatically, no extra notif needed
+                    }
+                  : undefined}
+                fuzzyScanning={fuzzyScanning}
               />
             )}
 

@@ -89,8 +89,7 @@ BGS-Translator/
 │   │   │   ├── ToolBar.tsx           # Quick-action toolbar
 │   │   │   └── TopBar.tsx            # Window title + controls
 │   │   ├── settings/
-│   │   │   ├── SettingsModal.tsx     # Settings dialog
-│   │   │   └── SettingsPanel.tsx     # Settings content (theme, shortcuts, spell check…)
+│   │   │   └── SettingsModal.tsx     # Settings dialog (tabs: General, Database, Auto Translation, Spell Check, Shortcuts, Theme, System)
 │   │   ├── shared/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
 │   │   │   ├── ConvertToBgtModal.tsx      # Floating draggable database converter (any format → .bgt/.bgtx)
@@ -103,9 +102,9 @@ BGS-Translator/
 │   │   ├── themes/
 │   │   │   └── ThemeManagerModal.tsx # Theme picker + colour customiser
 │   │   └── translation/
-│   │       ├── BulkActionBar.tsx     # Bulk status change on selected entries
-│   │       ├── EditPanel.tsx         # Right-side entry editor (incl. spell error overlay)
-│   │       ├── FilterBar.tsx         # Status / record-type filters + search
+│   │       ├── BulkActionBar.tsx     # Bulk status change + fuzzy apply on selected entries
+│   │       ├── EditPanel.tsx         # Right-side entry editor (incl. spell error overlay + fuzzy bandeau)
+│   │       ├── FilterBar.tsx         # Status / record-type / fuzzy-only filters + search
 │   │       ├── GroupPanel.tsx        # Record-type group view with per-group stats
 │   │       ├── StatusBar.tsx         # Bottom bar (progress, counts, session info)
 │   │       └── TranslationTable.tsx  # Main sortable translation table (virtualised)
@@ -155,6 +154,9 @@ BGS-Translator/
 │   │   ├── compare/
 │   │   │   ├── mod.rs                # Diff algorithm — two-phase (stats + full records)
 │   │   │   └── commands.rs           # Tauri commands: check_plugin_diff_cmd, compute_plugin_diff_cmd
+│   │   ├── fuzzy/
+│   │   │   ├── mod.rs                # TextIndex + two-algorithm similarity engine (Jaro-Winkler / Levenshtein)
+│   │   │   └── commands.rs           # Tauri commands: get_fuzzy_matches_cmd, get_fuzzy_match_single_cmd
 │   │   ├── spellcheck/
 │   │   │   ├── mod.rs                # FFI bindings + safe Spellchecker wrapper
 │   │   │   ├── commands.rs           # Tauri commands (list/download/delete/check/suggest)
@@ -188,6 +190,7 @@ BGS-Translator/
 | Encoding | `encoding_rs` 0.8 | Windows-1252 → UTF-8 for legacy plugins |
 | Database format | `bincode` 1 + zstd | Custom `.bgt` (reference) and `.bgtx` (personal) binary formats |
 | HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads — no OpenSSL dependency |
+| Fuzzy matching | `strsim` 0.11 · `rayon` 1 | Jaro-Winkler (short strings) + Levenshtein (long strings); parallel bulk scan |
 | Spell check | [Nuspell](https://nuspell.github.io/) 5.x | C ABI wrapper · ICU · 47 languages |
 | Virtualisation | `@tanstack/react-virtual` 3 | Windowed rendering for large entry lists |
 | Styling | Tailwind CSS 3 + CSS variables | 13 built-in themes, full colour customisation |
@@ -276,6 +279,8 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Configurable shortcuts** — all Edit Panel shortcuts (find, replace, text ops) editable in Settings → Shortcuts
 - **Identical-entry propagation** — changing the translation or status of an entry automatically propagates to all entries that share the same original text and translation, eliminating repetitive work
 - **Spell check overlay** — misspelled words highlighted with a wavy red underline directly in the textarea; click any underlined word to open a suggestions popup; suggestions replace the word in place
+- **Fuzzy suggestion bandeau** — when a fuzzy match is available, a coloured banner appears between the toolbar and the editor showing the suggested translation, its score (%), and its origin; one-click **Accept** (→ validated) or **Dismiss**
+- **Manual fuzzy trigger** — 🔍 button in the translation toolbar runs a single-entry fuzzy search on demand, with toast feedback when no sources or no match are found
 
 ### Spell Check
 - Powered by [Nuspell](https://nuspell.github.io/) 5.x (C++ library via Rust FFI)
@@ -293,8 +298,10 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Bulk Actions
 - Select multiple entries and apply a status change in one click
+- **Apply Fuzzy to selection** (`🔍 Appliquer Fuzzy`) — fills all entries in the selection that have a pending fuzzy suggestion; accepted entries are set to `validated` directly
 - **Apply personal DB to selection** (`↓ [DB name]`) — fills empty translations in the selected rows from the personal database
 - **Save selection to personal DB** (`+ [DB name]`) — writes all translated entries in the selection to the active personal database
+- **Selection is automatically cleared** after any bulk action (validate, fuzzy apply, DB apply, DeepL batch, add to DB) — no manual deselection needed
 
 ### Personal Translation Database (`.bgtx`)
 - Custom binary format (`BGTX` magic + zstd + bincode) for storing personal translation pairs across sessions
@@ -389,6 +396,41 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Stats bar**: real-time counts of added / removed / modified / unchanged records + total recoverable fields
 - Accessible from **Database → Comparer les plugins…** or the toolbar button
 - Uses theme font and size CSS variables (`--font-ui`, `--fz-table`, `--font-mono`, etc.) for visual consistency
+
+### Fuzzy Matching
+
+Automatically suggests translations for untranslated entries based on similarity to already-translated strings in the current session or personal database.
+
+**Algorithms** (implemented in Rust, run in parallel via `rayon`):
+
+| String length | Algorithm | Use case |
+|---------------|-----------|----------|
+| ≤ 60 chars | Jaro-Winkler (`strsim`) | NPC names, item names, short dialogue — prefix-sensitive |
+| > 60 chars | Normalized Levenshtein (`strsim`) | Long descriptions, journal entries, books |
+
+Long strings additionally require a **bigram Jaccard pre-filter** (≥ 20% overlap) before the full Levenshtein is computed, keeping bulk scans fast on large plugins.
+
+**Score display** — colour-coded badge on every suggestion:
+- 🟢 ≥ 90% — high confidence, safe to accept in bulk
+- 🟡 75–89% — good match, worth a quick review
+- 🟠 < 75% — weaker match, review before accepting
+
+**Workflows**:
+- **Auto-scan** — runs automatically when a plugin is opened; all untranslated entries are scanned in the background; matched entries show a coloured badge in the translation table
+- **Filter by fuzzy** — `Fuzzy (N)` chip in the filter bar isolates all entries with a pending suggestion
+- **Bulk accept** — select fuzzy-tagged entries and click **🔍 Appliquer Fuzzy** in the BulkActionBar; accepted entries are set to `validated` and the suggestion is consumed
+- **Manual trigger** — click the 🔍 button in the EditPanel toolbar to run a single-entry scan on demand
+- **Suggestion bandeau** — coloured banner in the EditPanel showing the suggested text, its score, and the source (session / personal DB); **Accept** applies the suggestion and validates the entry; **Dismiss** removes it
+
+**Sources** (priority order, deduplication by original text — first source wins):
+1. Current session — entries with a translation and status ≠ `untranslated`
+2. Personal database — entries from the active `.bgtx` file *(wiring in progress)*
+
+**Settings** (`Settings → Auto Translation → Autres réglages`):
+- Enable / disable auto-scan on plugin open
+- Jaro-Winkler threshold (default 78 %)
+- Levenshtein threshold (default 65 %)
+- Toggle session and personal DB as sources
 
 ### Global Find & Replace
 - Floating, draggable window (stays open while working — no backdrop blocking the table)

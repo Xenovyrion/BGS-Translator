@@ -217,7 +217,8 @@
     "select_all_title":    "Select all {{count}} visible rows",
     "deselect_all_title":  "Deselect all",
     "n_selected":          "{{count}} / {{total}} selected",
-    "selection_hint":      "Ctrl+Click: add to selection • Shift+Click: select range • ☑: select all"
+    "selection_hint":      "Ctrl+Click: add to selection • Shift+Click: select range • ☑: select all",
+    "fuzzy_only":          "🔍 Fuzzy"
   },
   "bulk": {
     "selected":              "{{count}} rows selected —",
@@ -233,7 +234,28 @@
     "add_personal_db":         "+ My DB",
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Add to my personal database (highest priority)",
-    "deselect_all":          "Deselect all"
+    "deselect_all":          "Deselect all",
+    "apply_fuzzy":           "🔍 Apply Fuzzy",
+    "apply_fuzzy_title":     "Apply fuzzy suggestions to selected entries"
+  },
+  "fuzzy": {
+    "badge_title":           "Fuzzy suggestion — {{score}}% similarity · Source: {{src}}",
+    "accept":                "Accept",
+    "dismiss":               "Dismiss",
+    "scan_done":             "{{count}} fuzzy suggestion(s) found",
+    "scan_none":             "No suggestion found for this entry",
+    "scan_no_sources":       "No sources available — translate some entries first",
+    "scan_running":          "Searching for fuzzy matches…",
+    "bulk_applied":          "{{count}} fuzzy translation(s) applied",
+    "origin_session":        "session",
+    "origin_personal_db":    "personal DB",
+    "settings_title":        "Fuzzy Matching",
+    "settings_desc":         "Searches for similar translations for untranslated entries. Useful when updating a mod where a few words have changed.",
+    "auto_enabled":          "Enable automatically on plugin load",
+    "threshold_jw":          "Short string threshold (≤ 60 chars) — Jaro-Winkler",
+    "threshold_lev":         "Long string threshold (> 60 chars) — Levenshtein",
+    "use_session":           "Use current session entries",
+    "use_personal_db":       "Use personal database"
   },
   "edit": {
     "status_validated":   "✓ Validated",
@@ -372,7 +394,8 @@
     "tab_spellcheck":  "Spell Check",
     "tab_database":    "Databases",
     "tab_misc":        "Misc",
-    "tab_api":         "API & AI",
+    "tab_api":         "Auto Translation",
+    "tab_auto_other":  "Other settings",
     "tab_system":      "System",
     "appearance": {
       "theme_section":      "Theme",

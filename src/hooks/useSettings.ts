@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS } from "../types";
 
 export interface DefaultDbEntry {
   path:    string;
@@ -43,6 +43,8 @@ export interface AppSettings {
   personalDbFolder:   string;  // folder containing .bgtx files (empty = default personal_dbs/)
   activePersonalDbPath: string; // path of the active personal DB (empty = none)
   personalDbAutoApply:  boolean; // auto-apply personal DB when opening a plugin
+  // Fuzzy matching
+  fuzzy: FuzzySettings;
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -75,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   personalDbFolder:     "",
   activePersonalDbPath: "",
   personalDbAutoApply:  true,
+  fuzzy: { ...DEFAULT_FUZZY_SETTINGS },
 };
 
 export function useSettings() {
@@ -86,9 +89,10 @@ export function useSettings() {
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
-          // Merge shortcut objects so new keys added in later versions always have a default
+          // Merge nested objects so new keys added in later versions always have a default
           shortcuts:     { ...DEFAULT_SHORTCUTS,       ...(parsed.shortcuts      ?? {}) },
           editShortcuts: { ...DEFAULT_EDIT_SHORTCUTS,  ...(parsed.editShortcuts  ?? {}) },
+          fuzzy:         { ...DEFAULT_FUZZY_SETTINGS,  ...(parsed.fuzzy          ?? {}) },
         };
       }
     } catch {}

@@ -3,6 +3,7 @@ pub mod compare;
 pub mod database;
 pub mod deepl;
 pub mod formats;
+pub mod fuzzy;
 pub mod parser;
 pub mod spellcheck;
 pub mod translation;
@@ -86,6 +87,8 @@ pub fn run() {
             deepl::commands::translate_deepl_batch_cmd,
             compare::commands::check_plugin_diff_cmd,
             compare::commands::compute_plugin_diff_cmd,
+            fuzzy::commands::get_fuzzy_matches_cmd,
+            fuzzy::commands::get_fuzzy_match_single_cmd,
             database::personal_commands::create_personal_db_cmd,
             database::personal_commands::scan_personal_dbs_cmd,
             database::personal_commands::peek_personal_db_cmd,

@@ -12,6 +12,10 @@ interface Props {
   onSelectAll?:           () => void;
   onDeeplBatch?:          () => void;
   deeplBatchLoading?:     boolean;
+  /** Fuzzy: apply suggestions to current selection */
+  onApplyFuzzy?:          () => void;
+  /** Number of fuzzy matches available in the whole set (shows button only when > 0) */
+  fuzzyMatchCount?:       number;
 }
 
 export default function BulkActionBar({
@@ -19,6 +23,7 @@ export default function BulkActionBar({
   onSetStatus, onAddToPersonalDb, onApplyFromPersonalDb, personalDbName,
   onClear, onSelectAll,
   onDeeplBatch, deeplBatchLoading,
+  onApplyFuzzy, fuzzyMatchCount = 0,
 }: Props) {
   const { t } = useTranslation();
 
@@ -99,6 +104,30 @@ export default function BulkActionBar({
               ? <><span style={{ fontSize: 13 }}>⟳</span>{t("deepl.batch_loading")}</>
               : t("deepl.batch_btn", { count })
             }
+          </button>
+        </>
+      )}
+
+      {/* Fuzzy apply */}
+      {onApplyFuzzy && fuzzyMatchCount > 0 && (
+        <>
+          <div style={{ width: 1, height: 16, background: "rgba(99,102,241,0.4)", flexShrink: 0 }} />
+          <button
+            onClick={onApplyFuzzy}
+            title={t("bulk.apply_fuzzy_title")}
+            style={{
+              height: 26, padding: "0 10px",
+              borderRadius: 5, boxSizing: "border-box",
+              border: "1px solid #f97316",
+              cursor: "pointer",
+              fontSize: 11, fontWeight: 600,
+              background: "#f97316",
+              color: "#fff",
+              display: "flex", alignItems: "center", gap: 5,
+              flexShrink: 0,
+            }}
+          >
+            {t("bulk.apply_fuzzy")}
           </button>
         </>
       )}

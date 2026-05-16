@@ -2,8 +2,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "../../hooks/useLayout";
-import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef } from "../../types";
-import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut } from "../../types";
+import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch } from "../../types";
+import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
 
 interface SpellError {
@@ -41,6 +41,13 @@ interface Props {
   deeplTargetLang?:   string;
   onAddToPersonalDb?: () => void;    // Add single entry to personal DB
   personalDbName?:    string;        // Name of the active personal DB (for tooltip)
+  /** Fuzzy suggestion for this entry (if any) */
+  fuzzyMatch?:        FuzzyMatch;
+  onAcceptFuzzy?:     () => void;
+  onDismissFuzzy?:    () => void;
+  /** Manual fuzzy trigger for this single entry */
+  onRunFuzzy?:        () => void;
+  fuzzyScanning?:     boolean;
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -180,7 +187,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr", onAddToPersonalDb, personalDbName },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, deeplApiKey, deeplApiType = "free", deeplTargetLang = "fr", onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
   ref,
 ) {
   const { t } = useTranslation();
@@ -617,6 +624,73 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
         </div>
       )}
 
+      {/* ── Fuzzy suggestion bandeau ──────────────────────────────────── */}
+      {fuzzyMatch && (
+        <div style={{
+          flexShrink: 0, padding: "5px 10px",
+          background: `${fuzzyScoreColor(fuzzyMatch.score)}18`,
+          borderBottom: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}44`,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          {/* Score badge */}
+          <span style={{
+            flexShrink: 0, fontSize: 10, fontWeight: 700,
+            color: fuzzyScoreColor(fuzzyMatch.score),
+            background: `${fuzzyScoreColor(fuzzyMatch.score)}22`,
+            border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}55`,
+            borderRadius: 4, padding: "1px 5px",
+          }}>
+            🔍 {fuzzyScoreLabel(fuzzyMatch.score)}
+          </span>
+
+          {/* Suggestion text */}
+          <span style={{
+            flex: 1, fontSize: 12, fontStyle: "italic",
+            color: "var(--text-2)", overflow: "hidden",
+            textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }} title={fuzzyMatch.suggested}>
+            {fuzzyMatch.suggested}
+          </span>
+
+          {/* Origin label */}
+          <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>
+            {t(`fuzzy.origin_${fuzzyMatch.origin}`)}
+          </span>
+
+          {/* Accept */}
+          <button
+            onClick={() => {
+              onTranslate(entry._idx ?? 0, fuzzyMatch.suggested);
+              onSetStatus(entry._idx ?? 0, "validated");
+              onAcceptFuzzy?.();
+            }}
+            style={{
+              height: 22, padding: "0 8px", flexShrink: 0,
+              borderRadius: 4, border: `1px solid ${fuzzyScoreColor(fuzzyMatch.score)}`,
+              cursor: "pointer", fontSize: 11, fontWeight: 600,
+              background: fuzzyScoreColor(fuzzyMatch.score), color: "#fff",
+              boxSizing: "border-box",
+            }}
+          >
+            ✓ {t("fuzzy.accept")}
+          </button>
+
+          {/* Dismiss */}
+          <button
+            onClick={onDismissFuzzy}
+            style={{
+              height: 22, padding: "0 8px", flexShrink: 0,
+              borderRadius: 4, border: "1px solid var(--border)",
+              cursor: "pointer", fontSize: 11,
+              background: "transparent", color: "var(--text-3)",
+              boxSizing: "border-box",
+            }}
+          >
+            × {t("fuzzy.dismiss")}
+          </button>
+        </div>
+      )}
+
       {/* ── Content ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
@@ -663,6 +737,18 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 style={{ background: "var(--bg-primary)", color: "var(--accent)", borderColor: "var(--accent)" }}
               >
                 <span style={{ fontSize: 11, fontWeight: 700 }}>+ DB</span>
+              </ToolBtn>
+            )}
+
+            {/* Fuzzy manual trigger */}
+            {onRunFuzzy && (
+              <ToolBtn
+                onClick={onRunFuzzy}
+                disabled={fuzzyScanning}
+                title={t("fuzzy.badge_title", { score: fuzzyMatch ? Math.round(fuzzyMatch.score * 100) : 0, src: fuzzyMatch?.origin ?? "" })}
+                style={fuzzyMatch ? { color: fuzzyScoreColor(fuzzyMatch.score), borderColor: fuzzyScoreColor(fuzzyMatch.score) } : undefined}
+              >
+                🔍{fuzzyScanning ? "…" : (fuzzyMatch ? ` ${fuzzyScoreLabel(fuzzyMatch.score)}` : "")}
               </ToolBtn>
             )}
 

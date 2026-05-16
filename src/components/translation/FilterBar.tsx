@@ -9,11 +9,16 @@ interface Props {
   onFilterChange:       (f: FilterMode) => void;
   onSearchChange:       (s: string) => void;
   onToggleColumnFilters: () => void;
+  /** Fuzzy-only filter toggle */
+  filterFuzzyOnly?:     boolean;
+  onToggleFuzzyOnly?:   () => void;
+  fuzzyMatchCount?:     number;
 }
 
 export default function FilterBar({
   filter, search, isLocalized, showColumnFilters,
   onFilterChange, onSearchChange, onToggleColumnFilters,
+  filterFuzzyOnly = false, onToggleFuzzyOnly, fuzzyMatchCount = 0,
 }: Props) {
   const { t } = useTranslation();
 
@@ -81,6 +86,34 @@ export default function FilterBar({
           );
         })}
       </div>
+
+      {/* Fuzzy-only chip — only shown when there are suggestions */}
+      {onToggleFuzzyOnly && fuzzyMatchCount > 0 && (
+        <button
+          onClick={onToggleFuzzyOnly}
+          title={`${fuzzyMatchCount} suggestion(s) fuzzy`}
+          style={{
+            height: 26, padding: "0 10px",
+            borderRadius: 5, cursor: "pointer",
+            fontSize: 11, fontWeight: filterFuzzyOnly ? 700 : 400,
+            background: filterFuzzyOnly ? "#f97316" : "transparent",
+            color: filterFuzzyOnly ? "#fff" : "#f97316",
+            border: "1px solid #f97316",
+            opacity: filterFuzzyOnly ? 1 : 0.7,
+            transition: "opacity 0.12s, background 0.12s",
+            boxSizing: "border-box", flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 4,
+          }}
+        >
+          {t("filter.fuzzy_only")}
+          <span style={{
+            background: filterFuzzyOnly ? "rgba(255,255,255,0.3)" : "rgba(249,115,22,0.2)",
+            borderRadius: 8, padding: "0 5px", fontSize: 10, fontWeight: 700,
+          }}>
+            {fuzzyMatchCount}
+          </span>
+        </button>
+      )}
 
       {isLocalized && (
         <span style={{

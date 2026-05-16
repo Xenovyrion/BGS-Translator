@@ -217,7 +217,8 @@
     "select_all_title":    "Sélectionner les {{count}} lignes visibles",
     "deselect_all_title":  "Désélectionner tout",
     "n_selected":          "{{count}} / {{total}} sélectionnées",
-    "selection_hint":      "Ctrl+Clic : ajouter à la sélection • Shift+Clic : sélectionner une plage • ☑ : tout sélectionner"
+    "selection_hint":      "Ctrl+Clic : ajouter à la sélection • Shift+Clic : sélectionner une plage • ☑ : tout sélectionner",
+    "fuzzy_only":          "🔍 Fuzzy"
   },
   "bulk": {
     "selected":              "{{count}} lignes sélectionnées —",
@@ -233,7 +234,28 @@
     "add_personal_db":         "+ Ma BDD",
     "add_personal_db_named":   "+ {{name}}",
     "add_personal_db_sub":     "Ajouter à ma base de données personnelle (prioritaire)",
-    "deselect_all":          "Désélectionner tout"
+    "deselect_all":          "Désélectionner tout",
+    "apply_fuzzy":           "🔍 Appliquer Fuzzy",
+    "apply_fuzzy_title":     "Appliquer les suggestions fuzzy sur les entrées sélectionnées"
+  },
+  "fuzzy": {
+    "badge_title":           "Suggestion fuzzy — similarité {{score}}% · Source : {{src}}",
+    "accept":                "Accepter",
+    "dismiss":               "Ignorer",
+    "scan_done":             "{{count}} suggestion(s) fuzzy trouvée(s)",
+    "scan_none":             "Aucune suggestion trouvée pour cette entrée",
+    "scan_no_sources":       "Aucune source disponible — traduisez d'abord quelques entrées",
+    "scan_running":          "Recherche de correspondances fuzzy…",
+    "bulk_applied":          "{{count}} traduction(s) fuzzy appliquée(s)",
+    "origin_session":        "session",
+    "origin_personal_db":    "BDD personnelle",
+    "settings_title":        "Matching Fuzzy",
+    "settings_desc":         "Recherche des traductions similaires pour les entrées non traduites. Utile lors d'une mise à jour de mod où quelques mots ont changé.",
+    "auto_enabled":          "Activer automatiquement au chargement du plugin",
+    "threshold_jw":          "Seuil strings courtes (≤ 60 car.) — Jaro-Winkler",
+    "threshold_lev":         "Seuil strings longues (> 60 car.) — Levenshtein",
+    "use_session":           "Utiliser les entrées de la session courante",
+    "use_personal_db":       "Utiliser la base de données personnelle"
   },
   "edit": {
     "status_validated":   "✓ Validé",
@@ -372,7 +394,8 @@
     "tab_spellcheck":  "Orthographe",
     "tab_database":    "Bases de données",
     "tab_misc":        "Divers",
-    "tab_api":         "API & IA",
+    "tab_api":         "Traduction auto.",
+    "tab_auto_other":  "Autres réglages",
     "tab_system":      "Système",
     "appearance": {
       "theme_section":      "Thème",

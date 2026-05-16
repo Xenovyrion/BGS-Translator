@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo } from "../types";
+import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo, FuzzyMatch, FuzzySettings, FuzzySourceEntry } from "../types";
 import type { DefaultDbEntry } from "./useSettings";
 
 /** Unique key based on _idx (assigned at load time) to avoid collisions
@@ -42,12 +42,14 @@ export function usePlugin({
   defaultDbs           = {},
   personalDbPath       = "",
   personalDbAutoApply  = true,
+  fuzzySettings        = undefined,
 }: {
   propagateIdentical?:   boolean;
   dbApplyValidates?:     boolean;
   defaultDbs?:           Record<string, DefaultDbEntry>;
   personalDbPath?:       string;
   personalDbAutoApply?:  boolean;
+  fuzzySettings?:        FuzzySettings;
 } = {}) {
   const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
   const [entries, setEntries]               = useState<TranslationEntry[]>([]);
@@ -65,6 +67,12 @@ export function usePlugin({
   const [dbNotFound, setDbNotFound]                 = useState<string | null>(null);
   const [loadedDbInfo, setLoadedDbInfo]             = useState<DbInfo | null>(null);
 
+  // ── Fuzzy matching state ──────────────────────────────────────────────────
+  /** Map from entry `_idx` → best fuzzy match (pending suggestions). */
+  const [fuzzyMatches,   setFuzzyMatches]   = useState<Map<number, FuzzyMatch>>(new Map());
+  const [fuzzyScanning,  setFuzzyScanning]  = useState(false);
+  const [filterFuzzyOnly, setFilterFuzzyOnly] = useState(false);
+
   // ── Shared reset helper ────────────────────────────────────────────────
 
   const resetState = useCallback(() => {
@@ -76,6 +84,9 @@ export function usePlugin({
     setAutoApplyResult(null);
     setDbNotFound(null);
     setLoadedDbInfo(null);
+    setFuzzyMatches(new Map());
+    setFuzzyScanning(false);
+    setFilterFuzzyOnly(false);
   }, []);
 
   // ── Internal: try to auto-load a DB matching the given game ─────────────
@@ -212,6 +223,11 @@ export function usePlugin({
 
       setPluginInfo((prev) => prev ? { ...prev, entries: indexed, entry_count: indexed.length } : null);
       setEntries(indexed);
+
+      // ── Auto fuzzy scan (non-blocking, fires in background after UI renders) ──
+      if (fuzzySettings?.auto_enabled) {
+        setTimeout(() => { runFuzzyAuto(indexed, fuzzySettings); }, 100);
+      }
     } catch (e) {
       cleanup();
       setError(String(e));
@@ -460,6 +476,7 @@ export function usePlugin({
       if (!prev || !selectedKeys.has(entryKey(prev))) return prev;
       return { ...prev, status };
     });
+    setSelectedKeys(new Set());
   }, [selectedKeys]);
 
   // ── Filtering ────────────────────────────────────────────────────────────
@@ -467,6 +484,7 @@ export function usePlugin({
   const filteredEntries = useMemo(() => entries.filter((e) => {
     if (selectedGroup && e.record_type !== selectedGroup) return false;
     if (filter !== "all" && e.status !== filter) return false;
+    if (filterFuzzyOnly && (e._idx === undefined || !fuzzyMatches.has(e._idx))) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -477,7 +495,7 @@ export function usePlugin({
       );
     }
     return true;
-  }), [entries, filter, search, selectedGroup]);
+  }), [entries, filter, search, selectedGroup, filterFuzzyOnly, fuzzyMatches]);
 
   // ── Sorting ───────────────────────────────────────────────────────────────
 
@@ -671,6 +689,180 @@ export function usePlugin({
     }
   }, [entries, personalDbPath]);
 
+  // ── Fuzzy helpers ─────────────────────────────────────────────────────────
+
+  /**
+   * Build the source list for fuzzy search from the current session entries.
+   * Priority: validated > pending. Deduplication is done server-side.
+   */
+  const buildFuzzySources = useCallback((
+    entriesSnapshot: TranslationEntry[],
+    settings: FuzzySettings,
+  ): FuzzySourceEntry[] => {
+    const sources: FuzzySourceEntry[] = [];
+    if (settings.use_session) {
+      for (const e of entriesSnapshot) {
+        if (e.translated && e.status !== "untranslated") {
+          sources.push({ original: e.original, translated: e.translated, origin: "session" });
+        }
+      }
+    }
+    return sources;
+  }, []);
+
+  /**
+   * Run a bulk fuzzy scan on all untranslated entries.
+   * Uses `entriesSnapshot` to avoid stale closure issues during async work.
+   * Returns the number of matches found.
+   */
+  const runFuzzyAuto = useCallback(async (
+    entriesSnapshot: TranslationEntry[],
+    settings: FuzzySettings,
+  ): Promise<number> => {
+    const sources = buildFuzzySources(entriesSnapshot, settings);
+    if (sources.length === 0) return 0;
+
+    const targets = entriesSnapshot
+      .filter(e => e.status === "untranslated" && !e.translated)
+      .map(e => ({ form_id: e.form_id, sub_type: e.sub_type, original: e.original }));
+
+    if (targets.length === 0) return 0;
+
+    setFuzzyScanning(true);
+    try {
+      const matches = await invoke<FuzzyMatch[]>("get_fuzzy_matches_cmd", {
+        targets,
+        sources,
+        thresholdJw:  settings.threshold_jw,
+        thresholdLev: settings.threshold_lev,
+      });
+
+      // Correlate by (form_id, sub_type, original) → _idx
+      const lookupMap = new Map<string, number>();
+      for (const e of entriesSnapshot) {
+        if (e._idx !== undefined) {
+          lookupMap.set(`${e.form_id}_${e.sub_type}_${e.original}`, e._idx);
+        }
+      }
+
+      const idxMap = new Map<number, FuzzyMatch>();
+      for (const m of matches) {
+        const idx = lookupMap.get(`${m.form_id}_${m.sub_type}_${m.original}`);
+        if (idx !== undefined) idxMap.set(idx, m);
+      }
+
+      setFuzzyMatches(idxMap);
+      return idxMap.size;
+    } catch (err) {
+      console.error("[fuzzy] auto scan failed:", err);
+      return 0;
+    } finally {
+      setFuzzyScanning(false);
+    }
+  }, [buildFuzzySources]);
+
+  /**
+   * Run fuzzy matching for a single entry (manual trigger from EditPanel).
+   * Immediately updates the fuzzyMatches map if a match is found (or removes the entry if none).
+   */
+  const runFuzzySingle = useCallback(async (
+    entry: TranslationEntry,
+    settings: FuzzySettings,
+  ): Promise<{ match: FuzzyMatch | null; reason?: "no_sources" | "error" }> => {
+    const sources = buildFuzzySources(entries, settings);
+    if (sources.length === 0) return { match: null, reason: "no_sources" };
+
+    setFuzzyScanning(true);
+    try {
+      const match = await invoke<FuzzyMatch | null>("get_fuzzy_match_single_cmd", {
+        original:     entry.original,
+        sources,
+        thresholdJw:  settings.threshold_jw,
+        thresholdLev: settings.threshold_lev,
+      });
+
+      const idx = entry._idx;
+      if (idx !== undefined) {
+        setFuzzyMatches(prev => {
+          const next = new Map(prev);
+          if (match) {
+            next.set(idx, {
+              ...match,
+              form_id:  entry.form_id,
+              sub_type: entry.sub_type,
+              original: entry.original,
+            });
+          } else {
+            next.delete(idx);
+          }
+          return next;
+        });
+      }
+
+      return { match };
+    } catch (err) {
+      console.error("[fuzzy] single scan failed:", err);
+      return { match: null, reason: "error" };
+    } finally {
+      setFuzzyScanning(false);
+    }
+  }, [entries, buildFuzzySources]);
+
+  /**
+   * Apply a fuzzy suggestion: set translation + status → validated, remove from map.
+   */
+  const acceptFuzzy = useCallback((idx: number) => {
+    const match = fuzzyMatches.get(idx);
+    if (!match) return;
+    updateTranslation(idx, match.suggested);
+    setStatus(idx, "validated");
+    setFuzzyMatches(prev => {
+      const next = new Map(prev);
+      next.delete(idx);
+      return next;
+    });
+  }, [fuzzyMatches, updateTranslation, setStatus]);
+
+  /** Dismiss a fuzzy suggestion without applying it. */
+  const dismissFuzzy = useCallback((idx: number) => {
+    setFuzzyMatches(prev => {
+      const next = new Map(prev);
+      next.delete(idx);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Apply fuzzy suggestions to the current selection (bulk).
+   * Returns the number of entries updated.
+   */
+  const applyFuzzyToSelection = useCallback((): number => {
+    let applied = 0;
+    const toRemove: number[] = [];
+
+    setEntries(prev => prev.map(e => {
+      if (e._idx === undefined) return e;
+      if (!selectedKeys.has(entryKey(e))) return e;
+      if (e.status !== "untranslated") return e;
+      const match = fuzzyMatches.get(e._idx);
+      if (!match) return e;
+      toRemove.push(e._idx);
+      applied++;
+      return { ...e, translated: match.suggested, status: "validated" as EntryStatus };
+    }));
+
+    if (toRemove.length > 0) {
+      setFuzzyMatches(prev => {
+        const next = new Map(prev);
+        for (const idx of toRemove) next.delete(idx);
+        return next;
+      });
+    }
+
+    setSelectedKeys(new Set());
+    return applied;
+  }, [selectedKeys, fuzzyMatches]);
+
   return {
     pluginInfo, entries, displayEntries, loading, loadingProgress, error,
     filter, setFilter, search, setSearch,
@@ -690,5 +882,9 @@ export function usePlugin({
     autoApplyResult, clearAutoApplyResult: () => setAutoApplyResult(null),
     dbNotFound, clearDbNotFound: () => setDbNotFound(null),
     loadedDbInfo,
+    // Fuzzy
+    fuzzyMatches, fuzzyScanning, filterFuzzyOnly, setFilterFuzzyOnly,
+    runFuzzyAuto, runFuzzySingle, acceptFuzzy, dismissFuzzy, applyFuzzyToSelection,
+    fuzzyMatchCount: fuzzyMatches.size,
   };
 }

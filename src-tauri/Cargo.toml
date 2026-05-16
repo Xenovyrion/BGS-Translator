@@ -50,6 +50,12 @@ log       = "0.4"
 # Spell check — HTTP dictionary downloads (no OpenSSL, pure Rust TLS)
 reqwest = { version = "0.12", features = ["rustls-tls", "stream", "json"], default-features = false }
 
+# Fuzzy text matching (Jaro-Winkler + normalized Levenshtein)
+strsim = "0.11"
+
+# Data-parallelism for fuzzy bulk search (run inside spawn_blocking)
+rayon = "1"
+
 [profile.release]
 panic         = "abort"
 codegen-units = 1

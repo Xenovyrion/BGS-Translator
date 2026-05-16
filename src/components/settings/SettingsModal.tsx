@@ -8,7 +8,7 @@ import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts } from "../../types";
-import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS } from "../../types";
+import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS } from "../../types";
 
 type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
@@ -1401,16 +1401,19 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
   );
 }
 
-// ── API & IA tab ──────────────────────────────────────────────────────────────
+// ── Traduction auto. tab ─────────────────────────────────────────────────────
 
 function ApiTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
   const [showApiKey, setShowApiKey] = useState(false);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
 
-      {/* ── DeepL ───────────────────────────────────────────────────────── */}
+      {/* ══ APIs ════════════════════════════════════════════════════════════ */}
+      <SubGroup first label="APIs">
+
+      {/* DeepL */}
       <Section first label={t("deepl.section_title")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.5 }}>
           {t("deepl.section_desc")}{" "}
@@ -1496,6 +1499,90 @@ function ApiTab({ settings, onUpdate }: TabProps) {
           </div>
         )}
       </Section>
+
+      </SubGroup>{/* /APIs */}
+
+      {/* ══ IA ══════════════════════════════════════════════════════════════ */}
+      <SubGroup label="IA">
+        <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
+          — Options IA à venir (résumé, reformulation, suggestions contextuelles…)
+        </p>
+      </SubGroup>{/* /IA */}
+
+      {/* ══ Autres réglages ═════════════════════════════════════════════════ */}
+      <SubGroup label={t("settings_modal.tab_auto_other")}>
+
+      {/* Fuzzy matching */}
+      <Section first label={t("fuzzy.settings_title")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 14 }}>
+          {t("fuzzy.settings_desc")}
+        </p>
+
+        {/* Auto-enable on plugin load */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
+            <input
+              type="checkbox"
+              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).auto_enabled}
+              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), auto_enabled: e.target.checked } })}
+              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+            />
+            {t("fuzzy.auto_enabled")}
+          </label>
+        </div>
+
+        {/* Jaro-Winkler threshold */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>{t("fuzzy.threshold_jw")}</span>
+          <input
+            type="range" min={0.70} max={1.00} step={0.01}
+            value={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).threshold_jw}
+            onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), threshold_jw: Number(e.target.value) } })}
+            style={{ width: 130, accentColor: "var(--accent)" }}
+          />
+          <span style={{ fontSize: 12, color: "var(--text-3)", minWidth: 36, textAlign: "right" }}>
+            {Math.round((settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).threshold_jw * 100)}%
+          </span>
+        </div>
+
+        {/* Levenshtein threshold */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>{t("fuzzy.threshold_lev")}</span>
+          <input
+            type="range" min={0.50} max={1.00} step={0.01}
+            value={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).threshold_lev}
+            onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), threshold_lev: Number(e.target.value) } })}
+            style={{ width: 130, accentColor: "var(--accent)" }}
+          />
+          <span style={{ fontSize: 12, color: "var(--text-3)", minWidth: 36, textAlign: "right" }}>
+            {Math.round((settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).threshold_lev * 100)}%
+          </span>
+        </div>
+
+        {/* Sources */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
+            <input
+              type="checkbox"
+              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).use_session}
+              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), use_session: e.target.checked } })}
+              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+            />
+            {t("fuzzy.use_session")}
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
+            <input
+              type="checkbox"
+              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).use_personal_db}
+              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), use_personal_db: e.target.checked } })}
+              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+            />
+            {t("fuzzy.use_personal_db")}
+          </label>
+        </div>
+      </Section>
+
+      </SubGroup>{/* /Autres réglages */}
 
     </div>
   );
@@ -1728,6 +1815,24 @@ function iconBtn(): React.CSSProperties {
     display: "flex", alignItems: "center", justifyContent: "center",
     boxSizing: "border-box",
   };
+}
+
+/** Lightweight subsection header — used inside a tab to group related settings
+ *  without the heavy accent border of Section. */
+function SubGroup({ label, children, first }: { label: string; children?: React.ReactNode; first?: boolean }) {
+  return (
+    <div style={{ marginBottom: 20, paddingTop: first ? 0 : 24, borderTop: first ? "none" : "1px solid var(--border)" }}>
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: "var(--text-3)",
+        textTransform: "uppercase", letterSpacing: "0.1em",
+        marginBottom: 16, display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span style={{ flex: 0 }}>{label}</span>
+        <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function Section({ label, children, first }: { label: React.ReactNode; children: React.ReactNode; first?: boolean }) {
