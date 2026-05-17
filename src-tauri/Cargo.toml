@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "BGS Translator - Outil de traduction de mods Bethesda"
 authors = []
 edition = "2021"
-license = "GPL-3.0"
+license = "MPL-2.0"
 
 [package.metadata]
 

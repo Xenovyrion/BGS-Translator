@@ -11,7 +11,7 @@
 <p align="center">
 <!-- BADGES:START -->
 <img alt="Release" src="https://img.shields.io/github/v/release/LordLuffy/BGS-Translator?style=for-the-badge" />
-<img alt="License" src="https://img.shields.io/badge/License-GPL--3.0-F4C430?style=for-the-badge" />
+<img alt="License" src="https://img.shields.io/badge/License-MPL--2.0-F4C430?style=for-the-badge" />
 <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4?style=for-the-badge" />
 <!-- BADGES:END -->
 </p>
@@ -505,5 +505,15 @@ ICU (International Components for Unicode), a transitive dependency of Nuspell, 
 | Log file | `{AppLog}/bgstranslator.log` (e.g. `%APPDATA%\com.bgstranslator\logs\` on Windows) |
 
 Export and session directories are created automatically on first launch and are cross-platform (`Documents` resolves via the OS API on Windows, macOS and Linux).
+
+---
+
+## 9. License
+
+This project is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
+
+You may use, modify and distribute this software under the terms of the MPL-2.0. Modified source files must remain under the MPL-2.0; you may combine MPL-2.0 code with code under other licenses (including proprietary licenses) in a larger work.
+
+See the [`LICENSE`](LICENSE) file for the full license text, or visit [mozilla.org/MPL/2.0](https://www.mozilla.org/en-US/MPL/2.0/).
 
 ---

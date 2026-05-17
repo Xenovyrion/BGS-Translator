@@ -1,12 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core"; // used by spell check
 import { startDrag } from "../../hooks/useLayout";
-import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch, ProviderConfig } from "../../types";
+import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch, ActiveProvider } from "../../types";
 import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
 import {
-  IconCopy, IconSearch, IconCheck, IconClose, IconReplace,
+  IconCopy, IconSearch, IconCheck, IconClose, IconReplace, IconExternalLink,
   IconArrowUp, IconArrowDown, IconCaseSensitive, IconSpellCheck,
   IconSettings as IconGear, IconSpinner,
 } from "../../icons";
@@ -41,15 +41,22 @@ interface Props {
   spellLang?:         string;
   spellRealtime?:     boolean;
   spellDebounce?:     number;
-  /** Full provider config (id + per-provider fields) — used for translation button. */
-  providerConfig?:      ProviderConfig;
-  /** Human-readable name of the active provider (for button label). */
-  providerName?:        string;
-  /** True when the provider opens the browser instead of returning text. */
-  providerIsLauncher?:  boolean;
+  /** Active API providers (shown as translate buttons). */
+  activeApiProviders?:      ActiveProvider[];
+  /** Active browser launcher providers (shown as open-browser buttons). */
+  activeLauncherProviders?: ActiveProvider[];
+  /** ID of the provider currently loading (null = none). */
+  translateLoadingId?:      string | null;
+  /** Per-provider error messages. */
+  translateErrorMap?:       Map<string, string>;
+  /** Called when the user clicks a translate button for an API provider. */
+  onTranslateWith?:         (provider: ActiveProvider) => void;
+  /** Called when the user clicks a browser launcher button. */
+  onOpenBrowserWith?:       (provider: ActiveProvider) => void;
   /** Target language code (e.g. "fr"). */
-  targetLang?:          string;
-  onAddToPersonalDb?: () => void;    // Add single entry to personal DB
+  targetLang?:              string;
+  onApplyPersonalDb?: () => void;    // Apply personal DB to this entry
+  onAddToPersonalDb?: () => void;    // Add this entry to personal DB
   personalDbName?:    string;        // Name of the active personal DB (for tooltip)
   /** Fuzzy suggestion for this entry (if any) */
   fuzzyMatch?:        FuzzyMatch;
@@ -179,7 +186,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, providerConfig, providerName, providerIsLauncher = false, targetLang = "fr", onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, activeApiProviders = [], activeLauncherProviders = [], translateLoadingId, translateErrorMap, onTranslateWith, onOpenBrowserWith, onApplyPersonalDb, onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
   ref,
 ) {
   const { t } = useTranslation();
@@ -207,8 +214,6 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
   const [spellChecking,  setSpellChecking]  = useState(false);
   const [spellPopup,     setSpellPopup]     = useState<SpellPopup | null>(null);
   const spellPopupRef                       = useRef<HTMLDivElement>(null);
-  const [translateLoading, setTranslateLoading] = useState(false);
-  const [translateError,   setTranslateError]   = useState<string | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
@@ -404,63 +409,6 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     onTranslate(entry._idx ?? 0, text);
   }, [allMatches, replaceQuery, entry.translated, entry._idx, onTranslate]);
 
-  const runTranslation = useCallback(async () => {
-    if (!providerConfig || !entry.original.trim()) return;
-    setTranslateLoading(true);
-    setTranslateError(null);
-    try {
-      if (providerIsLauncher) {
-        // Browser launcher — open the browser with the text pre-filled
-        const result = await invoke<{ opened: boolean; text_in_url: boolean }>(
-          "open_browser_translator_cmd", {
-            service:    providerConfig.id,
-            text:       entry.original,
-            sourceLang: "auto",
-            targetLang: targetLang,
-          }
-        );
-        if (result.opened && !result.text_in_url) {
-          // Text was too long for URL — copy to clipboard and notify
-          await navigator.clipboard.writeText(entry.original).catch(() => {});
-          setTranslateError(t("providers.launcher_long_text"));
-          setTimeout(() => setTranslateError(null), 5000);
-        }
-      } else {
-        // API provider — call translate_one_cmd
-        const result = await invoke<string>("translate_one_cmd", {
-          config:     providerConfig,
-          text:       entry.original,
-          sourceLang: null,
-          targetLang: targetLang,
-        });
-        if (result) onTranslate(entry._idx ?? 0, result);
-      }
-    } catch (e) {
-      const msg = String(e);
-      const errorKey =
-        msg === "deepl_invalid_key"            ? t("deepl.error_invalid_key")              :
-        msg === "deepl_quota_exceeded"         ? t("deepl.error_quota")                    :
-        msg === "deepl_no_api_key"             ? t("deepl.error_no_api_key")               :
-        msg === "deepl_too_many_requests"      ? t("deepl.error_too_many_requests")        :
-        msg === "microsoft_no_api_key"         ? t("providers.error_microsoft_no_key")     :
-        msg === "microsoft_invalid_key"        ? t("providers.error_microsoft_invalid_key"):
-        msg === "microsoft_quota_exceeded"     ? t("providers.error_microsoft_quota")      :
-        msg === "microsoft_too_many_requests"  ? t("providers.error_microsoft_rate")       :
-        msg === "libretranslate_forbidden"     ? t("providers.error_libretranslate_forbidden") :
-        msg === "libretranslate_too_many_requests" ? t("providers.error_libretranslate_rate") :
-        msg === "libretranslate_server_error"  ? t("providers.error_libretranslate_server"):
-        msg === "mymemory_quota_exceeded"      ? t("providers.error_mymemory_quota")       :
-        msg === "custom_no_endpoint"           ? t("providers.error_custom_no_endpoint")   :
-        msg === "custom_no_request_template"   ? t("providers.error_custom_no_template")   :
-        msg.startsWith("custom_invalid_request_template") ? t("providers.error_custom_invalid_template") :
-        msg.startsWith("custom_path_not_found")           ? t("providers.error_custom_path") :
-        msg;
-      setTranslateError(errorKey);
-      setTimeout(() => setTranslateError(null), 4000);
-    } finally {
-      setTranslateLoading(false);
-    }
-  }, [providerConfig, providerIsLauncher, targetLang, entry.original, entry._idx, onTranslate, t]);
 
   const runSpellCheck = useCallback(async () => {
     if (!spellLang) return;
@@ -747,65 +695,113 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             {/* Spacer — pushes all action buttons to the right */}
             <div style={{ flex: 1 }} />
 
-            {/* Personal DB button (single entry) */}
-            {onAddToPersonalDb && (
-              <ToolBtn
-                onClick={() => {
-                  if (entry.translated) onAddToPersonalDb();
-                }}
-                disabled={!entry.translated}
-                title={personalDbName
-                  ? t("edit.add_personal_db_named", { name: personalDbName })
-                  : t("edit.add_personal_db")}
-                style={{ background: "var(--bg-primary)", color: "var(--accent)", borderColor: "var(--accent)" }}
-              >
-                <span style={{ fontSize: 11, fontWeight: 700 }}>+ DB</span>
-              </ToolBtn>
+            {/* ── BDD Perso : charger + ajouter ─────────────────────────── */}
+            {(onApplyPersonalDb || onAddToPersonalDb) && (
+              <>
+                <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+                {/* Charger depuis BDD perso — cyan #0ea5e9 comme BulkActionBar */}
+                {onApplyPersonalDb && (
+                  <ToolBtn
+                    onClick={onApplyPersonalDb}
+                    title={personalDbName
+                      ? t("bulk.apply_personal_db_named", { name: personalDbName })
+                      : t("bulk.apply_personal_db")}
+                    style={{ background: "#0ea5e9", color: "#fff", border: "1px solid #0ea5e9", opacity: 1 }}
+                  >
+                    <IconArrowDown size={11} />
+                    <span style={{ fontSize: 10, fontWeight: 700 }}>DB</span>
+                  </ToolBtn>
+                )}
+                {/* Ajouter à BDD perso — indigo #6366f1 comme BulkActionBar */}
+                {onAddToPersonalDb && (
+                  <ToolBtn
+                    onClick={() => { if (entry.translated) onAddToPersonalDb!(); }}
+                    disabled={!entry.translated}
+                    title={personalDbName
+                      ? t("bulk.add_personal_db_named", { name: personalDbName })
+                      : t("bulk.add_personal_db")}
+                    style={{ background: "#6366f1", color: "#fff", border: "1px solid #6366f1", opacity: entry.translated ? 1 : 0.4 }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 700 }}>+</span>
+                    <span style={{ fontSize: 10, fontWeight: 700 }}>DB</span>
+                  </ToolBtn>
+                )}
+              </>
             )}
 
-            {/* Fuzzy manual trigger */}
+            {/* Fuzzy — orange #f97316 quand suggestion disponible (cohérent avec BulkActionBar) */}
             {onRunFuzzy && (
               <ToolBtn
                 onClick={onRunFuzzy}
                 disabled={fuzzyScanning}
                 title={t("fuzzy.badge_title", { score: fuzzyMatch ? Math.round(fuzzyMatch.score * 100) : 0, src: fuzzyMatch?.origin ?? "" })}
-                style={fuzzyMatch ? { color: fuzzyScoreColor(fuzzyMatch.score), borderColor: fuzzyScoreColor(fuzzyMatch.score) } : undefined}
+                style={fuzzyMatch
+                  ? { background: "#f97316", color: "#fff", border: "1px solid #f97316", opacity: 1 }
+                  : undefined}
               >
                 {fuzzyScanning ? <IconSpinner size={11} /> : <IconSearch size={12} />}
-                {!fuzzyScanning && fuzzyMatch && ` ${fuzzyScoreLabel(fuzzyMatch.score)}`}
+                {!fuzzyScanning && fuzzyMatch && <span style={{ fontSize: 10, fontWeight: 700 }}>{fuzzyScoreLabel(fuzzyMatch.score)}</span>}
               </ToolBtn>
             )}
 
-            {/* Translation provider button */}
-            {providerConfig && (
-              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                <ToolBtn
-                  onClick={runTranslation}
-                  disabled={translateLoading}
-                  title={providerIsLauncher
-                    ? t("providers.btn_open_browser", { name: providerName ?? providerConfig.id })
-                    : t("providers.btn_translate",    { name: providerName ?? providerConfig.id })}
-                  style={{ background: translateLoading ? undefined : "var(--bg-primary)" }}
-                >
-                  {translateLoading
-                    ? <IconSpinner size={11} />
-                    : <><IconReplace size={13} /><span style={{ fontSize: 10, fontWeight: 600 }}>
-                        {(providerName ?? providerConfig.id).slice(0, 7)}
-                      </span></>
-                  }
-                </ToolBtn>
-                {translateError && (
-                  <div style={{
-                    position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 300,
-                    background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444",
-                    borderRadius: 6, padding: "5px 10px",
-                    fontSize: 11, color: "#ef4444", whiteSpace: "nowrap",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                  }}>
-                    {translateError}
-                  </div>
-                )}
-              </div>
+            {/* API provider buttons — one per enabled API provider */}
+            {activeApiProviders.length > 0 && (
+              <>
+                <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+                {activeApiProviders.map(provider => {
+                  const loading = translateLoadingId === provider.id;
+                  const error   = translateErrorMap?.get(provider.id);
+                  return (
+                    <div key={provider.id} style={{ position: "relative" }}>
+                      <ToolBtn
+                        onClick={() => onTranslateWith?.(provider)}
+                        disabled={loading || !!translateLoadingId}
+                        title={t("providers.btn_translate", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
+                        style={{
+                          background: loading ? "rgba(37,99,235,0.15)" : "#2563eb",
+                          color:      loading ? "#2563eb"              : "#fff",
+                          border:     "1px solid #2563eb",
+                          opacity:    loading ? 0.7 : 1,
+                        }}
+                      >
+                        {loading
+                          ? <IconSpinner size={11} />
+                          : <><IconReplace size={12} /><span style={{ fontSize: 10, fontWeight: 600 }}>{provider.name.slice(0, 12)}</span></>
+                        }
+                      </ToolBtn>
+                      {error && (
+                        <div style={{
+                          position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 300,
+                          background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444",
+                          borderRadius: 6, padding: "5px 10px",
+                          fontSize: 11, color: "#ef4444", whiteSpace: "nowrap",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                        }}>
+                          {error}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Browser launcher buttons */}
+            {activeLauncherProviders.length > 0 && (
+              <>
+                <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+                {activeLauncherProviders.map(provider => (
+                  <ToolBtn
+                    key={provider.id}
+                    onClick={() => onOpenBrowserWith?.(provider)}
+                    title={t("providers.btn_open_browser", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
+                    style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", opacity: 1 }}
+                  >
+                    <IconExternalLink size={12} />
+                    <span style={{ fontSize: 10, fontWeight: 600 }}>{provider.name.slice(0, 12)}</span>
+                  </ToolBtn>
+                ))}
+              </>
             )}
 
             {/* Spell check button */}

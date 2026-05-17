@@ -6,27 +6,41 @@ use tauri_plugin_opener::OpenerExt;
 /// Beyond this threshold we signal the frontend to use clipboard fallback.
 const MAX_URL_TEXT_LEN: usize = 1_500;
 
-fn build_url(service: &str, text: &str, source_lang: &str, target_lang: &str) -> Option<String> {
+fn build_url(
+    service:          &str,
+    text:             &str,
+    source_lang:      &str,
+    target_lang:      &str,
+    custom_template:  Option<&str>,
+) -> Option<String> {
     let encoded = urlencoded(text);
+    let sl = source_lang.to_lowercase();
+    let tl = target_lang.to_lowercase();
+
     match service {
         "launcher_deepl" => Some(format!(
             "https://www.deepl.com/translator#{}/{}/{}",
-            source_lang.to_lowercase(),
-            target_lang.to_lowercase(),
-            encoded,
+            sl, tl, encoded,
         )),
         "launcher_google" => Some(format!(
             "https://translate.google.com/?sl={}&tl={}&text={}&op=translate",
-            source_lang.to_lowercase(),
-            target_lang.to_lowercase(),
-            encoded,
+            sl, tl, encoded,
         )),
         "launcher_bing" => Some(format!(
             "https://www.bing.com/translator?text={}&from={}&to={}",
-            encoded,
-            source_lang.to_lowercase(),
-            target_lang.to_lowercase(),
+            encoded, sl, tl,
         )),
+        // Custom browser launcher: the `endpoint` field is a URL template with
+        // optional placeholders: {text}, {from}, {to}, {text_enc}
+        _ if custom_template.is_some() => {
+            let tmpl = custom_template.unwrap();
+            let url  = tmpl
+                .replace("{text_enc}", &encoded)
+                .replace("{text}",     text)
+                .replace("{from}",     &sl)
+                .replace("{to}",       &tl);
+            Some(url)
+        }
         _ => None,
     }
 }
@@ -59,19 +73,24 @@ pub struct LaunchResult {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/// Open a browser-based translation service.
+///
+/// `custom_template` is the URL template for custom launchers (the `endpoint` field from
+/// ProviderConfig). It may contain: `{text_enc}`, `{text}`, `{from}`, `{to}`.
 pub fn open(
-    app:         &tauri::AppHandle,
-    service:     &str,
-    text:        &str,
-    source_lang: &str,
-    target_lang: &str,
+    app:             &tauri::AppHandle,
+    service:         &str,
+    text:            &str,
+    source_lang:     &str,
+    target_lang:     &str,
+    custom_template: Option<&str>,
 ) -> Result<LaunchResult, String> {
     let text_in_url = text.len() <= MAX_URL_TEXT_LEN;
 
-    // If text is too long, open the service homepage without the text
+    // If text is too long, open the service with an empty text slot
     let effective_text = if text_in_url { text } else { "" };
 
-    let url = build_url(service, effective_text, source_lang, target_lang)
+    let url = build_url(service, effective_text, source_lang, target_lang, custom_template)
         .ok_or_else(|| format!("launcher_unknown_service:{service}"))?;
 
     app.opener()

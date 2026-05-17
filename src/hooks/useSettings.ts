@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type StoredProviderConfig } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type ProviderEntry, DEFAULT_PROVIDER_ENTRIES } from "../types";
 
 export interface DefaultDbEntry {
   path:    string;
@@ -36,12 +36,8 @@ export interface AppSettings {
   spellLang:      string;   // active dictionary lang code; "" = disabled
   spellRealtime:  boolean;  // check while typing
   spellDebounce:  number;   // debounce delay in ms for real-time mode
-  // DeepL auto-translation (legacy — kept for migration, use providerConfigs instead)
-  deeplApiKey:    string;
-  deeplApiType:   string;   // "free" | "pro"
-  // Translation provider system
-  activeProviderId:  string;                             // ID of the active provider
-  providerConfigs:   Record<string, StoredProviderConfig>; // per-provider config
+  // Translation provider system (multi-provider, Phase 2)
+  providerEntries: ProviderEntry[];
   // Personal DB
   personalDbFolder:   string;  // folder containing .bgtx files (empty = default personal_dbs/)
   activePersonalDbPath: string; // path of the active personal DB (empty = none)
@@ -75,10 +71,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellLang:     "",
   spellRealtime: false,
   spellDebounce: 600,
-  deeplApiKey:   "",
-  deeplApiType:  "free",
-  activeProviderId:  "deepl",
-  providerConfigs:   {},
+  providerEntries: DEFAULT_PROVIDER_ENTRIES,
   personalDbFolder:     "",
   activePersonalDbPath: "",
   personalDbAutoApply:  true,
@@ -91,19 +84,49 @@ export function useSettings() {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Migrate legacy deeplApiKey/deeplApiType into providerConfigs.deepl
-        const providerConfigs: Record<string, StoredProviderConfig> = { ...(parsed.providerConfigs ?? {}) };
-        if (!providerConfigs.deepl?.apiKey && parsed.deeplApiKey) {
-          providerConfigs.deepl = {
-            ...providerConfigs.deepl,
-            apiKey:  parsed.deeplApiKey,
-            variant: parsed.deeplApiType ?? "free",
-          };
+
+        // ── Migrate to multi-provider providerEntries (Phase 2) ───────────────
+        let providerEntries: ProviderEntry[];
+
+        if (Array.isArray(parsed.providerEntries)) {
+          // Already Phase 2 format — merge with DEFAULT_PROVIDER_ENTRIES so newly
+          // added built-ins appear (disabled by default) after an app update.
+          const savedMap = new Map<string, ProviderEntry>(
+            parsed.providerEntries.map((e: ProviderEntry) => [e.id, e])
+          );
+          const builtinIds = new Set(DEFAULT_PROVIDER_ENTRIES.map(e => e.id));
+
+          providerEntries = [
+            // Built-ins: keep saved state, fill gaps with defaults
+            ...DEFAULT_PROVIDER_ENTRIES.map(def => savedMap.get(def.id) ?? def),
+            // Custom entries (ids not in built-in set)
+            ...parsed.providerEntries.filter((e: ProviderEntry) => !builtinIds.has(e.id)),
+          ];
+        } else {
+          // Phase 1 / legacy format — build providerEntries from old fields
+          providerEntries = DEFAULT_PROVIDER_ENTRIES.map(def => {
+            const saved = { ...def };
+
+            // Migrate deepl API key from deeplApiKey / deeplApiType
+            if (def.id === "deepl" && parsed.deeplApiKey) {
+              saved.enabled = parsed.activeProviderId === "deepl" || !!parsed.deeplApiKey;
+              saved.config  = { apiKey: parsed.deeplApiKey, variant: parsed.deeplApiType ?? "free" };
+            }
+
+            // Migrate other providers from providerConfigs
+            if (parsed.providerConfigs?.[def.id]) {
+              saved.enabled = parsed.activeProviderId === def.id;
+              saved.config  = { ...parsed.providerConfigs[def.id] };
+            }
+
+            return saved;
+          });
         }
+
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
-          providerConfigs,
+          providerEntries,
           // Merge nested objects so new keys added in later versions always have a default
           shortcuts:     { ...DEFAULT_SHORTCUTS,       ...(parsed.shortcuts      ?? {}) },
           editShortcuts: { ...DEFAULT_EDIT_SHORTCUTS,  ...(parsed.editShortcuts  ?? {}) },

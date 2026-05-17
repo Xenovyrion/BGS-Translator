@@ -7,8 +7,8 @@ import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
-import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig } from "../../types";
-import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS } from "../../types";
+import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig, ProviderEntry } from "../../types";
+import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS, DEFAULT_PROVIDER_ENTRIES, SHORTCUT_OPTIONS } from "../../types";
 import {
   IconSettings, IconClose, IconFolder,
   IconReplace, IconCheck, IconDatabase, IconSort, IconRefresh, IconSearch,
@@ -1409,142 +1409,223 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
 // ── Traduction auto. tab ─────────────────────────────────────────────────────
 
+// ── UUID generator (tiny, no dep) ─────────────────────────────────────────────
+function genId() {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+const BUILTIN_IDS = new Set(DEFAULT_PROVIDER_ENTRIES.map(e => e.id));
+
 function ApiTab({ settings, onUpdate }: TabProps) {
   const { t } = useTranslation();
-  const [providers,        setProviders]        = useState<ProviderMeta[]>([]);
-  const [selectedId,       setSelectedId]       = useState<string>(settings.activeProviderId ?? "deepl");
-  const [showKey,          setShowKey]          = useState(false);
+  const [providerMetas, setProviderMetas] = useState<ProviderMeta[]>([]);
+  const [expandedId,    setExpandedId]    = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<ProviderMeta[]>("get_providers_cmd").then(setProviders).catch(() => {});
+    invoke<ProviderMeta[]>("get_providers_cmd").then(setProviderMetas).catch(() => {});
   }, []);
 
-  const activeId  = settings.activeProviderId ?? "deepl";
-  const cfg       = (settings.providerConfigs ?? {})[selectedId] ?? {};
+  const entries: ProviderEntry[] = settings.providerEntries ?? DEFAULT_PROVIDER_ENTRIES;
 
-  function updateCfg(patch: Partial<StoredProviderConfig>) {
-    onUpdate({
-      providerConfigs: {
-        ...(settings.providerConfigs ?? {}),
-        [selectedId]: { ...cfg, ...patch },
-      },
-    });
+  function updateEntries(next: ProviderEntry[]) {
+    onUpdate({ providerEntries: next });
   }
 
-  function activate(id: string) {
-    setSelectedId(id);
-    onUpdate({ activeProviderId: id });
+  function patchEntry(id: string, patch: Partial<ProviderEntry>) {
+    updateEntries(entries.map(e => e.id === id ? { ...e, ...patch } : e));
   }
 
-  const groups: Array<{ key: string; ids: string[] }> = [
-    { key: "group_official", ids: ["deepl", "microsoft"] },
-    { key: "group_free",     ids: ["libretranslate", "mymemory"] },
-    { key: "group_browser",  ids: ["launcher_deepl", "launcher_google", "launcher_bing"] },
-    { key: "group_custom",   ids: ["custom"] },
-  ];
+  function patchConfig(id: string, patch: Partial<StoredProviderConfig>) {
+    updateEntries(entries.map(e =>
+      e.id === id ? { ...e, config: { ...e.config, ...patch } } : e
+    ));
+  }
+
+  function deleteEntry(id: string) {
+    updateEntries(entries.filter(e => e.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  }
+
+  function addCustomApi() {
+    const id = genId();
+    const newEntry: ProviderEntry = { id, enabled: true, kind: "api", isCustom: true, customName: t("providers.new_custom_name"), config: {} };
+    updateEntries([...entries, newEntry]);
+    setExpandedId(id);
+  }
+
+  function addCustomBrowser() {
+    const id = genId();
+    const newEntry: ProviderEntry = { id, enabled: true, kind: "browser", isCustom: true, customName: t("providers.new_browser_name"), config: {} };
+    updateEntries([...entries, newEntry]);
+    setExpandedId(id);
+  }
+
+  const apiEntries     = entries.filter(e => e.kind === "api");
+  const browserEntries = entries.filter(e => e.kind === "browser");
+
+  const renderRow = (entry: ProviderEntry) => {
+    const meta       = providerMetas.find(m => m.id === entry.id);
+    const displayName = entry.customName ?? meta?.name ?? entry.id;
+    const isExpanded  = expandedId === entry.id;
+    const isCustom    = entry.isCustom || !BUILTIN_IDS.has(entry.id);
+
+    return (
+      <div key={entry.id}>
+        {/* ── Row ── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "7px 10px",
+          borderRadius: isExpanded ? "6px 6px 0 0" : 6,
+          background: isExpanded ? "var(--bg-card)" : "var(--bg-hover)",
+          border: "1px solid var(--border)",
+          borderBottom: isExpanded ? "none" : "1px solid var(--border)",
+          marginBottom: isExpanded ? 0 : 5,
+          transition: "background 0.1s",
+        }}>
+          {/* Toggle */}
+          <input
+            type="checkbox" checked={entry.enabled}
+            onChange={e => patchEntry(entry.id, { enabled: e.target.checked })}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14, flexShrink: 0, cursor: "pointer" }}
+          />
+
+          {/* Name (editable for custom) */}
+          {isCustom ? (
+            <input
+              value={entry.customName ?? ""}
+              onChange={e => patchEntry(entry.id, { customName: e.target.value })}
+              style={{
+                flex: 1, minWidth: 0, height: 24, padding: "0 6px",
+                background: "var(--bg-primary)", color: "var(--text-1)",
+                border: "1px solid var(--border)", borderRadius: 4, fontSize: 12,
+                outline: "none", boxSizing: "border-box",
+              }}
+              placeholder={t("providers.custom_name_placeholder")}
+            />
+          ) : (
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: entry.enabled ? "var(--text-1)" : "var(--text-3)" }}>
+              {displayName}
+            </span>
+          )}
+
+          {/* Shortcut selector */}
+          <select
+            value={entry.shortcut ?? ""}
+            onChange={e => patchEntry(entry.id, { shortcut: e.target.value || undefined })}
+            style={{
+              height: 26, padding: "0 4px", fontSize: 11,
+              background: "var(--bg-primary)", color: "var(--text-2)",
+              border: "1px solid var(--border)", borderRadius: 4,
+              cursor: "pointer", flexShrink: 0, minWidth: 80,
+              boxSizing: "border-box",
+            }}
+          >
+            {SHORTCUT_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {/* Expand config */}
+          <button
+            onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+            title={t("providers.config_btn")}
+            style={{
+              height: 26, width: 26, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+              background: isExpanded ? "var(--accent)" : "var(--bg-primary)",
+              color:      isExpanded ? "#fff"          : "var(--text-2)",
+              border: "1px solid var(--border)", fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxSizing: "border-box",
+            }}
+          >
+            ⚙
+          </button>
+
+          {/* Delete (custom only) */}
+          {isCustom && (
+            <button
+              onClick={() => deleteEntry(entry.id)}
+              title={t("providers.delete_btn")}
+              style={{
+                height: 26, width: 26, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                background: "transparent", color: "#ef4444",
+                border: "1px solid rgba(239,68,68,0.4)", fontSize: 14,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxSizing: "border-box",
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* ── Config panel (expanded) ── */}
+        {isExpanded && (
+          <div style={{
+            padding: "12px 14px",
+            borderRadius: "0 0 6px 6px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderTop: "none",
+            marginBottom: 5,
+          }}>
+            <ProviderConfigPanel
+              providerId={entry.id}
+              meta={meta}
+              cfg={entry.config}
+              isBrowserKind={entry.kind === "browser"}
+              isCustomEntry={isCustom}
+              onUpdate={(patch) => patchConfig(entry.id, patch)}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
 
-      {/* ══ Provider selector ═══════════════════════════════════════════════ */}
-      <SubGroup first label={t("providers.section_title")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
-          {t("providers.section_desc")}
+      {/* ══ API providers ═══════════════════════════════════════════════════ */}
+      <SubGroup first label={t("providers.section_api")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          {t("providers.section_api_desc")}
         </p>
 
-        {groups.map(group => {
-          const groupProviders = group.ids
-            .map(id => providers.find(p => p.id === id))
-            .filter(Boolean) as ProviderMeta[];
-          if (!groupProviders.length) return null;
-          return (
-            <div key={group.key} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                {t(`providers.${group.key}`)}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {groupProviders.map(p => {
-                  const isActive   = p.id === activeId;
-                  const isSelected = p.id === selectedId;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => { setSelectedId(p.id); setShowKey(false); }}
-                      style={{
-                        height: 30, padding: "0 12px",
-                        borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
-                        background: isSelected ? "var(--accent)" : "var(--bg-hover)",
-                        color: isSelected ? "#fff" : "var(--text-2)",
-                        border: isSelected
-                          ? "1px solid var(--accent)"
-                          : isActive
-                          ? "1px solid #22c55e"
-                          : "1px solid var(--border)",
-                        display: "flex", alignItems: "center", gap: 6,
-                        transition: "all 0.12s",
-                      }}
-                    >
-                      {p.name}
-                      {isActive && !isSelected && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "#22c55e", textTransform: "uppercase" }}>
-                          {t("providers.active_badge")}
-                        </span>
-                      )}
-                      {isActive && isSelected && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase" }}>
-                          {t("providers.active_badge")}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {apiEntries.map(renderRow)}
 
-        {/* ── Config panel for selected provider ── */}
-        {providers.length > 0 && (
-          <div style={{
-            marginTop: 12,
-            padding: "14px 16px",
-            borderRadius: 8,
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)" }}>
-                {providers.find(p => p.id === selectedId)?.name ?? selectedId}
-              </span>
-              {selectedId !== activeId && (
-                <button
-                  onClick={() => activate(selectedId)}
-                  style={{
-                    height: 24, padding: "0 10px", borderRadius: 5, cursor: "pointer",
-                    fontSize: 10, fontWeight: 700, background: "#22c55e", color: "#fff",
-                    border: "none", marginLeft: "auto",
-                  }}
-                >
-                  {t("providers.activate_btn")}
-                </button>
-              )}
-              {selectedId === activeId && (
-                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "#22c55e" }}>
-                  ✓ {t("providers.active_badge")}
-                </span>
-              )}
-            </div>
+        <button
+          onClick={addCustomApi}
+          style={{
+            height: 30, padding: "0 12px", borderRadius: 6, cursor: "pointer",
+            fontSize: 11, fontWeight: 600,
+            background: "transparent", color: "var(--accent)",
+            border: "1px dashed var(--accent)", marginTop: 4,
+          }}
+        >
+          + {t("providers.add_api_btn")}
+        </button>
+      </SubGroup>
 
-            <ProviderConfigPanel
-              providerId={selectedId}
-              meta={providers.find(p => p.id === selectedId)}
-              cfg={cfg}
-              showKey={showKey}
-              onShowKey={setShowKey}
-              onUpdate={updateCfg}
-            />
-          </div>
-        )}
+      {/* ══ Browser launchers ═══════════════════════════════════════════════ */}
+      <SubGroup label={t("providers.section_browser")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          {t("providers.section_browser_desc")}
+        </p>
+
+        {browserEntries.map(renderRow)}
+
+        <button
+          onClick={addCustomBrowser}
+          style={{
+            height: 30, padding: "0 12px", borderRadius: 6, cursor: "pointer",
+            fontSize: 11, fontWeight: 600,
+            background: "transparent", color: "var(--accent)",
+            border: "1px dashed var(--accent)", marginTop: 4,
+          }}
+        >
+          + {t("providers.add_browser_btn")}
+        </button>
       </SubGroup>
 
       {/* ══ Autres réglages ═════════════════════════════════════════════════ */}
@@ -1556,17 +1637,21 @@ function ApiTab({ settings, onUpdate }: TabProps) {
           {t("fuzzy.settings_desc")}
         </p>
 
-        {/* Auto-enable on plugin load */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
-            <input
-              type="checkbox"
-              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).auto_enabled}
-              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), auto_enabled: e.target.checked } })}
-              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+        {/* Auto-enable on plugin load — PillBtn style like other on/off settings */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>{t("fuzzy.auto_enabled")}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <PillBtn
+              label={t("settings_modal.misc.propagate_on")}
+              active={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).auto_enabled}
+              onClick={() => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), auto_enabled: true } })}
             />
-            {t("fuzzy.auto_enabled")}
-          </label>
+            <PillBtn
+              label={t("settings_modal.misc.propagate_off")}
+              active={!(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).auto_enabled}
+              onClick={() => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), auto_enabled: false } })}
+            />
+          </div>
         </div>
 
         {/* Jaro-Winkler threshold */}
@@ -1598,25 +1683,24 @@ function ApiTab({ settings, onUpdate }: TabProps) {
         </div>
 
         {/* Sources */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
-            <input
-              type="checkbox"
-              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).use_session}
-              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), use_session: e.target.checked } })}
-              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
-            />
-            {t("fuzzy.use_session")}
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
-            <input
-              type="checkbox"
-              checked={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS).use_personal_db}
-              onChange={e => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), use_personal_db: e.target.checked } })}
-              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
-            />
-            {t("fuzzy.use_personal_db")}
-          </label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {([ ["use_session", "use_personal_db"] as const ][0]).map(key => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--text-2)", flex: 1 }}>{t(`fuzzy.${key}`)}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <PillBtn
+                  label={t("settings_modal.misc.propagate_on")}
+                  active={(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS)[key]}
+                  onClick={() => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), [key]: true } })}
+                />
+                <PillBtn
+                  label={t("settings_modal.misc.propagate_off")}
+                  active={!(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS)[key]}
+                  onClick={() => onUpdate({ fuzzy: { ...(settings.fuzzy ?? DEFAULT_FUZZY_SETTINGS), [key]: false } })}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </Section>
 
@@ -1629,26 +1713,57 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 // ── Provider config panel (shown inside ApiTab) ───────────────────────────────
 
 function ProviderConfigPanel({
-  providerId, meta, cfg, showKey, onShowKey, onUpdate,
+  providerId, meta, cfg, isBrowserKind = false, isCustomEntry = false, onUpdate,
 }: {
-  providerId: string;
-  meta:       ProviderMeta | undefined;
-  cfg:        StoredProviderConfig;
-  showKey:    boolean;
-  onShowKey:  (v: boolean) => void;
-  onUpdate:   (patch: Partial<StoredProviderConfig>) => void;
+  providerId:     string;
+  meta:           ProviderMeta | undefined;
+  cfg:            StoredProviderConfig;
+  isBrowserKind?: boolean;
+  isCustomEntry?: boolean;
+  onUpdate:       (patch: Partial<StoredProviderConfig>) => void;
 }) {
   const { t } = useTranslation();
-  if (!meta) return null;
+  const [showKey, setShowKey] = useState(false);
 
-  // Browser launcher — no config needed
-  if (meta.is_launcher) {
+  // Built-in browser launcher — only needs URL info
+  if (isBrowserKind && !isCustomEntry) {
     return (
       <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
         {t("providers.launcher_info")}
       </p>
     );
   }
+
+  // Custom browser launcher — needs a URL template
+  if (isBrowserKind && isCustomEntry) {
+    const inputStyle: React.CSSProperties = {
+      flex: 1, height: 30, padding: "0 10px", borderRadius: 6, fontSize: 11,
+      background: "var(--bg-hover)", color: "var(--text-1)",
+      border: "1px solid var(--border)", outline: "none",
+      fontFamily: "monospace", boxSizing: "border-box",
+    };
+    const labelStyle: React.CSSProperties = { fontSize: 11, color: "var(--text-3)", width: 100, flexShrink: 0 };
+    const row = (label: string, child: React.ReactNode) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={labelStyle}>{label}</span>
+        {child}
+      </div>
+    );
+    return (
+      <div>
+        {row(t("providers.endpoint_label"),
+          <input style={inputStyle} value={cfg.endpoint ?? ""} onChange={e => onUpdate({ endpoint: e.target.value })}
+            placeholder="https://translate.example.com/?q={text_enc}&sl={from}&tl={to}" spellCheck={false} />,
+        )}
+        <p style={{ fontSize: 11, color: "var(--text-3)", margin: "4px 0 0", lineHeight: 1.5 }}>
+          {t("providers.browser_template_hint")}
+        </p>
+      </div>
+    );
+  }
+
+  // API provider — no meta means unknown custom, show all fields
+  if (!meta && !isCustomEntry) return null;
 
   const inputStyle: React.CSSProperties = {
     flex: 1, height: 30, padding: "0 10px", borderRadius: 6, fontSize: 11,
@@ -1739,7 +1854,7 @@ function ProviderConfigPanel({
             spellCheck={false}
             style={inputStyle}
           />
-          <button onClick={() => onShowKey(!showKey)} title={showKey ? t("providers.hide_key") : t("providers.show_key")} style={iconBtn()}>
+          <button onClick={() => setShowKey(v => !v)} title={showKey ? t("providers.hide_key") : t("providers.show_key")} style={iconBtn()}>
             {showKey ? "🙈" : "👁"}
           </button>
           {cfg.apiKey && (
@@ -1750,7 +1865,7 @@ function ProviderConfigPanel({
         </div>
       </div>
 
-      {!meta.requires_key && (
+      {meta && !meta.requires_key && (
         <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4, lineHeight: 1.4 }}>
           ℹ {t("providers.optional_key")}
         </p>

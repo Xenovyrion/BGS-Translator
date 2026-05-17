@@ -283,7 +283,7 @@ export interface ProviderMeta {
 export interface StoredProviderConfig {
   apiKey?:          string;
   variant?:         string;   // deepl: "free"/"pro" | microsoft: region code
-  endpoint?:        string;   // libretranslate self-hosted, custom URL
+  endpoint?:        string;   // libretranslate self-hosted, custom URL or browser template
   authHeader?:      string;   // custom: "Authorization: Bearer {api_key}"
   requestTemplate?: string;   // custom: JSON body template
   responsePath?:    string;   // custom: "translations[0].text"
@@ -292,6 +292,95 @@ export interface StoredProviderConfig {
 /** Full provider config sent to Rust — extends StoredProviderConfig with id. */
 export interface ProviderConfig extends StoredProviderConfig {
   id: string;
+}
+
+/**
+ * One entry in the user's provider list (built-in or custom).
+ * Stored in localStorage as part of AppSettings.providerEntries.
+ */
+export interface ProviderEntry {
+  /** Built-in id ("deepl", "microsoft", …) or UUID for custom providers. */
+  id:          string;
+  /** Whether this provider is active (button visible, shortcut fires). */
+  enabled:     boolean;
+  /** "api" for translation APIs, "browser" for browser launchers. */
+  kind:        "api" | "browser";
+  /** Keyboard shortcut string, e.g. "F9", "Shift+F10". Empty = none. */
+  shortcut?:   string;
+  /** Provider-specific configuration (API keys, endpoints, …). */
+  config:      StoredProviderConfig;
+  // ── Custom-provider-only fields ─────────────────────────────────────────
+  isCustom?:   boolean;
+  /** User-defined display name (custom providers only). */
+  customName?: string;
+}
+
+/** Default provider list — all built-ins disabled, with suggested Fx shortcuts. */
+export const DEFAULT_PROVIDER_ENTRIES: ProviderEntry[] = [
+  { id: "deepl",           enabled: false, kind: "api",     shortcut: "F9",  config: {} },
+  { id: "microsoft",       enabled: false, kind: "api",     shortcut: "F10", config: {} },
+  { id: "libretranslate",  enabled: false, kind: "api",     shortcut: "F11", config: {} },
+  { id: "mymemory",        enabled: false, kind: "api",     shortcut: "F12", config: {} },
+  { id: "launcher_deepl",  enabled: false, kind: "browser", shortcut: "F5",  config: {} },
+  { id: "launcher_google", enabled: false, kind: "browser", shortcut: "F6",  config: {} },
+  { id: "launcher_bing",   enabled: false, kind: "browser", shortcut: "F7",  config: {} },
+];
+
+/**
+ * A provider ready to use — built from ProviderEntry + ProviderMeta lookup.
+ * Passed to EditPanel as an array.
+ */
+export interface ActiveProvider {
+  id:         string;
+  name:       string;
+  shortcut?:  string;
+  isLauncher: boolean;
+  config:     ProviderConfig;
+}
+
+/** Shortcut options shown in the settings shortcut selector. */
+export const SHORTCUT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "—" },
+  ...Array.from({ length: 12 }, (_, i) => ({ value: `F${i + 1}`, label: `F${i + 1}` })),
+  ...Array.from({ length: 12 }, (_, i) => ({ value: `Shift+F${i + 1}`, label: `Shift+F${i + 1}` })),
+  ...Array.from({ length: 12 }, (_, i) => ({ value: `Ctrl+F${i + 1}`, label: `Ctrl+F${i + 1}` })),
+];
+
+/** Returns true when a KeyboardEvent matches a provider shortcut string. */
+export function matchProviderShortcut(e: KeyboardEvent, shortcut: string | undefined): boolean {
+  if (!shortcut) return false;
+  const parts = shortcut.split("+");
+  const key   = parts[parts.length - 1];
+  const shift = parts.includes("Shift");
+  const ctrl  = parts.includes("Ctrl");
+  return e.key === key &&
+    !!(e.ctrlKey || e.metaKey) === ctrl &&
+    !!e.shiftKey === shift &&
+    !e.altKey;
+}
+
+/** Maps a Rust provider error code to a human-readable message via i18next. */
+export function mapProviderError(code: string, t: (k: string, o?: object) => string): string {
+  const map: Record<string, string> = {
+    deepl_invalid_key:                t("deepl.error_invalid_key"),
+    deepl_quota_exceeded:             t("deepl.error_quota"),
+    deepl_no_api_key:                 t("deepl.error_no_api_key"),
+    deepl_too_many_requests:          t("deepl.error_too_many_requests"),
+    microsoft_no_api_key:             t("providers.error_microsoft_no_key"),
+    microsoft_invalid_key:            t("providers.error_microsoft_invalid_key"),
+    microsoft_quota_exceeded:         t("providers.error_microsoft_quota"),
+    microsoft_too_many_requests:      t("providers.error_microsoft_rate"),
+    libretranslate_forbidden:         t("providers.error_libretranslate_forbidden"),
+    libretranslate_too_many_requests: t("providers.error_libretranslate_rate"),
+    libretranslate_server_error:      t("providers.error_libretranslate_server"),
+    mymemory_quota_exceeded:          t("providers.error_mymemory_quota"),
+    custom_no_endpoint:               t("providers.error_custom_no_endpoint"),
+    custom_no_request_template:       t("providers.error_custom_no_template"),
+  };
+  if (map[code]) return map[code];
+  if (code.startsWith("custom_invalid_request_template")) return t("providers.error_custom_invalid_template");
+  if (code.startsWith("custom_path_not_found"))           return t("providers.error_custom_path");
+  return code;
 }
 
 /** Returns true when a keyboard event matches a ShortcutDef. */

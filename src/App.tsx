@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { documentDir } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
@@ -10,8 +10,8 @@ import { useSettings } from "./hooks/useSettings";
 import { usePlugin } from "./hooks/usePlugin";
 import { usePersonalDb } from "./hooks/usePersonalDb";
 import { useLayout } from "./hooks/useLayout";
-import { DEFAULT_SHORTCUTS, formatShortcut } from "./types";
-import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem, ProviderMeta, ProviderConfig } from "./types";
+import { DEFAULT_SHORTCUTS, formatShortcut, matchProviderShortcut, mapProviderError } from "./types";
+import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem, ProviderMeta, ActiveProvider } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
 import { IconSetContext } from "./icons";
@@ -161,7 +161,9 @@ export default function App() {
   const [showCompare,        setShowCompare]        = useState(false);
   const [compareSessions,    setCompareSessions]    = useState<SessionListItem[]>([]);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
-  const [translateBatchLoading, setTranslateBatchLoading] = useState(false);
+  const [batchLoadingId,     setBatchLoadingId]     = useState<string | null>(null);
+  const [translateLoadingId, setTranslateLoadingId] = useState<string | null>(null);
+  const [translateErrorMap,  setTranslateErrorMap]  = useState<Map<string, string>>(new Map());
   const [providerMetas,      setProviderMetas]      = useState<ProviderMeta[]>([]);
 
   const notify = useCallback((message: string, type: Notification["type"], detail?: string, duration?: number) => {
@@ -682,6 +684,20 @@ export default function App() {
     }
   }, [settings.activePersonalDbPath, applyPersonalDbManual, notify, t]);
 
+  /** Apply personal DB only to the single visible entry (from EditPanel). */
+  const handleApplyPersonalDbSingle = useCallback(async () => {
+    if (!settings.activePersonalDbPath || !selectedEntry || selectedEntry._idx === undefined) return;
+    const keys = new Set([String(selectedEntry._idx)]);
+    const matched = await applyPersonalDbManual(keys);
+    if (matched > 0) {
+      notify(`✓ ${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_banner_desc", { count: matched }), 4000);
+    } else {
+      notify(`${t("personal_db.apply_banner_title")}`, "success",
+        t("personal_db.apply_no_match"), 4000);
+    }
+  }, [settings.activePersonalDbPath, selectedEntry, applyPersonalDbManual, notify, t]);
+
   /** Apply personal DB only to the current selection (from BulkActionBar). */
   const handleApplyPersonalDbSelection = useCallback(async () => {
     if (!settings.activePersonalDbPath) {
@@ -699,22 +715,90 @@ export default function App() {
     clearSelection();
   }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t, clearSelection]);
 
-  // Build the active provider config from settings
-  const activeProviderMeta = providerMetas.find(p => p.id === (settings.activeProviderId ?? "deepl"));
-  const activeProviderConfig: ProviderConfig | undefined =
-    settings.activeProviderId
-      ? { id: settings.activeProviderId, ...(settings.providerConfigs?.[settings.activeProviderId] ?? {}) }
-      : undefined;
+  // ── Build active providers list ──────────────────────────────────────────
+  const activeProviders = useMemo<ActiveProvider[]>(() => {
+    return (settings.providerEntries ?? [])
+      .filter(e => e.enabled)
+      .map(e => {
+        const meta = providerMetas.find(m => m.id === e.id);
+        return {
+          id:         e.id,
+          name:       e.customName ?? meta?.name ?? e.id,
+          shortcut:   e.shortcut,
+          isLauncher: meta?.is_launcher ?? e.kind === "browser",
+          config:     { id: e.id, ...e.config },
+        };
+      });
+  }, [settings.providerEntries, providerMetas]);
 
-  const handleTranslateBatch = useCallback(async () => {
-    if (!activeProviderConfig || translateBatchLoading) return;
-    if (activeProviderMeta?.is_launcher) return; // launchers don't support batch
+  const activeApiProviders      = useMemo(() => activeProviders.filter(p => !p.isLauncher),  [activeProviders]);
+  const activeLauncherProviders = useMemo(() => activeProviders.filter(p => p.isLauncher),   [activeProviders]);
+
+  // ── Translate a single entry with a given provider ───────────────────────
+  const handleTranslateWith = useCallback(async (provider: ActiveProvider, entry: TranslationEntry) => {
+    setTranslateLoadingId(provider.id);
+    setTranslateErrorMap(prev => { const m = new Map(prev); m.delete(provider.id); return m; });
+    try {
+      const result = await invoke<string>("translate_one_cmd", {
+        config:     provider.config,
+        text:       entry.original,
+        sourceLang: null,
+        targetLang: settings.targetLanguage,
+      });
+      updateTranslation(entry._idx ?? 0, result);
+    } catch (e) {
+      const msg = mapProviderError(String(e), (k, o) => t(k, o as Record<string, unknown>));
+      setTranslateErrorMap(prev => { const m = new Map(prev); m.set(provider.id, msg); return m; });
+    } finally {
+      setTranslateLoadingId(null);
+    }
+  }, [settings.targetLanguage, updateTranslation, t]);
+
+  // ── Open browser launcher ─────────────────────────────────────────────────
+  const handleOpenBrowserWith = useCallback(async (provider: ActiveProvider, text: string) => {
+    try {
+      const result = await invoke<{ opened: boolean; text_in_url: boolean }>("open_browser_translator_cmd", {
+        config:     provider.config,
+        text,
+        sourceLang: "en",
+        targetLang: settings.targetLanguage,
+      });
+      if (result.opened && !result.text_in_url) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        notify(t("providers.browser_clipboard_hint"), "success", undefined, 5000);
+      }
+    } catch (e) {
+      notify(String(e), "error");
+    }
+  }, [settings.targetLanguage, notify, t]);
+
+  // ── Open browser launcher for the whole selection ────────────────────────
+  // Copies all originals to clipboard then opens the browser with the first entry.
+  const handleOpenBrowserBatch = useCallback(async (provider: ActiveProvider) => {
     const selected = entries.filter(e => selectedKeys.has(String(e._idx)));
     if (selected.length === 0) return;
-    setTranslateBatchLoading(true);
+    const allText = selected.map(e => e.original).join("\n\n");
+    // Copy everything to clipboard so the user can paste in the browser
+    await navigator.clipboard.writeText(allText).catch(() => {});
+    // Open browser with the first entry's text
+    await handleOpenBrowserWith(provider, selected[0].original);
+    if (selected.length > 1) {
+      notify(
+        t("providers.browser_batch_hint", { count: selected.length }),
+        "success", undefined, 6000,
+      );
+    }
+  }, [entries, selectedKeys, handleOpenBrowserWith, notify, t]);
+
+  // ── Batch-translate the current selection with a given provider ──────────
+  const handleTranslateBatchWith = useCallback(async (provider: ActiveProvider) => {
+    if (batchLoadingId) return;
+    const selected = entries.filter(e => selectedKeys.has(String(e._idx)));
+    if (selected.length === 0) return;
+    setBatchLoadingId(provider.id);
     try {
       const results = await invoke<string[]>("translate_batch_cmd", {
-        config:     activeProviderConfig,
+        config:     provider.config,
         texts:      selected.map(e => e.original),
         sourceLang: null,
         targetLang: settings.targetLanguage,
@@ -726,31 +810,16 @@ export default function App() {
           updated++;
         }
       });
-      notify(t("providers.batch_ok", { count: updated, name: activeProviderMeta?.name ?? activeProviderConfig.id }), "success");
+      notify(t("providers.batch_ok", { count: updated, name: provider.name }), "success");
       clearSelection();
     } catch (e) {
-      const msg = String(e);
-      const label =
-        msg === "deepl_invalid_key"            ? t("deepl.error_invalid_key")              :
-        msg === "deepl_quota_exceeded"         ? t("deepl.error_quota")                    :
-        msg === "deepl_no_api_key"             ? t("deepl.error_no_api_key")               :
-        msg === "deepl_too_many_requests"      ? t("deepl.error_too_many_requests")        :
-        msg === "microsoft_no_api_key"         ? t("providers.error_microsoft_no_key")     :
-        msg === "microsoft_invalid_key"        ? t("providers.error_microsoft_invalid_key"):
-        msg === "microsoft_quota_exceeded"     ? t("providers.error_microsoft_quota")      :
-        msg === "microsoft_too_many_requests"  ? t("providers.error_microsoft_rate")       :
-        msg === "libretranslate_forbidden"     ? t("providers.error_libretranslate_forbidden") :
-        msg === "libretranslate_too_many_requests" ? t("providers.error_libretranslate_rate") :
-        msg === "libretranslate_server_error"  ? t("providers.error_libretranslate_server"):
-        msg === "mymemory_quota_exceeded"      ? t("providers.error_mymemory_quota")       :
-        msg;
-      notify(label, "error");
+      notify(mapProviderError(String(e), (k, o) => t(k, o as Record<string, unknown>)), "error");
     } finally {
-      setTranslateBatchLoading(false);
+      setBatchLoadingId(null);
     }
-  }, [activeProviderConfig, activeProviderMeta, translateBatchLoading, entries, selectedKeys, updateTranslation, notify, t, clearSelection, settings.targetLanguage]);
+  }, [batchLoadingId, entries, selectedKeys, updateTranslation, notify, t, clearSelection, settings.targetLanguage]);
 
-  /* ── Global shortcuts (Ctrl+O, Ctrl+S, etc.) ────────────────────────────── */
+  /* ── Global shortcuts (Ctrl+O, Ctrl+S, Fx providers, etc.) ─────────────── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
@@ -764,10 +833,26 @@ export default function App() {
         e.preventDefault();
         setShowGlobalFind(true);
       }
+      // Provider Fx shortcuts
+      if (pluginInfo) {
+        const firedProvider = activeProviders.find(p => matchProviderShortcut(e, p.shortcut));
+        if (firedProvider) {
+          e.preventDefault();
+          if (firedProvider.isLauncher) {
+            handleOpenBrowserWith(firedProvider, selectedEntry?.original ?? "");
+          } else if (selectedCount >= 2) {
+            handleTranslateBatchWith(firedProvider);
+          } else if (selectedEntry) {
+            handleTranslateWith(firedProvider, selectedEntry);
+          }
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo, sc.globalFind]);
+  }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo,
+      sc.globalFind, activeProviders, selectedEntry, selectedCount,
+      handleOpenBrowserWith, handleTranslateWith, handleTranslateBatchWith]);
 
   /* ── Render ──────────────────────────────────────────────────────────────── */
 
@@ -857,8 +942,21 @@ export default function App() {
           personalDbName={personalDbInfoLoaded?.name ?? undefined}
           onClear={clearSelection}
           onSelectAll={pluginInfo ? () => selectAll(displayEntries) : undefined}
-          onDeeplBatch={activeProviderConfig && !activeProviderMeta?.is_launcher ? handleTranslateBatch : undefined}
-          deeplBatchLoading={translateBatchLoading}
+          translationBatches={[
+            ...activeApiProviders.map(p => ({
+              id:      p.id,
+              name:    p.name,
+              loading: batchLoadingId === p.id,
+              onBatch: () => handleTranslateBatchWith(p),
+            })),
+            ...activeLauncherProviders.map(p => ({
+              id:         p.id,
+              name:       p.name,
+              loading:    false,
+              isLauncher: true as const,
+              onBatch:    () => handleOpenBrowserBatch(p),
+            })),
+          ]}
           onApplyFuzzy={pluginInfo ? handleApplyFuzzySelection : undefined}
           fuzzyMatchCount={fuzzyMatchCount}
         />
@@ -912,10 +1010,14 @@ export default function App() {
                 spellLang={settings.spellLang || undefined}
                 spellRealtime={settings.spellRealtime}
                 spellDebounce={settings.spellDebounce}
-                providerConfig={activeProviderConfig}
-                providerName={activeProviderMeta?.name}
-                providerIsLauncher={activeProviderMeta?.is_launcher}
+                activeApiProviders={activeApiProviders}
+                activeLauncherProviders={activeLauncherProviders}
+                translateLoadingId={translateLoadingId}
+                translateErrorMap={translateErrorMap}
+                onTranslateWith={(provider) => handleTranslateWith(provider, selectedEntry)}
+                onOpenBrowserWith={(provider) => handleOpenBrowserWith(provider, selectedEntry.original)}
                 targetLang={settings.targetLanguage}
+                onApplyPersonalDb={settings.activePersonalDbPath ? handleApplyPersonalDbSingle : undefined}
                 onAddToPersonalDb={settings.activePersonalDbPath ? handleAddSingleToPersonalDb : undefined}
                 personalDbName={personalDbInfoLoaded?.name ?? undefined}
                 fuzzyMatch={selectedEntry._idx !== undefined ? fuzzyMatches.get(selectedEntry._idx) : undefined}

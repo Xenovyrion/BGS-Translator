@@ -48,16 +48,26 @@ pub async fn translate_batch_cmd(
 
 /// Open the system browser on a translation service with the text pre-filled.
 ///
+/// `config.id` identifies the service ("launcher_deepl", "launcher_google",
+/// "launcher_bing", or a custom launcher whose URL template is `config.endpoint`).
+///
 /// Returns `{ opened: true, text_in_url: true }` if the text fit in the URL,
 /// or `{ opened: true, text_in_url: false }` when the text was too long —
 /// the frontend should copy the text to the clipboard and inform the user.
 #[tauri::command]
 pub async fn open_browser_translator_cmd(
     app:         AppHandle,
-    service:     String,
+    config:      ProviderConfig,
     text:        String,
     source_lang: String,
     target_lang: String,
 ) -> Result<launcher::LaunchResult, String> {
-    launcher::open(&app, &service, &text, &source_lang, &target_lang)
+    launcher::open(
+        &app,
+        &config.id,
+        &text,
+        &source_lang,
+        &target_lang,
+        config.endpoint.as_deref(),
+    )
 }
