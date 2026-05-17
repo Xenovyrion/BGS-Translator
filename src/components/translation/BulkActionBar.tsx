@@ -127,7 +127,8 @@ export default function BulkActionBar({
                   display: "flex", alignItems: "center", gap: 5,
                   opacity: batch.loading ? 0.7 : 1,
                   transition: "all 0.15s",
-                  flexShrink: 0,
+                  flexShrink: 0, whiteSpace: "nowrap",
+                  maxWidth: 200, overflow: "hidden",
                 }}
               >
                 {batch.loading

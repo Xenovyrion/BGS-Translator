@@ -1,5 +1,6 @@
 use serde::Serialize;
 use tauri::{Emitter, Manager};
+use tauri_plugin_opener::OpenerExt;
 
 use crate::formats;
 use crate::parser::open_file;
@@ -300,4 +301,12 @@ pub async fn open_log_file_cmd(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn open_log_dir_cmd(app: tauri::AppHandle) -> Result<(), String> {
     let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
     open_dir_in_explorer(&dir)
+}
+
+/// Open an https/http URL in the default system browser.
+/// Uses the Rust-side opener to bypass the JS plugin ACL check.
+#[tauri::command]
+pub async fn open_url_cmd(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    app.opener().open_url(&url, None::<&str>)
+        .map_err(|e| e.to_string())
 }

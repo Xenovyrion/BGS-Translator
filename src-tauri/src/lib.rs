@@ -47,6 +47,7 @@ pub fn run() {
         .manage(database::DbState(std::sync::Mutex::new(None)))
         .manage(spellcheck::commands::SpellState::new())
         .invoke_handler(tauri::generate_handler![
+            commands::open_url_cmd,
             commands::open_plugin_cmd,
             commands::save_session_cmd,
             commands::list_sessions_cmd,
@@ -90,6 +91,12 @@ pub fn run() {
             providers::commands::translate_one_cmd,
             providers::commands::translate_batch_cmd,
             providers::commands::open_browser_translator_cmd,
+            providers::commands::fetch_ollama_models_cmd,
+            providers::commands::get_ollama_model_status_cmd,
+            providers::commands::pull_ollama_model_cmd,
+            providers::commands::load_ollama_model_cmd,
+            providers::commands::unload_ollama_model_cmd,
+            providers::commands::delete_ollama_model_cmd,
             compare::commands::check_plugin_diff_cmd,
             compare::commands::compute_plugin_diff_cmd,
             fuzzy::commands::get_fuzzy_matches_cmd,

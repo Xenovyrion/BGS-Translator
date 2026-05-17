@@ -189,7 +189,7 @@ BGS-Translator/
 | Compression | `flate2` (zlib) · `zstd` 0.13 | Compressed records · database compression |
 | Encoding | `encoding_rs` 0.8 | Windows-1252 → UTF-8 for legacy plugins |
 | Database format | `bincode` 1 + zstd | Custom `.bgt` (reference) and `.bgtx` (personal) binary formats |
-| HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads — no OpenSSL dependency |
+| HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads + AI provider API calls (Ollama, Claude, Cohere, OpenAI…) — no OpenSSL dependency |
 | Fuzzy matching | `strsim` 0.11 · `rayon` 1 | Jaro-Winkler (short strings) + Levenshtein (long strings); parallel bulk scan |
 | Spell check | [Nuspell](https://nuspell.github.io/) 5.x | C ABI wrapper · ICU · 47 languages |
 | Virtualisation | `@tanstack/react-virtual` 3 | Windowed rendering for large entry lists |
@@ -431,6 +431,41 @@ Long strings additionally require a **bigram Jaccard pre-filter** (≥ 20% overl
 - Jaro-Winkler threshold (default 78 %)
 - Levenshtein threshold (default 65 %)
 - Toggle session and personal DB as sources
+
+### AI / LLM Translation Providers
+
+Translate entries using large language models — local or cloud — directly from the Edit Panel or via bulk actions.
+
+**Built-in providers:**
+
+| Provider | Backend | Model selection | API key |
+|----------|---------|-----------------|---------|
+| **Ollama** | Local inference server | Preset catalogue + custom install | None |
+| **Claude** | Anthropic API | Haiku / Sonnet / Opus | Required |
+| **Cohere** | Cohere API | Command R / Command R+ | Required |
+| **ChatGPT** | OpenAI API | GPT-4o mini / GPT-4o / GPT-4.1 … | Required |
+| **Custom AI** | Any OpenAI-compatible endpoint | Free text input | Optional |
+
+**Ollama (local) — model management UI:**
+- Preset catalogue with RAM cost indicators (RAM badge: light / medium / heavy) and official documentation links
+- **Install** — downloads the model via `ollama pull` with progress feedback and detailed error messages
+- **Load / Unload** — pre-load a model into VRAM or free memory on demand
+- **Status machine** — `checking → not_installed → installed → loaded in memory`; auto-checked on model change
+- **Custom models** — "+" button opens an inline form; model is pulled, loaded and saved to the provider config; reappears in the dropdown under a "My models" group
+- **Manage installed models** panel — lists all models currently on disk with `Use` and `×` delete (unload + `ollama rm`) actions
+- **Logging** — all Ollama operations (pull, load, unload, delete) are written to the log file via `tauri-plugin-log`
+
+**Custom AI providers:**
+- "Add a custom AI provider" button creates an OpenAI-compatible provider entry
+- Configure: base URL, model name (free text), optional API key, temperature, max tokens
+- Routed automatically to the OpenAI-compatible backend (`/v1/chat/completions`)
+
+**All providers share:**
+- Editable system prompt with `{source_lang}` / `{target_lang}` placeholders (reset to default available)
+- Configurable temperature (0.0 – 1.0) and max output tokens
+- Keyboard shortcut (F1–F4 + configurable) for instant one-click translation
+- Bulk translation via the BulkActionBar (one button per enabled AI provider)
+- BGS tag protection — custom `<Tag>` markup is masked before the LLM call and restored in the output; the LLM never sees raw BGS tags
 
 ### Global Find & Replace
 - Floating, draggable window (stays open while working — no backdrop blocking the table)

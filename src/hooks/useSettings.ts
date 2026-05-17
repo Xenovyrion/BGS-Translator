@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type ProviderEntry, DEFAULT_PROVIDER_ENTRIES } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type ProviderEntry, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES } from "../types";
 
 export interface DefaultDbEntry {
   path:    string;
@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellLang:     "",
   spellRealtime: false,
   spellDebounce: 600,
-  providerEntries: DEFAULT_PROVIDER_ENTRIES,
+  providerEntries: [...DEFAULT_PROVIDER_ENTRIES, ...DEFAULT_AI_PROVIDER_ENTRIES],
   personalDbFolder:     "",
   activePersonalDbPath: "",
   personalDbAutoApply:  true,
@@ -88,23 +88,27 @@ export function useSettings() {
         // ── Migrate to multi-provider providerEntries (Phase 2) ───────────────
         let providerEntries: ProviderEntry[];
 
+        // All built-in provider+AI entries (Phase 2 + Phase 3)
+        const ALL_DEFAULTS = [...DEFAULT_PROVIDER_ENTRIES, ...DEFAULT_AI_PROVIDER_ENTRIES];
+        const ALL_BUILTIN_IDS = new Set(ALL_DEFAULTS.map(e => e.id));
+
         if (Array.isArray(parsed.providerEntries)) {
-          // Already Phase 2 format — merge with DEFAULT_PROVIDER_ENTRIES so newly
-          // added built-ins appear (disabled by default) after an app update.
+          // Phase 2/3 format — merge with ALL_DEFAULTS so newly added built-ins
+          // (e.g. AI providers added in Phase 3) appear disabled after an update.
           const savedMap = new Map<string, ProviderEntry>(
             parsed.providerEntries.map((e: ProviderEntry) => [e.id, e])
           );
-          const builtinIds = new Set(DEFAULT_PROVIDER_ENTRIES.map(e => e.id));
 
           providerEntries = [
             // Built-ins: keep saved state, fill gaps with defaults
-            ...DEFAULT_PROVIDER_ENTRIES.map(def => savedMap.get(def.id) ?? def),
+            ...ALL_DEFAULTS.map(def => savedMap.get(def.id) ?? def),
             // Custom entries (ids not in built-in set)
-            ...parsed.providerEntries.filter((e: ProviderEntry) => !builtinIds.has(e.id)),
+            ...parsed.providerEntries.filter((e: ProviderEntry) => !ALL_BUILTIN_IDS.has(e.id)),
           ];
         } else {
           // Phase 1 / legacy format — build providerEntries from old fields
-          providerEntries = DEFAULT_PROVIDER_ENTRIES.map(def => {
+          // AI providers just get their defaults (no legacy format to migrate from)
+          providerEntries = ALL_DEFAULTS.map(def => {
             const saved = { ...def };
 
             // Migrate deepl API key from deeplApiKey / deeplApiType
@@ -113,8 +117,8 @@ export function useSettings() {
               saved.config  = { apiKey: parsed.deeplApiKey, variant: parsed.deeplApiType ?? "free" };
             }
 
-            // Migrate other providers from providerConfigs
-            if (parsed.providerConfigs?.[def.id]) {
+            // Migrate other API providers from providerConfigs
+            if (def.kind === "api" && parsed.providerConfigs?.[def.id]) {
               saved.enabled = parsed.activeProviderId === def.id;
               saved.config  = { ...parsed.providerConfigs[def.id] };
             }
@@ -122,6 +126,29 @@ export function useSettings() {
             return saved;
           });
         }
+
+        // ── Migrate legacy "custom_ai" built-in → user custom AI provider ─────────
+        // custom_ai was removed from DEFAULT_AI_PROVIDER_ENTRIES; existing users
+        // who have it configured keep it as a custom entry so nothing is lost.
+        providerEntries = providerEntries.map(e => {
+          if (e.id !== "custom_ai") return e;
+          return { ...e, isCustom: true, customName: e.customName ?? "Custom AI" };
+        });
+
+        // ── Purge customModels pollution (bug: migration effect auto-added preset/default models) ──
+        // Known built-in Ollama preset values + the old hard-coded default "llama3"
+        const OLLAMA_PRESET_VALUES = new Set([
+          "llama3", "llama3.2", "llama3.1", "mistral", "qwen2.5", "gemma2", "phi3", "mixtral",
+        ]);
+        providerEntries = providerEntries.map(e => {
+          if (e.id !== "ollama" || !Array.isArray(e.config.customModels)) return e;
+          const cleaned = e.config.customModels.filter(
+            (m: string) => m && !OLLAMA_PRESET_VALUES.has(m.replace(/:latest$/, ""))
+          );
+          return cleaned.length === e.config.customModels.length
+            ? e
+            : { ...e, config: { ...e.config, customModels: cleaned } };
+        });
 
         return {
           ...DEFAULT_SETTINGS,

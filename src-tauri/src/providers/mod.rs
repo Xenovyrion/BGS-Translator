@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod commands;
 pub mod custom;
 pub mod deepl;
@@ -17,6 +18,7 @@ pub enum ProviderKind {
     OfficialApi,
     FreeApi,
     BrowserLauncher,
+    Ai,
     Custom,
 }
 
@@ -61,6 +63,16 @@ pub struct ProviderConfig {
     pub request_template: Option<String>,
     /// Dot/bracket path into the JSON response, e.g. "translations[0].text"
     pub response_path: Option<String>,
+
+    // ── AI / LLM provider fields ──────────────────────────────────────────────
+    /// LLM model name: "llama3", "claude-haiku-4-5", "command-r-plus", …
+    pub model: Option<String>,
+    /// Editable system prompt. Supports {source_lang} and {target_lang} variables.
+    pub system_prompt: Option<String>,
+    /// Sampling temperature 0.0–1.0 (default 0.3).
+    pub temperature: Option<f32>,
+    /// Maximum output tokens (default 1024).
+    pub max_tokens: Option<u32>,
 }
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -79,6 +91,9 @@ pub async fn dispatch_one(
         "libretranslate" => libretranslate::translate_one(config, text, source_lang, target_lang).await,
         "mymemory"       => mymemory::translate_one(config, text, source_lang, target_lang).await,
         "custom"         => custom::translate_one(config, text, source_lang, target_lang).await,
+        // AI / LLM providers
+        "ollama" | "claude" | "cohere" | "custom_ai"
+                         => ai::translate_one(config, text, source_lang, target_lang).await,
         id               => Err(format!("provider_unknown:{id}")),
     }
 }
@@ -98,6 +113,9 @@ pub async fn dispatch_batch(
         "libretranslate" => sequential_batch(config, texts, source_lang, target_lang).await,
         "mymemory"       => sequential_batch(config, texts, source_lang, target_lang).await,
         "custom"         => sequential_batch(config, texts, source_lang, target_lang).await,
+        // AI providers: sequential (LLMs don't support true parallel batching)
+        "ollama" | "claude" | "cohere" | "custom_ai"
+                         => ai::translate_batch(config, texts, source_lang, target_lang).await,
         id               => Err(format!("provider_unknown:{id}")),
     }
 }
@@ -158,6 +176,32 @@ pub fn all_providers() -> Vec<ProviderMeta> {
         ProviderMeta {
             id: "custom".into(), name: "Custom API".into(),
             kind: ProviderKind::Custom,
+            requires_key: false, supports_batch: false, is_launcher: false,
+        },
+        // ── AI / LLM providers ────────────────────────────────────────────────
+        ProviderMeta {
+            id: "ollama".into(), name: "Ollama (local)".into(),
+            kind: ProviderKind::Ai,
+            requires_key: false, supports_batch: false, is_launcher: false,
+        },
+        ProviderMeta {
+            id: "claude".into(), name: "Claude (Anthropic)".into(),
+            kind: ProviderKind::Ai,
+            requires_key: true, supports_batch: false, is_launcher: false,
+        },
+        ProviderMeta {
+            id: "cohere".into(), name: "Cohere".into(),
+            kind: ProviderKind::Ai,
+            requires_key: true, supports_batch: false, is_launcher: false,
+        },
+        ProviderMeta {
+            id: "openai".into(), name: "ChatGPT (OpenAI)".into(),
+            kind: ProviderKind::Ai,
+            requires_key: true, supports_batch: false, is_launcher: false,
+        },
+        ProviderMeta {
+            id: "custom_ai".into(), name: "Custom AI (OpenAI-compatible)".into(),
+            kind: ProviderKind::Ai,
             requires_key: false, supports_batch: false, is_launcher: false,
         },
     ]

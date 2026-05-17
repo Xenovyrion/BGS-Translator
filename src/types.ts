@@ -283,10 +283,16 @@ export interface ProviderMeta {
 export interface StoredProviderConfig {
   apiKey?:          string;
   variant?:         string;   // deepl: "free"/"pro" | microsoft: region code
-  endpoint?:        string;   // libretranslate self-hosted, custom URL or browser template
+  endpoint?:        string;   // libretranslate self-hosted, custom URL, browser template, or Ollama base URL
   authHeader?:      string;   // custom: "Authorization: Bearer {api_key}"
   requestTemplate?: string;   // custom: JSON body template
   responsePath?:    string;   // custom: "translations[0].text"
+  // ── AI / LLM provider fields ────────────────────────────────────────────────
+  model?:        string;   // AI: model name ("llama3", "claude-haiku-4-5", "command-r-plus"…)
+  systemPrompt?: string;   // AI: editable system prompt (supports {source_lang}, {target_lang})
+  temperature?:  number;   // AI: sampling temperature 0.0–1.0
+  maxTokens?:    number;   // AI: maximum output tokens
+  customModels?: string[]; // AI (Ollama): user-added custom model names, persisted separately from presets
 }
 
 /** Full provider config sent to Rust — extends StoredProviderConfig with id. */
@@ -299,21 +305,33 @@ export interface ProviderConfig extends StoredProviderConfig {
  * Stored in localStorage as part of AppSettings.providerEntries.
  */
 export interface ProviderEntry {
-  /** Built-in id ("deepl", "microsoft", …) or UUID for custom providers. */
+  /** Built-in id ("deepl", "microsoft", "ollama", …) or UUID for custom providers. */
   id:          string;
   /** Whether this provider is active (button visible, shortcut fires). */
   enabled:     boolean;
-  /** "api" for translation APIs, "browser" for browser launchers. */
-  kind:        "api" | "browser";
+  /** "api" for translation APIs, "browser" for browser launchers, "ai" for LLM providers. */
+  kind:        "api" | "browser" | "ai";
   /** Keyboard shortcut string, e.g. "F9", "Shift+F10". Empty = none. */
   shortcut?:   string;
-  /** Provider-specific configuration (API keys, endpoints, …). */
+  /** Provider-specific configuration (API keys, endpoints, model, prompt…). */
   config:      StoredProviderConfig;
   // ── Custom-provider-only fields ─────────────────────────────────────────
   isCustom?:   boolean;
   /** User-defined display name (custom providers only). */
   customName?: string;
 }
+
+/** Default system prompt for AI providers — stored in config if the user hasn't customized it. */
+export const DEFAULT_AI_SYSTEM_PROMPT =
+`You are a professional video game translator specializing in Bethesda RPGs (Starfield, Skyrim, Fallout).
+Translate from {source_lang} to {target_lang}.
+
+Rules:
+- Return ONLY the translated text — no explanations, no quotes, no comments
+- Preserve all special symbols, brackets and placeholders EXACTLY as they appear
+- Preserve all line breaks exactly
+- Match the tone of the original (dialogue, lore, UI label, etc.)
+- Keep proper nouns untranslated unless you know the official localized version`;
 
 /** Default provider list — all built-ins disabled, with suggested Fx shortcuts. */
 export const DEFAULT_PROVIDER_ENTRIES: ProviderEntry[] = [
@@ -324,6 +342,26 @@ export const DEFAULT_PROVIDER_ENTRIES: ProviderEntry[] = [
   { id: "launcher_deepl",  enabled: false, kind: "browser", shortcut: "F5",  config: {} },
   { id: "launcher_google", enabled: false, kind: "browser", shortcut: "F6",  config: {} },
   { id: "launcher_bing",   enabled: false, kind: "browser", shortcut: "F7",  config: {} },
+];
+
+/** Default AI provider list — all disabled, F1–F4. */
+export const DEFAULT_AI_PROVIDER_ENTRIES: ProviderEntry[] = [
+  {
+    id: "ollama", enabled: false, kind: "ai", shortcut: "F1",
+    config: { endpoint: "http://localhost:11434", model: "llama3.2" },
+  },
+  {
+    id: "claude", enabled: false, kind: "ai", shortcut: "F2",
+    config: { model: "claude-haiku-4-5" },
+  },
+  {
+    id: "cohere", enabled: false, kind: "ai", shortcut: "F3",
+    config: { model: "command-r-plus" },
+  },
+  {
+    id: "openai", enabled: false, kind: "ai", shortcut: "F4",
+    config: { model: "gpt-4o-mini" },
+  },
 ];
 
 /**
@@ -376,10 +414,29 @@ export function mapProviderError(code: string, t: (k: string, o?: object) => str
     mymemory_quota_exceeded:          t("providers.error_mymemory_quota"),
     custom_no_endpoint:               t("providers.error_custom_no_endpoint"),
     custom_no_request_template:       t("providers.error_custom_no_template"),
+    // AI providers
+    ai_claude_no_key:      t("providers.ai_error_claude_no_key"),
+    ai_claude_invalid_key: t("providers.ai_error_claude_invalid_key"),
+    ai_claude_rate_limit:  t("providers.ai_error_rate_limit"),
+    ai_claude_overloaded:  t("providers.ai_error_overloaded"),
+    ai_claude_empty:       t("providers.ai_error_empty"),
+    ai_cohere_no_key:      t("providers.ai_error_cohere_no_key"),
+    ai_cohere_invalid_key: t("providers.ai_error_cohere_invalid_key"),
+    ai_cohere_rate_limit:  t("providers.ai_error_rate_limit"),
+    ai_cohere_empty:       t("providers.ai_error_empty"),
+    ai_custom_no_endpoint: t("providers.ai_error_custom_no_endpoint"),
+    ai_custom_invalid_key: t("providers.ai_error_custom_invalid_key"),
+    ai_custom_rate_limit:  t("providers.ai_error_rate_limit"),
+    ai_custom_empty:       t("providers.ai_error_empty"),
+    ollama_not_running:        t("providers.ai_error_ollama_not_running"),
+    ollama_model_not_found:    t("providers.ai_error_ollama_model_not_found"),
   };
   if (map[code]) return map[code];
   if (code.startsWith("custom_invalid_request_template")) return t("providers.error_custom_invalid_template");
   if (code.startsWith("custom_path_not_found"))           return t("providers.error_custom_path");
+  if (code.startsWith("ai_network:"))   return t("providers.ai_error_network");
+  if (code.startsWith("ai_parse:"))     return t("providers.ai_error_parse");
+  if (code.startsWith("ollama_http:"))  return t("providers.ai_error_ollama_http", { code: code.split(":")[1] });
   return code;
 }
 

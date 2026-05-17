@@ -8,7 +8,7 @@ import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
 import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig, ProviderEntry } from "../../types";
-import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS, DEFAULT_PROVIDER_ENTRIES, SHORTCUT_OPTIONS } from "../../types";
+import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES, DEFAULT_AI_SYSTEM_PROMPT, SHORTCUT_OPTIONS } from "../../types";
 import {
   IconSettings, IconClose, IconFolder,
   IconReplace, IconCheck, IconDatabase, IconSort, IconRefresh, IconSearch,
@@ -16,7 +16,7 @@ import {
 } from "../../icons";
 import type { ReactNode } from "react";
 
-type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "systeme";
+type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "ai" | "systeme";
 type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
 
 // ── Modal principal ───────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
     { id: "database",    labelKey: "settings_modal.tab_database",     icon: <IconDatabase size={13} /> },
     { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: <IconRefresh size={13} /> },
     { id: "api",         labelKey: "settings_modal.tab_api",          icon: <IconReplace size={13} /> },
+    { id: "ai",          labelKey: "settings_modal.tab_ai",           icon: <IconSearch size={13} /> },
     { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: <IconSettings size={13} /> },
   ];
 
@@ -65,8 +66,8 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
         style={{
           background: "var(--bg-primary)",
           borderRadius: 12,
-          width: 860,
-          height: 680,
+          width: "min(980px, 95vw)",
+          height: "min(700px, 90vh)",
           display: "flex", flexDirection: "column",
           border: "1px solid var(--border)",
           boxShadow: "0 30px 60px rgba(0,0,0,0.6)",
@@ -104,12 +105,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
               key={tabDef.id}
               onClick={() => setTab(tabDef.id)}
               style={{
-                padding: "0 12px", height: 40,
+                padding: "0 9px", height: 40,
                 background: "none", border: "none",
                 borderBottom: tab === tabDef.id ? "2px solid var(--accent)" : "2px solid transparent",
                 color: tab === tabDef.id ? "var(--accent)" : "var(--text-2)",
-                fontSize: 13, fontWeight: tab === tabDef.id ? 600 : 400,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
+                fontSize: 12, fontWeight: tab === tabDef.id ? 600 : 400,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                 whiteSpace: "nowrap", transition: "color 0.15s",
               }}
             >
@@ -127,6 +128,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
           {tab === "database"    && <DatabaseTab    settings={settings} onUpdate={onUpdate} />}
           {tab === "divers"      && <DiversTab      settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
           {tab === "api"         && <ApiTab         settings={settings} onUpdate={onUpdate} />}
+          {tab === "ai"          && <AiTab          settings={settings} onUpdate={onUpdate} />}
           {tab === "systeme"     && <SystemeTab     settings={settings} onUpdate={onUpdate} />}
         </div>
 
@@ -1706,6 +1708,1010 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 
       </SubGroup>{/* /Autres réglages */}
 
+    </div>
+  );
+}
+
+// ── AI tab ────────────────────────────────────────────────────────────────────
+
+const AI_BUILTIN_IDS = new Set(DEFAULT_AI_PROVIDER_ENTRIES.map(e => e.id));
+
+function AiTab({ settings, onUpdate }: TabProps) {
+  const { t } = useTranslation();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const allEntries: ProviderEntry[] = settings.providerEntries ?? [...DEFAULT_PROVIDER_ENTRIES, ...DEFAULT_AI_PROVIDER_ENTRIES];
+  const aiEntries  = allEntries.filter(e => e.kind === "ai");
+
+  function updateEntries(nextAi: ProviderEntry[]) {
+    const nonAi = allEntries.filter(e => e.kind !== "ai");
+    onUpdate({ providerEntries: [...nonAi, ...nextAi] });
+  }
+
+  function patchEntry(id: string, patch: Partial<ProviderEntry>) {
+    updateEntries(aiEntries.map(e => e.id === id ? { ...e, ...patch } : e));
+  }
+
+  function patchConfig(id: string, patch: Partial<StoredProviderConfig>) {
+    updateEntries(aiEntries.map(e =>
+      e.id === id ? { ...e, config: { ...e.config, ...patch } } : e
+    ));
+  }
+
+  function deleteEntry(id: string) {
+    updateEntries(aiEntries.filter(e => e.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  }
+
+  function addCustomAi() {
+    const id = genId();
+    const newEntry: ProviderEntry = {
+      id, enabled: true, kind: "ai",
+      isCustom: true, customName: t("providers.new_ai_name"),
+      config: { endpoint: "", model: "" },
+    };
+    updateEntries([...aiEntries, newEntry]);
+    setExpandedId(id);
+  }
+
+  const renderRow = (entry: ProviderEntry) => {
+    const isExpanded  = expandedId === entry.id;
+    const isCustom    = entry.isCustom || !AI_BUILTIN_IDS.has(entry.id);
+    const displayName = entry.customName ?? entry.id;
+
+    return (
+      <div key={entry.id}>
+        {/* ── Row ── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "7px 10px",
+          borderRadius: isExpanded ? "6px 6px 0 0" : 6,
+          background: isExpanded ? "var(--bg-card)" : "var(--bg-hover)",
+          border: "1px solid var(--border)",
+          borderBottom: isExpanded ? "none" : "1px solid var(--border)",
+          marginBottom: isExpanded ? 0 : 5,
+          transition: "background 0.1s",
+        }}>
+          {/* Toggle */}
+          <input
+            type="checkbox" checked={entry.enabled}
+            onChange={e => patchEntry(entry.id, { enabled: e.target.checked })}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14, flexShrink: 0, cursor: "pointer" }}
+          />
+
+          {/* Name (editable for custom) */}
+          {isCustom ? (
+            <input
+              value={entry.customName ?? ""}
+              onChange={e => patchEntry(entry.id, { customName: e.target.value })}
+              style={{
+                flex: 1, minWidth: 0, height: 24, padding: "0 6px",
+                background: "var(--bg-primary)", color: "var(--text-1)",
+                border: "1px solid var(--border)", borderRadius: 4, fontSize: 12,
+                outline: "none", boxSizing: "border-box",
+              }}
+              placeholder={t("providers.custom_name_placeholder")}
+            />
+          ) : (
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: entry.enabled ? "var(--text-1)" : "var(--text-3)" }}>
+              {displayName}
+            </span>
+          )}
+
+          {/* Local badge for Ollama */}
+          {entry.id === "ollama" && (
+            <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "#22c55e22", color: "#22c55e", flexShrink: 0 }}>
+              {t("providers.ai_local_badge")}
+            </span>
+          )}
+
+          {/* Model quick display */}
+          {entry.config.model && (
+            <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "monospace", flexShrink: 0, maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {entry.config.model}
+            </span>
+          )}
+
+          {/* Shortcut selector */}
+          <select
+            value={entry.shortcut ?? ""}
+            onChange={e => patchEntry(entry.id, { shortcut: e.target.value || undefined })}
+            style={{
+              height: 26, padding: "0 4px", fontSize: 11,
+              background: "var(--bg-primary)", color: "var(--text-2)",
+              border: "1px solid var(--border)", borderRadius: 4,
+              cursor: "pointer", flexShrink: 0, minWidth: 80, boxSizing: "border-box",
+            }}
+          >
+            {SHORTCUT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+
+          {/* Expand config */}
+          <button
+            onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+            title={t("providers.config_btn")}
+            style={{
+              height: 26, width: 26, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+              background: isExpanded ? "var(--accent)" : "var(--bg-primary)",
+              color:      isExpanded ? "#fff"          : "var(--text-2)",
+              border: "1px solid var(--border)", fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxSizing: "border-box",
+            }}
+          >
+            ⚙
+          </button>
+
+          {/* Delete (custom only) */}
+          {isCustom && (
+            <button
+              onClick={() => deleteEntry(entry.id)}
+              title={t("providers.delete_btn")}
+              style={{
+                height: 26, width: 26, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                background: "transparent", color: "#ef4444",
+                border: "1px solid rgba(239,68,68,0.4)", fontSize: 14,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxSizing: "border-box",
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* ── Config panel (expanded) ── */}
+        {isExpanded && (
+          <div style={{
+            padding: "12px 14px",
+            borderRadius: "0 0 6px 6px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderTop: "none",
+            marginBottom: 5,
+          }}>
+            <AiConfigPanel
+              providerId={entry.id}
+              cfg={entry.config}
+              isCustomProvider={isCustom}
+              onUpdate={(patch) => patchConfig(entry.id, patch)}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <SubGroup first label={t("providers.section_ai")}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          {t("providers.section_ai_desc")}
+        </p>
+        {aiEntries.map(renderRow)}
+        <button
+          onClick={addCustomAi}
+          style={{
+            height: 30, padding: "0 12px", borderRadius: 6, cursor: "pointer",
+            fontSize: 11, fontWeight: 600,
+            background: "transparent", color: "var(--accent)",
+            border: "1px dashed var(--accent)", marginTop: 4,
+          }}
+        >
+          + {t("providers.add_ai_btn")}
+        </button>
+      </SubGroup>
+    </div>
+  );
+}
+
+// ── Predefined model catalogue ────────────────────────────────────────────────
+// ram  : approximate VRAM/RAM needed (Ollama local models only)
+// url  : official documentation / library page for this model
+// tier : "light" | "medium" | "heavy" — drives the RAM badge colour
+
+type RamTier = "light" | "medium" | "heavy";
+interface ModelPreset {
+  value:        string;
+  label:        string;
+  desc:         string;
+  recommended?: boolean;
+  ram?:         string;
+  tier?:        RamTier;
+  url?:         string;
+}
+
+/** RAM badge colour by tier */
+function ramColor(tier: RamTier): string {
+  if (tier === "light")  return "#22c55e";   // green
+  if (tier === "medium") return "#f59e0b";   // amber
+  return "#ef4444";                          // red (heavy)
+}
+
+const AI_PRESET_MODELS: Record<string, ModelPreset[]> = {
+  ollama: [
+    {
+      value: "llama3.2", label: "Llama 3.2 (3B)",
+      desc: "Meta · Ultra-léger, idéal pour débuter",
+      ram: "~2 GB", tier: "light", recommended: true,
+      url: "https://ollama.com/library/llama3.2",
+    },
+    {
+      value: "llama3.1", label: "Llama 3.1 (8B)",
+      desc: "Meta · Bon équilibre qualité / vitesse",
+      ram: "~5 GB", tier: "medium",
+      url: "https://ollama.com/library/llama3.1",
+    },
+    {
+      value: "mistral", label: "Mistral 7B",
+      desc: "Mistral AI · Rapide, excellent pour la traduction",
+      ram: "~4 GB", tier: "medium",
+      url: "https://ollama.com/library/mistral",
+    },
+    {
+      value: "qwen2.5", label: "Qwen 2.5 (7B)",
+      desc: "Alibaba · Très bon en multilingue / traduction",
+      ram: "~5 GB", tier: "medium",
+      url: "https://ollama.com/library/qwen2.5",
+    },
+    {
+      value: "gemma2", label: "Gemma 2 (9B)",
+      desc: "Google · Haute qualité, bien optimisé",
+      ram: "~6 GB", tier: "medium",
+      url: "https://ollama.com/library/gemma2",
+    },
+    {
+      value: "phi3", label: "Phi-3 Mini (3.8B)",
+      desc: "Microsoft · Très léger, tourne sur CPU",
+      ram: "~2 GB", tier: "light",
+      url: "https://ollama.com/library/phi3",
+    },
+    {
+      value: "mixtral", label: "Mixtral 8x7B",
+      desc: "Mistral AI · Très capable, nécessite beaucoup de RAM",
+      ram: "~48 GB", tier: "heavy",
+      url: "https://ollama.com/library/mixtral",
+    },
+  ],
+  claude: [
+    {
+      value: "claude-haiku-4-5", label: "Claude Haiku",
+      desc: "Le plus rapide et le moins cher — recommandé pour la traduction", recommended: true,
+      url: "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+    },
+    {
+      value: "claude-sonnet-4-5", label: "Claude Sonnet",
+      desc: "Équilibre qualité / coût — meilleure qualité narrative",
+      url: "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+    },
+    {
+      value: "claude-opus-4-5", label: "Claude Opus",
+      desc: "Le plus puissant — lent et coûteux, pour textes complexes",
+      url: "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+    },
+  ],
+  cohere: [
+    {
+      value: "command-r", label: "Command R",
+      desc: "Rapide et économique — idéal pour la traduction en volume", recommended: true,
+      url: "https://docs.cohere.com/docs/models",
+    },
+    {
+      value: "command-r-plus", label: "Command R+",
+      desc: "Plus capable — meilleure qualité pour textes longs",
+      url: "https://docs.cohere.com/docs/models",
+    },
+  ],
+  openai: [
+    {
+      value: "gpt-4o-mini", label: "GPT-4o mini",
+      desc: "Rapide et peu coûteux — recommandé pour la traduction", recommended: true,
+      url: "https://platform.openai.com/docs/models",
+    },
+    {
+      value: "gpt-4o", label: "GPT-4o",
+      desc: "Meilleure qualité — bon pour les textes longs ou complexes",
+      url: "https://platform.openai.com/docs/models",
+    },
+    {
+      value: "gpt-4.1-mini", label: "GPT-4.1 mini",
+      desc: "Nouvelle génération — efficace et économique",
+      url: "https://platform.openai.com/docs/models",
+    },
+    {
+      value: "gpt-4.1", label: "GPT-4.1",
+      desc: "Nouvelle génération — haute qualité",
+      url: "https://platform.openai.com/docs/models",
+    },
+  ],
+  custom_ai: [
+    {
+      value: "gpt-4o-mini", label: "GPT-4o mini",
+      desc: "OpenAI · Rapide et peu coûteux", recommended: true,
+      url: "https://platform.openai.com/docs/models",
+    },
+    {
+      value: "gpt-4o", label: "GPT-4o",
+      desc: "OpenAI · Meilleure qualité",
+      url: "https://platform.openai.com/docs/models",
+    },
+    {
+      value: "mistral-large-latest", label: "Mistral Large",
+      desc: "Mistral API · Très performant",
+      url: "https://docs.mistral.ai/getting-started/models/models_overview/",
+    },
+    {
+      value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B",
+      desc: "Groq · Inference ultra-rapide",
+      url: "https://console.groq.com/docs/models",
+    },
+  ],
+};
+
+// ── AI config panel ───────────────────────────────────────────────────────────
+
+type OllamaStatus = "unknown" | "checking" | "not_installed" | "installed" | "running";
+
+function ollamaActionBtn(color: string, disabled = false): React.CSSProperties {
+  return {
+    height: 30, padding: "0 10px", borderRadius: 6, fontSize: 11, flexShrink: 0,
+    cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1,
+    background: "var(--bg-hover)", color, border: `1px solid ${color}`,
+    boxSizing: "border-box",
+  };
+}
+
+function AiConfigPanel({
+  providerId, cfg, isCustomProvider = false, onUpdate,
+}: {
+  providerId:        string;
+  cfg:               StoredProviderConfig;
+  /** True for user-created custom AI providers (UUID ids) — shows endpoint field + uses OpenAI-compat presets. */
+  isCustomProvider?: boolean;
+  onUpdate:          (patch: Partial<StoredProviderConfig>) => void;
+}) {
+  const { t } = useTranslation();
+  const [showKey,        setShowKey]        = useState(false);
+  // "Add custom model" form — shown when the user clicks "+"
+  const [showAddForm,    setShowAddForm]    = useState(false);
+  const [newModelName,   setNewModelName]   = useState("");
+  // Ollama model status machine
+  const [modelStatus,    setModelStatus]    = useState<OllamaStatus>("unknown");
+  const [pulling,        setPulling]        = useState(false);
+  const [loadingModel,   setLoadingModel]   = useState(false);
+  const [unloading,   setUnloading]   = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  // "Browse installed" panel
+  const [installedList,      setInstalledList]      = useState<string[]>([]);
+  const [fetchingInstalled,  setFetchingInstalled]  = useState(false);
+  const [installedError,     setInstalledError]      = useState<string | null>(null);
+
+  const isOllama       = providerId === "ollama";
+  // Custom providers (UUID or legacy custom_ai): OpenAI-compatible, need endpoint + optional key
+  const isOpenAiCompat = isCustomProvider || providerId === "custom_ai";
+  // Providers that require a mandatory API key
+  const needsKey       = providerId === "claude" || providerId === "cohere" || providerId === "openai";
+  // Providers that need an endpoint URL configured
+  const needsEndpoint  = isOllama || isOpenAiCompat;
+  const baseUrl        = cfg.endpoint || "http://localhost:11434";
+
+  // Custom providers reuse the "custom_ai" preset model catalogue (GPT, Mistral, Groq, etc.)
+  const presets        = AI_PRESET_MODELS[isCustomProvider ? "custom_ai" : providerId] ?? [];
+  const presetValues   = presets.map(p => p.value);
+  const customModels   = cfg.customModels ?? [];
+
+  const currentModel     = cfg.model ?? "";
+  // Normalize ":latest" suffix (e.g. "llama3.1:latest" → "llama3.1")
+  const currentModelNorm = currentModel.replace(/:latest$/, "");
+
+  // All known model values (presets + user-saved custom models)
+  const allModelValues = [...presetValues, ...customModels];
+
+  // selectValue: the value shown in the <select>.
+  // Falls back to recommended preset if the stored model is not in any known list.
+  const selectValue = allModelValues.includes(currentModelNorm)
+    ? currentModelNorm
+    : (presets.find(p => p.recommended)?.value ?? presets[0]?.value ?? "");
+
+  const selectedPreset   = presets.find(p => p.value === selectValue);
+  const isCustomSelected = customModels.includes(currentModelNorm) || customModels.includes(currentModel);
+
+  // ── Auto-check Ollama model status whenever the selected model changes ────────
+  useEffect(() => {
+    if (!isOllama || !selectValue) {
+      setModelStatus("unknown");
+      return;
+    }
+    let cancelled = false;
+    setModelStatus("checking");
+    setStatusError(null);
+    invoke<{ installed: boolean; running: boolean }>("get_ollama_model_status_cmd", {
+      baseUrl, model: selectValue,
+    }).then(({ installed, running }) => {
+      if (!cancelled) setModelStatus(running ? "running" : installed ? "installed" : "not_installed");
+    }).catch(() => {
+      if (!cancelled) setModelStatus("unknown");
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOllama, selectValue, cfg.endpoint]);
+
+  // ── Ollama actions ────────────────────────────────────────────────────────────
+
+  /** Shared pull+load logic for both preset and custom install flows. */
+  const doPullAndLoad = async (model: string): Promise<void> => {
+    await invoke("pull_ollama_model_cmd", { baseUrl, model });
+    setLoadingModel(true);
+    try { await invoke("load_ollama_model_cmd", { baseUrl, model }); } catch { /* non-critical */ }
+    setLoadingModel(false);
+  };
+
+  /** Error message helper for ollama pull errors. */
+  const pullErrorMsg = (err: string, model: string): string => {
+    if (err.includes("ollama_not_running"))      return t("providers.ai_error_ollama_not_running");
+    if (err.includes("ollama_model_not_found"))  return t("providers.ai_error_ollama_model_not_found") + ` (${model})`;
+    if (err.includes("ollama_pull_failed:")) {
+      const detail = err.replace(/.*ollama_pull_failed:/, "").trim();
+      return `${t("providers.ai_ollama_install_error", { model })}: ${detail}`;
+    }
+    return t("providers.ai_ollama_install_error", { model });
+  };
+
+  /** Install the currently selected preset model. */
+  const handleInstall = async () => {
+    const model = selectValue;
+    if (!model) return;
+    setPulling(true);
+    setStatusError(null);
+    try {
+      await doPullAndLoad(model);
+      setModelStatus("running");
+    } catch (e) {
+      const err = String(e);
+      console.error("[ollama] pull failed:", err);
+      setStatusError(pullErrorMsg(err, model));
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  /** Install a brand-new custom model typed in the add-form. */
+  const handleInstallCustom = async () => {
+    const model = newModelName.trim();
+    if (!model) return;
+    setPulling(true);
+    setStatusError(null);
+    try {
+      await doPullAndLoad(model);
+      // Persist in customModels and set as active model
+      const updated = [...customModels.filter(m => m !== model), model];
+      onUpdate({ customModels: updated, model });
+      setModelStatus("running");
+      setShowAddForm(false);
+      setNewModelName("");
+    } catch (e) {
+      const err = String(e);
+      console.error("[ollama] custom pull failed:", err);
+      setStatusError(pullErrorMsg(err, model));
+    } finally {
+      setPulling(false);
+    }
+  };
+
+
+  const handleLoad = async () => {
+    const model = currentModel || selectValue;
+    if (!model) return;
+    setLoadingModel(true);
+    setStatusError(null);
+    try {
+      await invoke("load_ollama_model_cmd", { baseUrl, model });
+      setModelStatus("running");
+    } catch {
+      setStatusError(t("providers.ai_ollama_load_error"));
+    } finally {
+      setLoadingModel(false);
+    }
+  };
+
+  const handleUnload = async () => {
+    const model = currentModel || selectValue;
+    if (!model) return;
+    setUnloading(true);
+    try {
+      await invoke("unload_ollama_model_cmd", { baseUrl, model });
+      setModelStatus("installed");
+    } catch { /* non-critical */ }
+    finally { setUnloading(false); }
+  };
+
+  const handleBrowseInstalled = async () => {
+    setFetchingInstalled(true);
+    setInstalledError(null);
+    try {
+      const models = await invoke<string[]>("fetch_ollama_models_cmd", { baseUrl });
+      setInstalledList(models);
+      // Do NOT auto-select — the panel is for viewing only
+    } catch {
+      setInstalledError(t("providers.ai_fetch_models_error"));
+    } finally {
+      setFetchingInstalled(false);
+    }
+  };
+
+  // ── Styles ────────────────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    flex: 1, height: 30, padding: "0 10px", borderRadius: 6, fontSize: 11,
+    background: "var(--bg-hover)", color: "var(--text-1)",
+    border: "1px solid var(--border)", outline: "none",
+    fontFamily: "monospace", boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = { fontSize: 11, color: "var(--text-3)", width: 110, flexShrink: 0 };
+  const row = (label: string, child: React.ReactNode) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <span style={labelStyle}>{label}</span>
+      {child}
+    </div>
+  );
+
+  // Status action button for Ollama (preset row — right side of the select)
+  const renderOllamaAction = () => {
+    const busy = pulling || loadingModel || unloading;
+
+    if (pulling)      return <button disabled style={ollamaActionBtn("#f59e0b", true)}>⏳ {t("providers.ai_ollama_installing")}</button>;
+    if (loadingModel) return <button disabled style={ollamaActionBtn("#22c55e", true)}>⏳ {t("providers.ai_ollama_loading")}</button>;
+    if (unloading)    return <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>⏳ {t("providers.ai_ollama_unloading")}</span>;
+
+    switch (modelStatus) {
+      case "checking":
+        return <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>⏳ {t("providers.ai_ollama_checking")}</span>;
+      case "not_installed":
+        return (
+          <button type="button" onClick={handleInstall} disabled={busy} style={ollamaActionBtn("var(--accent)")}>
+            ⬇ {t("providers.ai_ollama_install")}
+          </button>
+        );
+      case "installed":
+        return (
+          <button type="button" onClick={handleLoad} disabled={busy} style={ollamaActionBtn("#22c55e")}>
+            ⬆ {t("providers.ai_ollama_load")}
+          </button>
+        );
+      case "running":
+        return (
+          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 600 }}>✓ {t("providers.ai_ollama_running")}</span>
+            <button type="button" onClick={handleUnload} style={{
+              height: 22, padding: "0 7px", borderRadius: 4, cursor: "pointer",
+              fontSize: 10, background: "transparent",
+              color: "var(--text-3)", border: "1px solid var(--border)",
+            }}>
+              {t("providers.ai_ollama_unload")}
+            </button>
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div>
+      {/* Endpoint URL (Ollama + custom_ai) */}
+      {needsEndpoint && row(
+        t("providers.ai_endpoint_label"),
+        <input
+          style={inputStyle}
+          value={cfg.endpoint ?? (isOllama ? "http://localhost:11434" : "")}
+          onChange={e => onUpdate({ endpoint: e.target.value })}
+          placeholder={isCustomProvider ? "" : t("providers.ai_endpoint_hint")}
+          spellCheck={false}
+        />,
+      )}
+
+      {/* ── Model picker — simple text field for custom providers ──────────── */}
+      {isCustomProvider && row(
+        t("providers.ai_model_label"),
+        <input
+          style={inputStyle}
+          value={cfg.model ?? ""}
+          onChange={e => onUpdate({ model: e.target.value })}
+          placeholder={t("providers.ai_model_custom_placeholder")}
+          spellCheck={false}
+        />,
+      )}
+
+      {/* ── Model picker — preset dropdown for built-in providers ──────────── */}
+      {!isCustomProvider && <div style={{ marginBottom: 10 }}>
+
+        {/* Row 1: label + select + "+" add button + doc link + Ollama status action */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={labelStyle}>{t("providers.ai_model_label")}</span>
+
+          {/* Model dropdown: presets + custom group */}
+          <select
+            value={selectValue}
+            onChange={e => {
+              setShowAddForm(false);
+              onUpdate({ model: e.target.value });
+            }}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            {presets.map(p => (
+              <option key={p.value} value={p.value}>
+                {p.label}{p.recommended ? " ★" : ""}
+              </option>
+            ))}
+            {customModels.length > 0 && (
+              <optgroup label={`— ${t("providers.ai_model_custom_group")} —`}>
+                {customModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+
+          {/* "+" toggle button — adds a new custom model (Ollama only) */}
+          {isOllama && (
+            <button
+              type="button"
+              title={showAddForm ? t("providers.ai_ollama_add_cancel") : t("providers.ai_ollama_add_model")}
+              onClick={() => { setShowAddForm(v => !v); setNewModelName(""); setStatusError(null); }}
+              style={{
+                height: 30, width: 30, borderRadius: 6, cursor: "pointer",
+                fontSize: 16, fontWeight: 700, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: showAddForm ? "rgba(239,68,68,0.15)" : "var(--bg-hover)",
+                color: showAddForm ? "#ef4444" : "var(--accent)",
+                border: `1px solid ${showAddForm ? "#ef4444" : "var(--accent)"}`,
+                boxSizing: "border-box", lineHeight: 1,
+              }}
+            >
+              {showAddForm ? "−" : "+"}
+            </button>
+          )}
+
+          {/* Doc link ↗ — only for selected preset models */}
+          {selectedPreset?.url && !isCustomSelected && installedList.length === 0 && (
+            <button
+              type="button"
+              title={t("providers.ai_model_doc_link")}
+              onClick={e => {
+                e.stopPropagation();
+                invoke("open_url_cmd", { url: selectedPreset.url! }).catch(err => console.error("open_url_cmd failed:", err));
+              }}
+              style={{
+                height: 28, width: 28, borderRadius: 6, cursor: "pointer",
+                fontSize: 13, flexShrink: 0, display: "flex", alignItems: "center",
+                justifyContent: "center",
+                background: "var(--bg-hover)", color: "var(--text-3)",
+                border: "1px solid var(--border)", boxSizing: "border-box",
+              }}
+            >
+              ↗
+            </button>
+          )}
+
+          {/* Ollama smart status/action button */}
+          {isOllama && !showAddForm && renderOllamaAction()}
+        </div>
+
+        {/* Row 2: "Add custom model" form — shown when "+" was clicked */}
+        {isOllama && showAddForm && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={labelStyle} />
+            <input
+              style={inputStyle}
+              value={newModelName}
+              onChange={e => setNewModelName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && newModelName.trim()) handleInstallCustom(); }}
+              placeholder={t("providers.ai_ollama_add_placeholder")}
+              spellCheck={false}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={handleInstallCustom}
+              disabled={!newModelName.trim() || pulling || loadingModel}
+              style={ollamaActionBtn("var(--accent)", !newModelName.trim() || pulling || loadingModel)}
+            >
+              {pulling
+                ? `⏳ ${t("providers.ai_ollama_installing")}`
+                : loadingModel
+                  ? `⏳ ${t("providers.ai_ollama_loading")}`
+                  : `⬇ ${t("providers.ai_ollama_install")}`}
+            </button>
+          </div>
+        )}
+
+        {/* Description box — only for preset models when browse panel is closed */}
+        {selectedPreset && !isCustomSelected && installedList.length === 0 && (
+          <div style={{
+            marginLeft: 120, padding: "5px 10px", borderRadius: 5,
+            background: "var(--bg-primary)", border: "1px solid var(--border)",
+            fontSize: 11, color: "var(--text-3)", lineHeight: 1.5,
+            display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+          }}>
+            {selectedPreset.recommended && (
+              <span style={{ color: "var(--accent)", fontWeight: 600, flexShrink: 0 }}>
+                ★ {t("providers.ai_model_recommended")}
+              </span>
+            )}
+            <span style={{ flex: 1 }}>{selectedPreset.desc}</span>
+            {selectedPreset.ram && selectedPreset.tier && (
+              <span style={{
+                marginLeft: "auto", flexShrink: 0,
+                padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 600,
+                background: ramColor(selectedPreset.tier) + "22",
+                color: ramColor(selectedPreset.tier),
+                border: `1px solid ${ramColor(selectedPreset.tier)}55`,
+              }}>
+                RAM {selectedPreset.ram}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Ollama — install hint (only when model is not installed and not pulling) */}
+        {isOllama && modelStatus === "not_installed" && !pulling && !showAddForm && (
+          <div style={{ marginLeft: 120, marginTop: 4, fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>
+            {t("providers.ai_ollama_hint")}
+          </div>
+        )}
+
+        {/* Ollama — "Installed" context: hint that model will auto-load on first use */}
+        {isOllama && modelStatus === "installed" && !loadingModel && (
+          <div style={{ marginLeft: 120, marginTop: 4, fontSize: 11, color: "#22c55e", lineHeight: 1.5 }}>
+            ✓ {t("providers.ai_ollama_installed_hint")}
+          </div>
+        )}
+
+        {/* Ollama — large model install warning */}
+        {isOllama && pulling && selectedPreset?.tier === "heavy" && (
+          <div style={{ marginLeft: 120, marginTop: 4, fontSize: 11, color: "#f59e0b", lineHeight: 1.5 }}>
+            ⚠ {t("providers.ai_ollama_heavy_warning")}
+          </div>
+        )}
+
+        {/* Errors */}
+        {statusError && (
+          <p style={{ fontSize: 11, color: "#ef4444", margin: "4px 0 0 120px" }}>⚠ {statusError}</p>
+        )}
+
+        {/* Browse installed models — link + collapsible list panel */}
+        {isOllama && (
+          <div style={{ marginLeft: 120, marginTop: 6 }}>
+            {/* Trigger link */}
+            {installedList.length === 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button type="button"
+                  onClick={handleBrowseInstalled}
+                  disabled={fetchingInstalled}
+                  style={{
+                    background: "none", border: "none", padding: 0, cursor: "pointer",
+                    fontSize: 11, color: "var(--accent)", textDecoration: "underline",
+                    opacity: fetchingInstalled ? 0.5 : 1,
+                  }}
+                >
+                  {fetchingInstalled ? `⏳ ${t("providers.ai_fetch_models_loading")}` : t("providers.ai_fetch_models")}
+                </button>
+                {installedError && (
+                  <span style={{ fontSize: 11, color: "#ef4444" }}>⚠ {installedError}</span>
+                )}
+              </div>
+            )}
+
+            {/* Installed models panel (replaces trigger when open) */}
+            {installedList.length > 0 && (
+              <div style={{
+                border: "1px solid var(--border)", borderRadius: 6,
+                background: "var(--bg-primary)", overflow: "hidden",
+              }}>
+                {/* Panel header */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "5px 10px",
+                  background: "var(--bg-hover)", borderBottom: "1px solid var(--border)",
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)" }}>
+                    📦 {t("providers.ai_fetch_models_ok", { count: installedList.length })}
+                  </span>
+                  <button type="button" onClick={() => setInstalledList([])}
+                    style={{
+                      background: "none", border: "none", padding: "0 4px",
+                      cursor: "pointer", fontSize: 14, color: "var(--text-3)",
+                      lineHeight: 1,
+                    }}>
+                    ×
+                  </button>
+                </div>
+                {/* Model rows */}
+                {installedList.map((m, idx) => {
+                  const norm       = m.replace(/:latest$/, "");
+                  const isSelected = norm === currentModelNorm || m === currentModel;
+                  const isRunning  = isSelected && modelStatus === "running";
+                  return (
+                    <div key={m} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "5px 10px",
+                      borderBottom: idx < installedList.length - 1 ? "1px solid var(--border)" : "none",
+                      background: isSelected ? "var(--bg-hover)" : "transparent",
+                    }}>
+                      {/* Model name */}
+                      <span style={{
+                        flex: 1, fontSize: 11, fontFamily: "monospace",
+                        color: isSelected ? "var(--text-1)" : "var(--text-2)",
+                      }}>
+                        {m}
+                      </span>
+                      {/* Running badge */}
+                      {isRunning && (
+                        <span style={{
+                          fontSize: 10, padding: "1px 6px", borderRadius: 8,
+                          background: "#22c55e22", color: "#22c55e",
+                          border: "1px solid #22c55e55", flexShrink: 0,
+                        }}>
+                          ✓ {t("providers.ai_ollama_running")}
+                        </span>
+                      )}
+                      {/* Selected badge (not running) */}
+                      {isSelected && !isRunning && (
+                        <span style={{
+                          fontSize: 10, padding: "1px 6px", borderRadius: 8,
+                          background: "var(--accent)22", color: "var(--accent)",
+                          border: "1px solid var(--accent)55", flexShrink: 0,
+                        }}>
+                          ✓ {t("providers.ai_ollama_selected")}
+                        </span>
+                      )}
+                      {/* Use button */}
+                      {!isSelected && (
+                        <button type="button"
+                          onClick={() => {
+                            const inPreset = presetValues.includes(norm);
+                            if (!inPreset && !customModels.includes(norm) && !customModels.includes(m)) {
+                              // Add to custom list automatically
+                              onUpdate({ customModels: [...customModels, norm], model: norm });
+                            } else {
+                              onUpdate({ model: inPreset ? norm : m });
+                            }
+                            setInstalledList([]);
+                          }}
+                          style={{
+                            height: 22, padding: "0 8px", borderRadius: 4,
+                            cursor: "pointer", fontSize: 10, flexShrink: 0,
+                            background: "var(--bg-hover)", color: "var(--accent)",
+                            border: "1px solid var(--accent)",
+                          }}
+                        >
+                          {t("providers.ai_ollama_use_model")}
+                        </button>
+                      )}
+                      {/* Delete button — unload + rm */}
+                      <button
+                        type="button"
+                        title={t("providers.ai_ollama_delete_model")}
+                        onClick={async () => {
+                          const target = norm || m;
+                          if (!window.confirm(t("providers.ai_ollama_delete_confirm", { model: target }))) return;
+                          try {
+                            try { await invoke("unload_ollama_model_cmd", { baseUrl, model: target }); } catch {}
+                            await invoke("delete_ollama_model_cmd", { baseUrl, model: target });
+                            setInstalledList(prev => prev.filter(x => x !== m));
+                            if (isSelected) {
+                              const updated  = customModels.filter(x => x !== norm && x !== m);
+                              const fallback = presets.find(p => p.recommended)?.value ?? presets[0]?.value ?? "";
+                              onUpdate({ customModels: updated, model: fallback });
+                              setModelStatus("checking");
+                            } else if (customModels.includes(norm)) {
+                              onUpdate({ customModels: customModels.filter(x => x !== norm && x !== m) });
+                            }
+                          } catch (e) {
+                            console.error("[ollama] delete from browse panel failed:", e);
+                          }
+                        }}
+                        style={{
+                          height: 22, width: 22, borderRadius: 4,
+                          cursor: "pointer", fontSize: 14, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent", color: "#ef4444",
+                          border: "1px solid rgba(239,68,68,0.4)",
+                          boxSizing: "border-box", lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>}
+
+      {/* API key (Claude, Cohere, OpenAI — required; OpenAI-compat custom providers — optional) */}
+      {(needsKey || isOpenAiCompat) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={labelStyle}>{t("providers.api_key_label")}</span>
+          <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              type={showKey ? "text" : "password"}
+              style={inputStyle}
+              value={cfg.apiKey ?? ""}
+              onChange={e => onUpdate({ apiKey: e.target.value })}
+              placeholder={isCustomProvider ? "" : (!needsKey ? t("providers.optional_key") : "")}
+              spellCheck={false}
+            />
+            <button onClick={() => setShowKey(v => !v)} title={showKey ? t("providers.hide_key") : t("providers.show_key")} style={iconBtn()}>
+              {showKey ? "🙈" : "👁"}
+            </button>
+            {cfg.apiKey && (
+              <button onClick={() => onUpdate({ apiKey: "" })} title={t("providers.clear_key")} style={{ ...iconBtn(), color: "#ef4444", borderColor: "#ef4444" }}>×</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Temperature */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={labelStyle}>{t("providers.ai_temperature_label")}</span>
+        <input
+          type="range" min={0} max={1} step={0.05}
+          value={cfg.temperature ?? 0.3}
+          onChange={e => onUpdate({ temperature: Number(e.target.value) })}
+          style={{ flex: 1, accentColor: "var(--accent)" }}
+        />
+        <span style={{ fontSize: 11, color: "var(--text-3)", minWidth: 36, textAlign: "right" }}>
+          {(cfg.temperature ?? 0.3).toFixed(2)}
+        </span>
+      </div>
+
+      {/* Max tokens */}
+      {row(
+        t("providers.ai_max_tokens_label"),
+        <input
+          type="number" min={64} max={8192} step={64}
+          value={cfg.maxTokens ?? 1024}
+          onChange={e => onUpdate({ maxTokens: Number(e.target.value) })}
+          style={{ ...inputStyle, flex: "none", width: 100 }}
+        />,
+      )}
+
+      {/* System prompt */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)" }}>
+            {t("providers.ai_prompt_label")}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--text-3)", flex: 1 }}>
+            {t("providers.ai_prompt_hint")}
+          </span>
+          <button
+            onClick={() => onUpdate({ systemPrompt: undefined })}
+            style={{
+              height: 22, padding: "0 8px", borderRadius: 4, cursor: "pointer", fontSize: 10,
+              background: "var(--bg-hover)", color: "var(--text-3)",
+              border: "1px solid var(--border)", flexShrink: 0,
+            }}
+          >
+            ↺ {t("providers.ai_prompt_reset")}
+          </button>
+        </div>
+        <textarea
+          value={cfg.systemPrompt ?? DEFAULT_AI_SYSTEM_PROMPT}
+          onChange={e => onUpdate({ systemPrompt: e.target.value })}
+          rows={8}
+          spellCheck={false}
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 6, fontSize: 11,
+            background: "var(--bg-hover)", color: "var(--text-1)",
+            border: "1px solid var(--border)", outline: "none",
+            fontFamily: "monospace", lineHeight: 1.5, resize: "vertical",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
     </div>
   );
 }

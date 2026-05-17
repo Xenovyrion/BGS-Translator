@@ -766,7 +766,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                       >
                         {loading
                           ? <IconSpinner size={11} />
-                          : <><IconReplace size={12} /><span style={{ fontSize: 10, fontWeight: 600 }}>{provider.name.slice(0, 12)}</span></>
+                          : <><IconReplace size={12} /><span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span></>
                         }
                       </ToolBtn>
                       {error && (
@@ -798,7 +798,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                     style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", opacity: 1 }}
                   >
                     <IconExternalLink size={12} />
-                    <span style={{ fontSize: 10, fontWeight: 600 }}>{provider.name.slice(0, 12)}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span>
                   </ToolBtn>
                 ))}
               </>

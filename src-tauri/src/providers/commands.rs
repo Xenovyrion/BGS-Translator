@@ -1,5 +1,5 @@
 use tauri::AppHandle;
-use super::{launcher, ProviderConfig, ProviderMeta, all_providers, dispatch_one, dispatch_batch};
+use super::{ai, launcher, ProviderConfig, ProviderMeta, all_providers, dispatch_one, dispatch_batch};
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,48 @@ pub async fn translate_batch_cmd(
         source_lang.as_deref(),
         &target_lang,
     ).await
+}
+
+// ── AI — Ollama model management ─────────────────────────────────────────────
+
+/// Fetch the list of models installed in the local Ollama server.
+#[tauri::command]
+pub async fn fetch_ollama_models_cmd(base_url: String) -> Result<Vec<String>, String> {
+    ai::fetch_ollama_models(&base_url).await
+}
+
+/// Check whether a specific model is installed on disk and/or loaded in VRAM.
+#[tauri::command]
+pub async fn get_ollama_model_status_cmd(
+    base_url: String,
+    model:    String,
+) -> Result<ai::OllamaModelStatus, String> {
+    ai::get_ollama_model_status(&base_url, &model).await
+}
+
+/// Download + install a model from Ollama's registry (ollama pull).
+/// Can take several minutes for large models — the frontend should show a spinner.
+#[tauri::command]
+pub async fn pull_ollama_model_cmd(base_url: String, model: String) -> Result<(), String> {
+    ai::pull_ollama_model(&base_url, &model).await
+}
+
+/// Pre-load a model into VRAM without running inference.
+#[tauri::command]
+pub async fn load_ollama_model_cmd(base_url: String, model: String) -> Result<(), String> {
+    ai::load_ollama_model(&base_url, &model).await
+}
+
+/// Unload a model from VRAM (keep_alive = 0).
+#[tauri::command]
+pub async fn unload_ollama_model_cmd(base_url: String, model: String) -> Result<(), String> {
+    ai::unload_ollama_model(&base_url, &model).await
+}
+
+/// Delete a model from disk (ollama rm).
+#[tauri::command]
+pub async fn delete_ollama_model_cmd(base_url: String, model: String) -> Result<(), String> {
+    ai::delete_ollama_model(&base_url, &model).await
 }
 
 // ── Browser launcher ──────────────────────────────────────────────────────────
