@@ -33,6 +33,7 @@ import ChangelogModal    from "./components/shared/ChangelogModal";
 import SessionPickerModal from "./components/shared/SessionPickerModal";
 import ThemeManagerModal from "./components/themes/ThemeManagerModal";
 import { NotificationBanner } from "./components/shared/NotificationBanner";
+import LoadingOverlay from "./components/shared/LoadingOverlay";
 import type { Notification } from "./components/shared/NotificationBanner";
 
 interface UpdateInfo { version: string; notes?: string }
@@ -802,6 +803,10 @@ export default function App() {
     } catch (e) {
       const msg = mapProviderError(String(e), (k, o) => t(k, o as Record<string, unknown>));
       setTranslateErrorMap(prev => { const m = new Map(prev); m.set(provider.id, msg); return m; });
+      // Auto-dismiss the error tooltip after 4 seconds
+      setTimeout(() => {
+        setTranslateErrorMap(prev => { const m = new Map(prev); m.delete(provider.id); return m; });
+      }, 4000);
     } finally {
       setTranslateLoadingId(null);
     }
@@ -966,10 +971,17 @@ export default function App() {
       </div>
 
       {/* ── Main area ─────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}>
+
+        {/* Loading overlay — covers the content area while a plugin is loading */}
+        <LoadingOverlay
+          loading={loading}
+          loadingStatus={loadingStatus}
+          loadingProgress={loadingProgress}
+        />
 
         {error && (
-          <div style={{ padding: "6px 14px", background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 12, borderBottom: "1px solid rgba(239,68,68,0.2)", flexShrink: 0 }}>
+          <div style={{ padding: "6px 14px", background: "var(--danger-dim)", color: "var(--danger)", fontSize: 12, borderBottom: "1px solid var(--danger-border)", flexShrink: 0 }}>
             {error}
           </div>
         )}

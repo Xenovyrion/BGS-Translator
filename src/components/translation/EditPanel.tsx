@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core"; // used by spell check
 import { startDrag } from "../../hooks/useLayout";
 import type { TranslationEntry, EntryStatus, EditPanelShortcuts, ShortcutDef, FuzzyMatch, ActiveProvider } from "../../types";
-import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel } from "../../types";
+import { DEFAULT_EDIT_SHORTCUTS, matchShortcut, formatShortcut, fuzzyScoreColor, fuzzyScoreLabel, getProviderStyle } from "../../types";
 import { TaggedText } from "../shared/TaggedText";
+import { ProviderLetterBadge } from "../shared/ProviderBadge";
 import {
   IconCopy, IconSearch, IconCheck, IconClose, IconReplace, IconExternalLink,
   IconArrowUp, IconArrowDown, IconCaseSensitive, IconSpellCheck,
@@ -751,6 +752,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 {activeApiProviders.map(provider => {
                   const loading = translateLoadingId === provider.id;
                   const error   = translateErrorMap?.get(provider.id);
+                  const ps      = getProviderStyle(provider.id);
                   return (
                     <div key={provider.id} style={{ position: "relative" }}>
                       <ToolBtn
@@ -758,23 +760,27 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                         disabled={loading || !!translateLoadingId}
                         title={t("providers.btn_translate", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
                         style={{
-                          background: loading ? "rgba(37,99,235,0.15)" : "#2563eb",
-                          color:      loading ? "#2563eb"              : "#fff",
-                          border:     "1px solid #2563eb",
+                          background: loading ? ps.bgIdle    : ps.bgActive,
+                          color:      loading ? ps.color     : "#fff",
+                          border:     `1px solid ${ps.border}`,
                           opacity:    loading ? 0.7 : 1,
+                          gap: 5,
                         }}
                       >
                         {loading
                           ? <IconSpinner size={11} />
-                          : <><IconReplace size={12} /><span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span></>
+                          : <>
+                              <ProviderLetterBadge letter={ps.letter} color={ps.bgActive} bgColor="rgba(255,255,255,0.25)" />
+                              <span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span>
+                            </>
                         }
                       </ToolBtn>
                       {error && (
                         <div style={{
                           position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 300,
-                          background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444",
+                          background: "var(--danger-dim)", border: "1px solid var(--danger)",
                           borderRadius: 6, padding: "5px 10px",
-                          fontSize: 11, color: "#ef4444", whiteSpace: "nowrap",
+                          fontSize: 11, color: "var(--danger)", whiteSpace: "nowrap",
                           boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                         }}>
                           {error}
@@ -790,17 +796,20 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             {activeLauncherProviders.length > 0 && (
               <>
                 <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
-                {activeLauncherProviders.map(provider => (
-                  <ToolBtn
-                    key={provider.id}
-                    onClick={() => onOpenBrowserWith?.(provider)}
-                    title={t("providers.btn_open_browser", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
-                    style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", opacity: 1 }}
-                  >
-                    <IconExternalLink size={12} />
-                    <span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span>
-                  </ToolBtn>
-                ))}
+                {activeLauncherProviders.map(provider => {
+                  const ps = getProviderStyle(provider.id);
+                  return (
+                    <ToolBtn
+                      key={provider.id}
+                      onClick={() => onOpenBrowserWith?.(provider)}
+                      title={t("providers.btn_open_browser", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
+                      style={{ background: ps.bgIdle, color: ps.color, border: `1px solid ${ps.border}`, gap: 5 }}
+                    >
+                      <IconExternalLink size={12} />
+                      <span style={{ fontSize: 10, fontWeight: 600, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span>
+                    </ToolBtn>
+                  );
+                })}
               </>
             )}
 

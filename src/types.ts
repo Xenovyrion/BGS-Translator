@@ -255,9 +255,52 @@ export const DEFAULT_FUZZY_SETTINGS: FuzzySettings = {
 
 /** Returns a CSS color for a fuzzy score (green → yellow → orange). */
 export function fuzzyScoreColor(score: number): string {
-  if (score >= 0.90) return "#22c55e"; // green
-  if (score >= 0.75) return "#eab308"; // yellow
-  return "#f97316";                    // orange
+  if (score >= 0.90) return "var(--fuzzy-high)";
+  if (score >= 0.75) return "var(--fuzzy-mid)";
+  return "var(--fuzzy-low)";
+}
+
+// ── Provider visual style ─────────────────────────────────────────────────────
+
+export interface ProviderStyle {
+  /** Main brand color — text, icon, border tint. */
+  color:    string;
+  /** Background when button is idle (very transparent tint). */
+  bgIdle:   string;
+  /** Background when button is active / loading (solid). */
+  bgActive: string;
+  /** Border color. */
+  border:   string;
+  /** Short badge letter shown inside the button icon area. */
+  letter:   string;
+}
+
+/**
+ * Returns the visual style for a translation provider button.
+ * Falls back to the theme accent color for unknown / custom providers.
+ */
+export function getProviderStyle(id: string): ProviderStyle {
+  switch (id) {
+    case "deepl":
+      return { color: "#3b82f6", bgIdle: "rgba(59,130,246,0.10)",  bgActive: "#2563eb", border: "rgba(59,130,246,0.45)", letter: "D"  };
+    case "ollama":
+      return { color: "#22c55e", bgIdle: "rgba(34,197,94,0.10)",   bgActive: "#16a34a", border: "rgba(34,197,94,0.45)",  letter: "Ol" };
+    case "claude":
+      return { color: "#d97706", bgIdle: "rgba(217,119,6,0.10)",   bgActive: "#b45309", border: "rgba(217,119,6,0.45)", letter: "Cl" };
+    case "openai":
+      return { color: "#10a37f", bgIdle: "rgba(16,163,127,0.10)",  bgActive: "#0d9268", border: "rgba(16,163,127,0.45)",letter: "Gpt"};
+    case "cohere":
+      return { color: "#8b5cf6", bgIdle: "rgba(139,92,246,0.10)",  bgActive: "#7c3aed", border: "rgba(139,92,246,0.45)",letter: "Co" };
+    case "launcher_deepl":
+      return { color: "#3b82f6", bgIdle: "transparent", bgActive: "rgba(59,130,246,0.12)",  border: "rgba(59,130,246,0.40)", letter: "D"  };
+    case "launcher_google":
+      return { color: "#4285f4", bgIdle: "transparent", bgActive: "rgba(66,133,244,0.12)",  border: "rgba(66,133,244,0.40)", letter: "G"  };
+    case "launcher_bing":
+      return { color: "#008272", bgIdle: "transparent", bgActive: "rgba(0,130,114,0.12)",   border: "rgba(0,130,114,0.40)",  letter: "Bi" };
+    default:
+      // Custom AI or unknown provider: use theme accent
+      return { color: "var(--accent)", bgIdle: "var(--accent-dim)", bgActive: "var(--accent)", border: "rgba(59,130,246,0.45)", letter: "?"  };
+  }
 }
 
 /** Returns a short human-readable label for a fuzzy score percentage. */

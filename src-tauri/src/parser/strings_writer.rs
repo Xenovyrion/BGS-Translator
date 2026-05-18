@@ -23,7 +23,7 @@ use std::{
     path::Path,
 };
 
-use crate::parser::archive::Ba2EntryMeta;
+use crate::parser::archive::{Ba2EntryMeta, Ba2RawEntry};
 use crate::parser::strings_file::StringFileKind;
 use crate::translation::entry::{EntryStatus, StringSource, TranslationEntry};
 
@@ -189,26 +189,23 @@ pub fn write_strings_files(
 
 // ── BA2 writer ────────────────────────────────────────────────────────────────
 
-/// Write translated strings into a new BA2 GNRL archive.
+/// Write translated strings into a BA2 GNRL archive, **merging** with the
+/// content of the source archive so all existing files are preserved.
 ///
-/// The archive will contain at most three files:
-/// ```text
-/// strings\<plugin_stem>_<lang>.strings
-/// strings\<plugin_stem>_<lang>.dlstrings
-/// strings\<plugin_stem>_<lang>.ilstrings
-/// ```
+/// Strategy:
+/// 1. Read ALL entries from `source_ba2` (if present), excluding any file whose
+///    name ends with `_<lang>.<ext>` (those will be replaced).
+/// 2. Build the new translated string files for `<lang>`.
+/// 3. Write a single BA2 containing existing entries + new entries.
 ///
-/// Hash strategy (highest priority first):
-/// 1. **Source archive metadata** (`source_ba2`) — reuses dir_hash / ext / file_hash
-///    directly from the original archive for that language.  This guarantees
-///    byte-perfect compatibility with the game engine.
-/// 2. **Computed hashes** — derived via the `ba2_path_hash` function (Bethesda
-///    multiplication hash with `0x1003F` prime).  Used when no source archive is
-///    available or when the language is new.
+/// If `source_ba2` is absent or unreadable, only the new translated files are
+/// written (same behaviour as before, but with a warning in the log).
 ///
-/// The output uses **BA2 v2 GNRL** format (Starfield native).  Fallout 4 and
-/// newer Bethesda titles can read both v1 and v2; only v2 is used here to
-/// avoid any game-engine loading issues on Starfield.
+/// Hash strategy for NEW files (highest priority first):
+/// 1. Source archive has an existing entry for this lang → reuse its hashes.
+/// 2. Computed via the `ba2_path_hash` function (`0x1003F` Bethesda prime).
+///
+/// Output format: **BA2 v2 GNRL** (Starfield native).
 pub fn write_strings_ba2(
     output_path: &Path,
     plugin_stem: &str,
@@ -217,73 +214,87 @@ pub fn write_strings_ba2(
     source_ba2:  Option<&Path>,
 ) -> Result<StringsWriteResult, String> {
     let tables = build_strings_tables(entries);
-    if tables.strings.is_empty() && tables.dlstrings.is_empty() && tables.ilstrings.is_empty() {
-        return Ok(StringsWriteResult { strings: 0, dlstrings: 0, ilstrings: 0, is_ba2: true });
-    }
 
-    // ── Build file data blobs ─────────────────────────────────────────────────
-    // Re-use the existing serialiser to get the raw bytes for each table.
-    let mut file_items: Vec<Ba2FileItem> = Vec::new();
-
+    // ── Build new translated file items ──────────────────────────────────────
+    let mut new_items: Vec<Ba2FileItem> = Vec::new();
     for (table, ext_str) in [
         (&tables.strings,   "strings"),
         (&tables.dlstrings, "dlstrings"),
         (&tables.ilstrings, "ilstrings"),
     ] {
         if table.is_empty() { continue; }
-
         let mut buf: Vec<u8> = Vec::new();
         serialise_string_table_into(table, ext_str, &mut buf)?;
-
-        let name = format!("strings\\{}_{}.{}", plugin_stem, lang, ext_str);
-        file_items.push(Ba2FileItem {
-            name:     name.to_lowercase(),
-            ext_str:  ext_str.to_string(),
-            data:     buf,
-        });
+        let name = format!("strings\\{}_{}.{}", plugin_stem, lang, ext_str).to_lowercase();
+        new_items.push(Ba2FileItem { name, ext_str: ext_str.to_string(), data: buf });
     }
 
-    if file_items.is_empty() {
+    if new_items.is_empty() {
         return Ok(StringsWriteResult { strings: 0, dlstrings: 0, ilstrings: 0, is_ba2: true });
     }
 
-    // ── Resolve hash metadata ─────────────────────────────────────────────────
-    // Try to read from source archive first; fall back to computed hashes.
-    let source_meta: Option<Vec<Ba2EntryMeta>> = source_ba2.and_then(|p| {
+    // ── Read existing entries from source BA2 (excluding the target language) ─
+    let existing: Vec<Ba2RawEntry> = source_ba2.map_or_else(
+        || {
+            log::warn!("[ba2_writer] No source BA2 provided — output will contain only new strings");
+            Vec::new()
+        },
+        |p| {
+            if p.exists() {
+                let v = crate::parser::archive::read_ba2_all_entries_with_data(p, Some(lang));
+                if v.is_empty() {
+                    log::warn!("[ba2_writer] Source BA2 '{}' yielded no existing entries \
+                                (unreadable or already empty)", p.display());
+                }
+                v
+            } else {
+                log::warn!("[ba2_writer] Source BA2 '{}' not found — output will contain only new strings",
+                    p.display());
+                Vec::new()
+            }
+        },
+    );
+
+    // Resolve hashes for new items: check source archive for existing lang entries first
+    let source_meta_lang: Option<Vec<Ba2EntryMeta>> = source_ba2.and_then(|p| {
         crate::parser::archive::read_ba2_entry_metadata(p, lang)
     });
-
-    if source_meta.is_some() {
-        log::info!("[ba2_writer] Using hash metadata from source archive");
+    if source_meta_lang.is_some() {
+        log::info!("[ba2_writer] Reusing hashes from source archive for lang '{}'", lang);
     } else {
-        log::info!("[ba2_writer] No source archive — computing hashes");
+        log::info!("[ba2_writer] No existing hashes for lang '{}' — computing", lang);
     }
 
-    // ── Layout constants (v2 GNRL format) ────────────────────────────────────
-    const MAGIC:          &[u8] = b"BTDX";
-    const VERSION:        u32   = 2;          // Starfield native
-    const ARCH_TYPE:      &[u8] = b"GNRL";
-    const HEADER_SIZE:    u64   = 32;         // magic(4)+ver(4)+type(4)+count(4)+names_off(8)+extra(8)
-    const ENTRY_SIZE:     u64   = 36;
+    // ── Layout (v2 GNRL) ──────────────────────────────────────────────────────
+    const MAGIC:       &[u8] = b"BTDX";
+    const VERSION:     u32   = 2;
+    const ARCH_TYPE:   &[u8] = b"GNRL";
+    const HEADER_SIZE: u64   = 32;  // magic(4)+ver(4)+type(4)+count(4)+names_off(8)+extra(8)
+    const ENTRY_SIZE:  u64   = 36;
 
-    let file_count = file_items.len() as u32;
-    let entries_size = file_count as u64 * ENTRY_SIZE;
-    let data_start   = HEADER_SIZE + entries_size;
+    let total_count   = (existing.len() + new_items.len()) as u32;
+    let entries_size  = total_count as u64 * ENTRY_SIZE;
+    let data_start    = HEADER_SIZE + entries_size;
 
-    // Compute data offsets and names_offset
-    let mut data_offset = data_start;
-    let mut offsets: Vec<u64> = Vec::new();
-    for item in &file_items {
-        offsets.push(data_offset);
-        data_offset += item.data.len() as u64;
+    // Compute data offsets: existing entries first, then new entries
+    let mut cur_offset = data_start;
+    let mut existing_offsets: Vec<u64> = Vec::with_capacity(existing.len());
+    for e in &existing {
+        existing_offsets.push(cur_offset);
+        let sz = if e.packed_size > 0 { e.packed_size } else { e.unpacked_size };
+        cur_offset += sz as u64;
     }
-    let names_offset = data_offset; // names table starts after all file data
+    let mut new_offsets: Vec<u64> = Vec::with_capacity(new_items.len());
+    for item in &new_items {
+        new_offsets.push(cur_offset);
+        cur_offset += item.data.len() as u64;
+    }
+    let names_offset = cur_offset;
 
-    // ── Write the archive ─────────────────────────────────────────────────────
+    // ── Write ─────────────────────────────────────────────────────────────────
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create dir: {e}"))?;
     }
-
     let file = File::create(output_path)
         .map_err(|e| format!("Cannot create '{}': {e}", output_path.display()))?;
     let mut w = BufWriter::new(file);
@@ -292,44 +303,68 @@ pub fn write_strings_ba2(
     w.write_all(MAGIC)                          .map_err(|e| e.to_string())?;
     w.write_all(&VERSION.to_le_bytes())         .map_err(|e| e.to_string())?;
     w.write_all(ARCH_TYPE)                      .map_err(|e| e.to_string())?;
-    w.write_all(&file_count.to_le_bytes())      .map_err(|e| e.to_string())?;
+    w.write_all(&total_count.to_le_bytes())     .map_err(|e| e.to_string())?;
     w.write_all(&names_offset.to_le_bytes())    .map_err(|e| e.to_string())?;
     w.write_all(&1u64.to_le_bytes())            .map_err(|e| e.to_string())?; // v2 extra
 
-    // Entry table (36 bytes × file_count)
-    for (i, item) in file_items.iter().enumerate() {
-        let (dir_hash, ext_bytes, file_hash, flags, unknown) =
-            resolve_entry_meta(item, source_meta.as_deref());
-
-        let data_off = offsets[i];
-        let unp_size = item.data.len() as u32;
-
-        w.write_all(&dir_hash.to_le_bytes())   .map_err(|e| e.to_string())?;
-        w.write_all(&ext_bytes)                .map_err(|e| e.to_string())?;
-        w.write_all(&file_hash.to_le_bytes())  .map_err(|e| e.to_string())?;
-        w.write_all(&[flags])                  .map_err(|e| e.to_string())?;
-        w.write_all(&[unknown])                .map_err(|e| e.to_string())?;
-        w.write_all(&0u16.to_le_bytes())       .map_err(|e| e.to_string())?; // comp_type=0 (none)
-        w.write_all(&data_off.to_le_bytes())   .map_err(|e| e.to_string())?;
-        w.write_all(&0u32.to_le_bytes())       .map_err(|e| e.to_string())?; // packed_size=0
-        w.write_all(&unp_size.to_le_bytes())   .map_err(|e| e.to_string())?;
-        w.write_all(&0xBAADF00Du32.to_le_bytes()).map_err(|e| e.to_string())?;
+    // ── Entry table: existing entries (preserved as-is) ───────────────────────
+    for (e, &off) in existing.iter().zip(existing_offsets.iter()) {
+        let m        = &e.meta;
+        let pck_size = e.packed_size;
+        let unp_size = e.unpacked_size;
+        w.write_all(&m.dir_hash.to_le_bytes())     .map_err(|e| e.to_string())?;
+        w.write_all(&m.ext)                         .map_err(|e| e.to_string())?;
+        w.write_all(&m.file_hash.to_le_bytes())    .map_err(|e| e.to_string())?;
+        w.write_all(&[m.flags])                     .map_err(|e| e.to_string())?;
+        w.write_all(&[m.unknown])                   .map_err(|e| e.to_string())?;
+        w.write_all(&e.comp_type.to_le_bytes())    .map_err(|e| e.to_string())?;
+        w.write_all(&off.to_le_bytes())             .map_err(|e| e.to_string())?;
+        w.write_all(&pck_size.to_le_bytes())       .map_err(|e| e.to_string())?;
+        w.write_all(&unp_size.to_le_bytes())       .map_err(|e| e.to_string())?;
+        w.write_all(&0xBAADF00Du32.to_le_bytes())  .map_err(|e| e.to_string())?;
     }
 
-    // File data
-    for item in &file_items {
+    // ── Entry table: new translated entries (always uncompressed) ─────────────
+    for (item, &off) in new_items.iter().zip(new_offsets.iter()) {
+        let (dir_hash, ext_bytes, file_hash, flags, unknown) =
+            resolve_entry_meta(item, source_meta_lang.as_deref());
+        let unp_size = item.data.len() as u32;
+        w.write_all(&dir_hash.to_le_bytes())        .map_err(|e| e.to_string())?;
+        w.write_all(&ext_bytes)                      .map_err(|e| e.to_string())?;
+        w.write_all(&file_hash.to_le_bytes())       .map_err(|e| e.to_string())?;
+        w.write_all(&[flags])                        .map_err(|e| e.to_string())?;
+        w.write_all(&[unknown])                      .map_err(|e| e.to_string())?;
+        w.write_all(&0u16.to_le_bytes())             .map_err(|e| e.to_string())?; // comp=none
+        w.write_all(&off.to_le_bytes())              .map_err(|e| e.to_string())?;
+        w.write_all(&0u32.to_le_bytes())             .map_err(|e| e.to_string())?; // packed_size=0
+        w.write_all(&unp_size.to_le_bytes())        .map_err(|e| e.to_string())?;
+        w.write_all(&0xBAADF00Du32.to_le_bytes())   .map_err(|e| e.to_string())?;
+    }
+
+    // ── File data: existing (raw, may be compressed) ──────────────────────────
+    for e in &existing {
+        w.write_all(&e.raw_data).map_err(|e| e.to_string())?;
+    }
+
+    // ── File data: new entries (uncompressed) ─────────────────────────────────
+    for item in &new_items {
         w.write_all(&item.data).map_err(|e| e.to_string())?;
     }
 
-    // Names table (u16 len + raw bytes, no null terminator)
-    for item in &file_items {
+    // ── Names table (u16 len + raw bytes, no null terminator) ─────────────────
+    for e in &existing {
+        let bytes = e.meta.name.as_bytes();
+        w.write_all(&(bytes.len() as u16).to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(bytes)                               .map_err(|e| e.to_string())?;
+    }
+    for item in &new_items {
         let bytes = item.name.as_bytes();
-        let len   = bytes.len() as u16;
-        w.write_all(&len.to_le_bytes()).map_err(|e| e.to_string())?;
-        w.write_all(bytes)             .map_err(|e| e.to_string())?;
+        w.write_all(&(bytes.len() as u16).to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(bytes)                               .map_err(|e| e.to_string())?;
     }
 
-    log::info!("[ba2_writer] Wrote {} files to {}", file_count, output_path.display());
+    log::info!("[ba2_writer] Wrote {} files ({} existing + {} new) to {}",
+        total_count, existing.len(), new_items.len(), output_path.display());
 
     Ok(StringsWriteResult {
         strings:   tables.strings.len(),

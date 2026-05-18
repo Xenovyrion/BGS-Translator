@@ -94,8 +94,10 @@ BGS-Translator/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
 │   │   │   ├── ConvertToBgtModal.tsx      # Floating draggable database converter (any format → .bgt/.bgtx)
 │   │   │   ├── GlobalFindReplaceModal.tsx # Floating global find & replace window
+│   │   │   ├── LoadingOverlay.tsx         # Centered spinner overlay shown during plugin loading
 │   │   │   ├── LogPanel.tsx               # Activity / debug log panel
 │   │   │   ├── NotificationBanner.tsx     # Inline success/error notification bar
+│   │   │   ├── ProviderBadge.tsx          # Letter badge component for provider buttons (D/Ol/Cl/…)
 │   │   │   ├── SessionPickerModal.tsx     # Session selection dialog
 │   │   │   ├── UpdateBanner.tsx           # Non-intrusive update notification
 │   │   │   └── UpdateModal.tsx            # Full update dialog (release notes + install)
@@ -367,8 +369,9 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 #### Localized plugins (Starfield, Fallout 4 — string files)
 - Exports validated `Localized` entries as `.strings` / `.dlstrings` / `.ilstrings` files for the target language
-- **BA2 archive mode** (default, configurable in Settings → Misc): packs the three string files into a standard `<stem> - Localization.ba2` GNRL archive; the engine loads it automatically — no manual Data folder management required
-  - Hashes are reused from the source archive when available, guaranteeing engine compatibility; a computed fallback (`0x1003F` multiplier) is used for new languages without an existing archive
+- **BA2 archive mode** (default, configurable in Settings → Misc): produces a `<stem> - Localization.ba2` GNRL archive loaded automatically by the engine
+  - **Round-trip merge**: all existing files from the source BA2 (e.g. English strings) are preserved; only the target-language files are replaced or added — the output is a complete, self-contained archive
+  - Hashes reused from the source archive guarantee byte-perfect engine compatibility; computed fallback (`0x1003F` multiplier) used when no source archive exists or the language is new
 - **Loose file mode**: writes the three files under `<output_dir>/Strings/` for manual placement or use with mod managers
 - The user picks an output folder; the correct subfolder / archive name is created automatically
 
@@ -394,6 +397,9 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - 3 icon sets: Minimal, Material, Classic
 - Record-type colour coding (customisable per type)
 - Interface language: English, French (auto-detected from system locale)
+- **Theme-aware CSS variable system** — all semantic colours (status dots, fuzzy scores, row highlights, provider tints) are defined as CSS custom properties that automatically adapt to any theme override; `color-mix()` generates alpha variants without per-theme duplication
+- **Loading overlay** — while a plugin is loading, a centered spinner with a status card (`Extraction des archives…` / `Lecture des enregistrements…`) covers the content area; the toolbar shows a compact entry counter during the streaming phase
+- **Provider error auto-dismiss** — translation error tooltips (API key missing, model not configured…) disappear automatically after 4 seconds
 
 ### Plugin Comparison (Diff)
 - Compare any two versions of the same plugin side by side — designed for the **mod-update workflow**
@@ -484,6 +490,7 @@ Translate entries using large language models — local or cloud — directly fr
 - Keyboard shortcut (F1–F4 + configurable) for instant one-click translation
 - Bulk translation via the BulkActionBar (one button per enabled AI provider)
 - BGS tag protection — custom `<Tag>` markup is masked before the LLM call and restored in the output; the LLM never sees raw BGS tags
+- **Per-provider visual identity** — each provider button has a dedicated brand colour and letter badge (DeepL `D` blue · Ollama `Ol` green · Claude `Cl` amber · OpenAI `Gpt` teal · Cohere `Co` purple · browser launchers outlined in their brand colour); colours are theme-compatible (semi-transparent tints on idle, solid on active)
 
 ### Global Find & Replace
 - Floating, draggable window (stays open while working — no backdrop blocking the table)

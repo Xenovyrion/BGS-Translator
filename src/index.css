@@ -24,6 +24,32 @@
   --warning:      #f59e0b;
   --danger:       #ef4444;
   --info:         #60a5fa;
+
+  /* ── Semantic alpha variants (color-mix adapts automatically to theme overrides) */
+  --danger-dim:    color-mix(in srgb, var(--danger)  10%, transparent);
+  --danger-border: color-mix(in srgb, var(--danger)  25%, transparent);
+  --success-dim:   color-mix(in srgb, var(--success) 12%, transparent);
+  --warning-dim:   color-mix(in srgb, var(--warning) 12%, transparent);
+
+  /* ── Table row backgrounds ──────────────────────────────────────────────────── */
+  --bg-row-hover: color-mix(in srgb, var(--accent) 6%, transparent);
+  --bg-row-alt:   color-mix(in srgb, var(--text-1) 2%, transparent);
+
+  /* ── Entry status colors (dot indicators in the table) ──────────────────────── */
+  --status-validated:    var(--success);
+  --status-pending:      var(--warning);
+  --status-untranslated: var(--danger);
+  --status-ignored:      var(--text-3);
+
+  /* ── Secondary accent (indigo) — localized badge, selection highlight ─────── */
+  --accent-alt:        #818cf8;
+  --accent-alt-dim:    color-mix(in srgb, var(--accent-alt) 12%, transparent);
+  --accent-alt-border: color-mix(in srgb, var(--accent-alt) 35%, transparent);
+
+  /* ── Fuzzy score colors ──────────────────────────────────────────────────── */
+  --fuzzy-high: var(--success);
+  --fuzzy-mid:  var(--warning);
+  --fuzzy-low:  #f97316;
 }
 
 body {
@@ -38,6 +64,20 @@ body {
 textarea, input {
   user-select: text;
   font-family: inherit;
+}
+
+/* Loading overlay spinner */
+@keyframes bgs-spin {
+  to { transform: rotate(360deg); }
+}
+.bgs-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: bgs-spin 0.75s linear infinite;
+  flex-shrink: 0;
 }
 
 /* Scrollbar */

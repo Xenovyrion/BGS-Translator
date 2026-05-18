@@ -130,6 +130,120 @@ pub fn read_ba2_entry_metadata(archive_path: &Path, lang: &str) -> Option<Vec<Ba
     if filtered.is_empty() { None } else { Some(filtered) }
 }
 
+/// Read ALL entries from a BA2 GNRL archive, optionally **excluding** any files
+/// whose name ends with `_<lang>.<ext>` (e.g. `_fr.strings`).
+///
+/// Returns an empty `Vec` when the source BA2 cannot be opened, is not a GNRL
+/// archive, or when all entries were filtered out.
+/// Used by the BA2 writer to perform a round-trip merge: keep every file from
+/// the source archive that isn't being replaced, then append the new translated
+/// files.
+pub fn read_ba2_all_entries_with_data(
+    archive_path: &Path,
+    exclude_lang: Option<&str>,
+) -> Vec<Ba2RawEntry> {
+    let inner = || -> Option<Vec<Ba2RawEntry>> {
+        let file = File::open(archive_path).ok()?;
+        let mut r = BufReader::new(file);
+
+        let mut magic = [0u8; 4];
+        r.read_exact(&mut magic).ok()?;
+        if &magic != b"BTDX" { return None; }
+
+        let version: u32      = r.read_le().ok()?;
+        let mut arch_type      = [0u8; 4];
+        r.read_exact(&mut arch_type).ok()?;
+        if &arch_type != b"GNRL" { return None; }
+
+        let file_count: u32   = r.read_le().ok()?;
+        let names_offset: u64 = r.read_le().ok()?;
+        if version >= 2 { let _extra: u64 = r.read_le().ok()?; }
+
+        // ── Read entry headers (36 bytes each) ────────────────────────────────
+        struct Hdr { dir_hash:u32, ext:[u8;4], file_hash:u32, flags:u8,
+                     unknown:u8, comp_type:u16, data_offset:u64,
+                     packed_size:u32, unpacked_size:u32 }
+        let mut hdrs = Vec::with_capacity(file_count as usize);
+        for _ in 0..file_count {
+            let dir_hash:      u32 = r.read_le().ok()?;
+            let mut ext             = [0u8; 4];
+            r.read_exact(&mut ext).ok()?;
+            let file_hash:     u32 = r.read_le().ok()?;
+            let flags:         u8  = r.read_le().ok()?;
+            let unknown:       u8  = r.read_le().ok()?;
+            let comp_type:     u16 = r.read_le().ok()?;
+            let data_offset:   u64 = r.read_le().ok()?;
+            let packed_size:   u32 = r.read_le().ok()?;
+            let unpacked_size: u32 = r.read_le().ok()?;
+            let _sentinel:     u32 = r.read_le().ok()?;
+            hdrs.push(Hdr { dir_hash, ext, file_hash, flags, unknown,
+                            comp_type, data_offset, packed_size, unpacked_size });
+        }
+
+        // ── Read names table ──────────────────────────────────────────────────
+        r.seek(SeekFrom::Start(names_offset)).ok()?;
+        let mut names: Vec<String> = Vec::with_capacity(file_count as usize);
+        for _ in 0..file_count {
+            let name_len: u16 = r.read_le().ok()?;
+            let mut name_bytes = vec![0u8; name_len as usize];
+            r.read_exact(&mut name_bytes).ok()?;
+            names.push(String::from_utf8_lossy(&name_bytes).into_owned());
+        }
+
+        // ── Build exclusion suffixes ──────────────────────────────────────────
+        // Match only exact language suffixes: "_<lang>.strings" etc.
+        let excl: Option<Vec<String>> = exclude_lang.map(|l| {
+            let l = l.to_lowercase();
+            vec![
+                format!("_{}.strings",   l),
+                format!("_{}.dlstrings", l),
+                format!("_{}.ilstrings", l),
+            ]
+        });
+
+        // ── Read file data for non-excluded entries ───────────────────────────
+        let mut result: Vec<Ba2RawEntry> = Vec::new();
+        for (hdr, name) in hdrs.iter().zip(names.iter()) {
+            // Filter out target-language files (they will be replaced)
+            if let Some(ref pats) = excl {
+                let name_lower = name.to_lowercase().replace('/', "\\");
+                if pats.iter().any(|p| name_lower.ends_with(p.as_str())) {
+                    log::debug!("[ba2_reader] Excluding '{}' (will be replaced)", name);
+                    continue;
+                }
+            }
+
+            // Seek to file data and read raw bytes (compressed or not)
+            if hdr.data_offset > i64::MAX as u64 { continue; }
+            r.seek(SeekFrom::Start(hdr.data_offset)).ok()?;
+            let raw_size = if hdr.packed_size > 0 { hdr.packed_size } else { hdr.unpacked_size };
+            let mut raw_data = vec![0u8; raw_size as usize];
+            if r.read_exact(&mut raw_data).is_err() { continue; }
+
+            result.push(Ba2RawEntry {
+                meta: Ba2EntryMeta {
+                    dir_hash:  hdr.dir_hash,
+                    ext:       hdr.ext,
+                    file_hash: hdr.file_hash,
+                    flags:     hdr.flags,
+                    unknown:   hdr.unknown,
+                    name:      name.clone(),
+                },
+                raw_data,
+                comp_type:     hdr.comp_type,
+                packed_size:   hdr.packed_size,
+                unpacked_size: hdr.unpacked_size,
+            });
+        }
+
+        log::info!("[ba2_reader] {} existing entries kept from source archive (excluded lang={:?})",
+            result.len(), exclude_lang);
+        Some(result)
+    };
+
+    inner().unwrap_or_default()
+}
+
 // ─── Archive discovery ────────────────────────────────────────────────────────
 
 fn find_candidate_archives(data_dir: &Path, plugin_stem: &str) -> Vec<PathBuf> {
@@ -229,6 +343,19 @@ pub struct Ba2EntryMeta {
     pub flags:        u8,
     pub unknown:      u8,
     pub name:         String,
+}
+
+/// One BA2 GNRL entry with its raw (possibly compressed) file data.
+/// Used by the BA2 writer to perform a round-trip: copy existing files from the
+/// source archive and replace only the target-language strings.
+#[derive(Debug, Clone)]
+pub struct Ba2RawEntry {
+    pub meta:          Ba2EntryMeta,
+    /// Raw bytes as stored in the archive (may be zlib-compressed).
+    pub raw_data:      Vec<u8>,
+    pub comp_type:     u16,
+    pub packed_size:   u32,   // 0 = uncompressed
+    pub unpacked_size: u32,
 }
 
 #[allow(dead_code)]

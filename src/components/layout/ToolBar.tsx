@@ -4,15 +4,11 @@ import { useTranslation } from "react-i18next";
 import { IconFolder, IconSession, IconSave, IconExport, IconSettings, IconSpinner } from "../../icons";
 import type { IconSetId } from "../../themes";
 
-const STATUS_LABELS: Record<string, string> = {
-  loading_strings:  "Extraction des strings…",
-  parsing_records:  "Lecture des enregistrements…",
-};
-
 interface Props {
   pluginName:       string | null;
   loading?:         boolean;
   loadingProgress?: number | null;
+  /** Kept for API compatibility — label is now shown by LoadingOverlay. */
   loadingStatus?:   string | null;
   onOpenPlugin:     () => void;
   onOpenSession:    () => void;
@@ -23,7 +19,7 @@ interface Props {
   lastAutosave?:    Date | null;
 }
 
-export default function ToolBar({ pluginName, loading, loadingProgress, loadingStatus, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
+export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
   const { t } = useTranslation();
 
   const openTitle = loading
@@ -114,13 +110,14 @@ export default function ToolBar({ pluginName, loading, loadingProgress, loadingS
             </span>
           )}
           {loading && (
-            <span style={{ fontSize: 11, color: "var(--accent)", marginLeft: 8, display: "flex", alignItems: "center", gap: 5 }}>
-              <IconSpinner size={11} />
-              {loadingProgress != null && loadingProgress > 0
-                ? `${loadingProgress.toLocaleString()} …`
-                : loadingStatus
-                  ? (STATUS_LABELS[loadingStatus] ?? loadingStatus)
-                  : t("toolbar.loading")}
+            // Subtle spinner in toolbar — the full label is shown by LoadingOverlay
+            <span style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 8 }}>
+              <IconSpinner size={11} style={{ color: "var(--accent)" }} />
+              {loadingProgress != null && loadingProgress > 0 && (
+                <span style={{ fontSize: 11, color: "var(--accent)" }}>
+                  {loadingProgress.toLocaleString()}
+                </span>
+              )}
             </span>
           )}
           {!loading && lastAutosave && (

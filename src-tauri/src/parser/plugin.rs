@@ -97,7 +97,7 @@ pub fn open_file(path: &Path, target_lang: &str, on_status: impl Fn(&str)) -> Re
     Ok(LoadedFile { path: path.to_owned(), info, entries })
 }
 
-fn parse_tes4_data(data: &[u8], _is_localized: bool) -> Result<PluginInfo, ParseError> {
+fn parse_tes4_data(data: &[u8], is_localized: bool) -> Result<PluginInfo, ParseError> {
     let subrecords = parse_subrecords(data)?;
 
     let mut author      = String::new();
@@ -120,7 +120,7 @@ fn parse_tes4_data(data: &[u8], _is_localized: bool) -> Result<PluginInfo, Parse
         }
     }
 
-    Ok(PluginInfo { author, description, masters, is_localized: false, version })
+    Ok(PluginInfo { author, description, masters, is_localized, version })
 }
 
 // ── String resolver loading ───────────────────────────────────────────────────

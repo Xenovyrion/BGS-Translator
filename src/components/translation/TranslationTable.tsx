@@ -10,10 +10,10 @@ import { TaggedText } from "../shared/TaggedText";
 import { IconSearch } from "../../icons";
 
 const STATUS_COLORS: Record<EntryStatus, string> = {
-  untranslated: "#ef4444",
-  pending:      "#f59e0b",
-  validated:    "#22c55e",
-  ignored:      "#64748b",
+  untranslated: "var(--status-untranslated)",
+  pending:      "var(--status-pending)",
+  validated:    "var(--status-validated)",
+  ignored:      "var(--status-ignored)",
 };
 
 type SortCol = SortConfig["column"];
@@ -244,7 +244,7 @@ export default function TranslationTable({
                         onClick={(e) => e.stopPropagation()}
                         style={{
                           width: "100%", padding: "2px 5px", fontSize: 10,
-                          background: columnFilters[key] ? "rgba(99,102,241,0.15)" : "var(--bg-hover)",
+                          background: columnFilters[key] ? "var(--accent-alt-dim)" : "var(--bg-hover)",
                           color: "var(--text-1)", border: "1px solid var(--border)",
                           borderRadius: 3, outline: "none", boxSizing: "border-box",
                         }}
@@ -312,17 +312,17 @@ const TableRow = memo(function TableRow({
 }: RowProps) {
   const [hovered, setHovered] = useState(false);
   const statusColor = STATUS_COLORS[entry.status];
-  const recordColor = recordColors[entry.record_type] ?? "#64748b";
+  const recordColor = recordColors[entry.record_type] ?? "var(--text-3)";
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
 
   const rowBg = isPrimary
-    ? "rgba(99,102,241,0.15)"
+    ? "var(--accent-alt-dim)"
     : isSelected
-    ? "rgba(99,102,241,0.07)"
+    ? "var(--accent-alt-dim)"
     : hovered && rowHover
     ? "var(--bg-row-hover)"
     : alternateRows && idx % 2 !== 0
-    ? "rgba(255,255,255,0.015)"
+    ? "var(--bg-row-alt)"
     : "transparent";
 
   return (
@@ -355,7 +355,7 @@ const TableRow = memo(function TableRow({
             style={{
               fontSize: 10, fontWeight: 800, lineHeight: 1,
               fontFamily: "monospace",
-              color: entry.source.type === "Localized" ? "#818cf8" : "#64748b",
+              color: entry.source.type === "Localized" ? "var(--accent-alt)" : "var(--text-3)",
               userSelect: "none",
               flexShrink: 0,
               padding: "3px 4px",
