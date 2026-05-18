@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { EntryStatus } from "../../types";
 import { getProviderStyle } from "../../types";
-import { IconRefresh, IconSearch, IconExternalLink } from "../../icons";
+import { IconRefresh, IconCheck, IconExternalLink } from "../../icons";
 import { ProviderLetterBadge } from "../shared/ProviderBadge";
 
 export interface TranslationBatch {
@@ -149,16 +149,16 @@ export default function BulkActionBar({
             style={{
               height: 26, padding: "0 10px",
               borderRadius: 5, boxSizing: "border-box",
-              border: "1px solid var(--fuzzy-low)",
+              border: "1px solid var(--fuzzy-action-border)",
               cursor: "pointer",
               fontSize: 11, fontWeight: 600,
-              background: "var(--fuzzy-low)",
+              background: "var(--fuzzy-action)",
               color: "#fff",
               display: "flex", alignItems: "center", gap: 5,
               flexShrink: 0,
             }}
           >
-            <IconSearch size={12} /> {t("bulk.apply_fuzzy")}
+            <IconCheck size={12} /> {t("bulk.apply_fuzzy")} ({fuzzyMatchCount})
           </button>
         </>
       )}

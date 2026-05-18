@@ -240,6 +240,8 @@
   },
   "fuzzy": {
     "badge_title":           "Suggestion automatique — similarité {{score}}% · Source : {{src}}",
+    "run_title":             "Rechercher une suggestion similaire",
+    "btn_label":             "Similaire",
     "accept":                "Accepter",
     "dismiss":               "Ignorer",
     "scan_done":             "{{count}} suggestion(s) trouvée(s)",

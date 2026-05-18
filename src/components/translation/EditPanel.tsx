@@ -137,7 +137,7 @@ function SegmentedText({ segments }: { segments: Segment[] }) {
       {segments.map((seg, i) => {
         if (seg.isCurrent)    return <mark key={i} style={{ background: "var(--accent)", color: "#fff", borderRadius: 2 }}>{seg.text}</mark>;
         if (seg.isMatch)      return <mark key={i} style={{ background: "rgba(253,224,71,0.4)", color: "inherit", borderRadius: 2 }}>{seg.text}</mark>;
-        if (seg.isSpellError) return <span key={i} style={{ textDecoration: "underline wavy #ef4444", textDecorationThickness: "1.5px", textUnderlineOffset: "2px" }}>{seg.text}</span>;
+        if (seg.isSpellError) return <span key={i} style={{ textDecoration: "underline wavy var(--danger)", textDecorationThickness: "1.5px", textUnderlineOffset: "2px" }}>{seg.text}</span>;
         if (seg.isTag)        return <span key={i} style={{ color: "var(--color-tag)" }}>{seg.text}</span>;
         return <span key={i}>{seg.text}</span>;
       })}
@@ -218,7 +218,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const formIdHex   = entry.form_id.toString(16).toUpperCase().padStart(8, "0");
-  const recordColor = recordColors[entry.record_type] ?? "#64748b";
+  const recordColor = recordColors[entry.record_type] ?? "var(--text-3)";
   const origLines   = entry.original.split("\n");
   const translLines = (entry.translated ?? "").split("\n");
   const origMulti   = origLines.length > 1;
@@ -487,10 +487,10 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
 
   // ── Shared styles ─────────────────────────────────────────────────────────
   const STATUS_CONFIG: Array<{ status: EntryStatus; label: string; color: string }> = [
-    { status: "validated",    label: t("edit.status_validated"),    color: "#22c55e" },
-    { status: "pending",      label: t("edit.status_pending"),      color: "#f59e0b" },
-    { status: "ignored",      label: t("edit.status_ignored"),      color: "#64748b" },
-    { status: "untranslated", label: t("edit.status_untranslated"), color: "#ef4444" },
+    { status: "validated",    label: t("edit.status_validated"),    color: "var(--status-validated)"    },
+    { status: "pending",      label: t("edit.status_pending"),      color: "var(--status-pending)"      },
+    { status: "ignored",      label: t("edit.status_ignored"),      color: "var(--status-ignored)"      },
+    { status: "untranslated", label: t("edit.status_untranslated"), color: "var(--status-untranslated)" },
   ];
   const colHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexShrink: 0 };
   const labelStyle:     React.CSSProperties = { fontSize: 11, color: "var(--text-1)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" };
@@ -674,7 +674,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             <span style={metaStyle}>{fmtN(entry.original.length)} {t("edit.chars")}</span>
             {origMulti && <><span style={dotStyle}>·</span><span style={metaStyle}>{fmtN(origLines.length)} {t("edit.lines")}</span></>}
             <ToolBtn style={{ marginLeft: "auto" }} onClick={() => copyText(entry.original, "original")} title={t("edit.copy_original")}>
-              {copiedSide === "original" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
+              {copiedSide === "original" ? <span style={{ color: "var(--success)" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
             </ToolBtn>
           </div>
           <div style={{ flex: 1 }}>
@@ -690,30 +690,28 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
             <span style={metaStyle}>{fmtN((entry.translated ?? "").length)} {t("edit.chars")}</span>
             {translMulti && <><span style={dotStyle}>·</span><span style={metaStyle}>{fmtN(translLines.length)} {t("edit.lines")}</span></>}
             {missingTags.length > 0 && (
-              <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "#f59e0b", cursor: "help", flexShrink: 0 }}>⚠ {missingTags.length}</span>
+              <span title={`${t("edit.missing_tags")}\n${missingTags.join("\n")}`} style={{ fontSize: 11, color: "var(--warning)", cursor: "help", flexShrink: 0 }}>⚠ {missingTags.length}</span>
             )}
 
             {/* Spacer — pushes all action buttons to the right */}
             <div style={{ flex: 1 }} />
 
-            {/* ── BDD Perso : charger + ajouter ─────────────────────────── */}
+            {/* ── Group: Personal DB ──────────────────────────────────────── */}
             {(onApplyPersonalDb || onAddToPersonalDb) && (
               <>
                 <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
-                {/* Charger depuis BDD perso — cyan #0ea5e9 comme BulkActionBar */}
                 {onApplyPersonalDb && (
                   <ToolBtn
                     onClick={onApplyPersonalDb}
                     title={personalDbName
                       ? t("bulk.apply_personal_db_named", { name: personalDbName })
                       : t("bulk.apply_personal_db")}
-                    style={{ background: "#0ea5e9", color: "#fff", border: "1px solid #0ea5e9", opacity: 1 }}
+                    style={{ background: "var(--info)", color: "#fff", border: "1px solid var(--info)", opacity: 1 }}
                   >
                     <IconArrowDown size={11} />
                     <span style={{ fontSize: 10, fontWeight: 700 }}>DB</span>
                   </ToolBtn>
                 )}
-                {/* Ajouter à BDD perso — indigo #6366f1 comme BulkActionBar */}
                 {onAddToPersonalDb && (
                   <ToolBtn
                     onClick={() => { if (entry.translated) onAddToPersonalDb!(); }}
@@ -721,7 +719,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                     title={personalDbName
                       ? t("bulk.add_personal_db_named", { name: personalDbName })
                       : t("bulk.add_personal_db")}
-                    style={{ background: "#6366f1", color: "#fff", border: "1px solid #6366f1", opacity: entry.translated ? 1 : 0.4 }}
+                    style={{ background: "var(--accent-alt)", color: "#fff", border: "1px solid var(--accent-alt)", opacity: entry.translated ? 1 : 0.4 }}
                   >
                     <span style={{ fontSize: 11, fontWeight: 700 }}>+</span>
                     <span style={{ fontSize: 10, fontWeight: 700 }}>DB</span>
@@ -730,22 +728,25 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               </>
             )}
 
-            {/* Fuzzy — orange #f97316 quand suggestion disponible (cohérent avec BulkActionBar) */}
-            {onRunFuzzy && (
-              <ToolBtn
-                onClick={onRunFuzzy}
-                disabled={fuzzyScanning}
-                title={t("fuzzy.badge_title", { score: fuzzyMatch ? Math.round(fuzzyMatch.score * 100) : 0, src: fuzzyMatch?.origin ?? "" })}
-                style={fuzzyMatch
-                  ? { background: "#f97316", color: "#fff", border: "1px solid #f97316", opacity: 1 }
-                  : undefined}
-              >
-                {fuzzyScanning ? <IconSpinner size={11} /> : <IconSearch size={12} />}
-                {!fuzzyScanning && fuzzyMatch && <span style={{ fontSize: 10, fontWeight: 700 }}>{fuzzyScoreLabel(fuzzyMatch.score)}</span>}
-              </ToolBtn>
+            {/* ── Group: Fuzzy trigger — hidden while bandeau is visible ─── */}
+            {onRunFuzzy && !fuzzyMatch && (
+              <>
+                <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+                <ToolBtn
+                  onClick={onRunFuzzy}
+                  disabled={fuzzyScanning}
+                  title={t("fuzzy.run_title")}
+                  style={{ gap: 5 }}
+                >
+                  {fuzzyScanning
+                    ? <><IconSpinner size={11} /><span style={{ fontSize: 10, fontWeight: 600 }}>{t("fuzzy.btn_label")}</span></>
+                    : <><IconSearch size={12} /><span style={{ fontSize: 10, fontWeight: 600 }}>{t("fuzzy.btn_label")}</span></>
+                  }
+                </ToolBtn>
+              </>
             )}
 
-            {/* API provider buttons — one per enabled API provider */}
+            {/* ── Group: API translate providers ──────────────────────────── */}
             {activeApiProviders.length > 0 && (
               <>
                 <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
@@ -760,8 +761,8 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                         disabled={loading || !!translateLoadingId}
                         title={t("providers.btn_translate", { name: provider.name }) + (provider.shortcut ? ` (${provider.shortcut})` : "")}
                         style={{
-                          background: loading ? ps.bgIdle    : ps.bgActive,
-                          color:      loading ? ps.color     : "#fff",
+                          background: loading ? ps.bgIdle : ps.bgActive,
+                          color:      loading ? ps.color  : "#fff",
                           border:     `1px solid ${ps.border}`,
                           opacity:    loading ? 0.7 : 1,
                           gap: 5,
@@ -792,7 +793,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               </>
             )}
 
-            {/* Browser launcher buttons */}
+            {/* ── Group: Browser launcher providers ───────────────────────── */}
             {activeLauncherProviders.length > 0 && (
               <>
                 <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
@@ -813,7 +814,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
               </>
             )}
 
-            {/* Spell check button */}
+            {/* ── Group: Utilities (spell check · tools · copy) ───────────── */}
+            <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+
             {spellLang && (
               <ToolBtn
                 onClick={runSpellCheck}
@@ -822,15 +825,15 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 title={t("spellcheck.btn_check")}
               >
                 {spellChecking
-                ? <IconSpinner size={11} />
-                : <><IconCheck size={11} />{spellErrors.length > 0 && <span style={{ fontSize: 10 }}>{spellErrors.length}</span>}</>}
-                {!spellChecking && <IconSpellCheck />}
+                  ? <IconSpinner size={11} />
+                  : <><IconSpellCheck />{spellErrors.length > 0 && <span style={{ fontSize: 10 }}>{spellErrors.length}</span>}</>
+                }
               </ToolBtn>
             )}
 
             {/* Tools dropdown */}
             <div ref={opsRef} style={{ position: "relative" }}>
-              <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}><IconGear size={12} /> {t("edit.ops_btn")}</ToolBtn>
+              <ToolBtn onClick={() => setOpsOpen(o => !o)} title={t("edit.ops_btn")}><IconGear size={12} /></ToolBtn>
               {opsOpen && (
                 <div role="menu" style={{ position: "absolute", top: `calc(100% + 3px)`, right: 0, zIndex: 200, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 0", minWidth: 240, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
                   {([ ["trim","op_trim"],["upper","op_upper"],["lower","op_lower"],["strip-tags","op_strip_tags"] ] as [string, string][]).map(([op, i18Key]) => {
@@ -860,8 +863,9 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                 </div>
               )}
             </div>
+
             <ToolBtn onClick={() => copyText(entry.translated ?? "", "translation")} title={t("edit.copy_translation")}>
-              {copiedSide === "translation" ? <span style={{ color: "#22c55e" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
+              {copiedSide === "translation" ? <span style={{ color: "var(--success)" }}>{t("edit.copied")}</span> : <><IconCopy size={11} />{t("edit.copy")}</>}
             </ToolBtn>
           </div>
 
