@@ -31,10 +31,15 @@ pub struct PluginMetadata {
 #[tauri::command]
 pub async fn open_plugin_cmd(
     path: String,
+    target_lang: String,
     window: tauri::WebviewWindow,
 ) -> Result<PluginMetadata, String> {
-    log::info!("[cmd] open_plugin: {}", path);
-    let loaded = open_file(std::path::Path::new(&path)).map_err(|e| {
+    log::info!("[cmd] open_plugin: {} (target_lang={})", path, target_lang);
+    let lang = if target_lang.is_empty() { "en".to_owned() } else { target_lang };
+    let win  = window.clone();
+    let loaded = open_file(std::path::Path::new(&path), &lang, move |status| {
+        win.emit("plugin:status", status).ok();
+    }).map_err(|e| {
         log::error!("[cmd] open_plugin failed: {}", e);
         e.to_string()
     })?;
@@ -110,7 +115,8 @@ pub async fn import_translations_from_plugin_cmd(
     reference_path: String,
 ) -> Result<Vec<TranslationEntry>, String> {
     log::info!("[cmd] import_translations_from: {}", reference_path);
-    let loaded = open_file(std::path::Path::new(&reference_path)).map_err(|e| {
+    // For reference import, load English only (no target pre-fill needed)
+    let loaded = open_file(std::path::Path::new(&reference_path), "en", |_| {}).map_err(|e| {
         log::error!("[cmd] import_translations_from failed: {}", e);
         e.to_string()
     })?;
@@ -150,6 +156,91 @@ pub async fn export_plugin_cmd(
         log::error!("[cmd] export_plugin failed: {:?}", result);
     }
     result
+}
+
+/// Export result for a localized (strings-based) plugin.
+#[derive(Serialize)]
+pub struct StringsExportResult {
+    pub strings_count:   usize,
+    pub dlstrings_count: usize,
+    pub ilstrings_count: usize,
+    pub total:           usize,
+    pub output_dir:      String,
+}
+
+/// Export translated strings for a **localized** plugin (Starfield, Fallout 4…).
+///
+/// Writes up to three files under `<output_dir>/Strings/`:
+///   `<plugin_stem>_<target_lang>.strings`
+///   `<plugin_stem>_<target_lang>.dlstrings`
+///   `<plugin_stem>_<target_lang>.ilstrings`
+///
+/// Only `Validated` entries with a `Localized` source are written.
+/// Files for empty tables are skipped.
+#[tauri::command]
+pub async fn export_strings_cmd(
+    output_dir:   String,
+    plugin_stem:  String,
+    target_lang:  String,
+    source_ba2:   Option<String>,  // path to original BA2, used to copy hashes
+    pack_as_ba2:  bool,            // true → write a BA2; false → loose files
+    entries:      Vec<TranslationEntry>,
+) -> Result<StringsExportResult, String> {
+    let validated = entries.iter().filter(|e| e.status == crate::translation::entry::EntryStatus::Validated).count();
+    log::info!("[cmd] export_strings: plugin={} lang={} pack_ba2={} validated={}/{}",
+        plugin_stem, target_lang, pack_as_ba2, validated, entries.len());
+
+    let lang = if target_lang.is_empty() { "en".to_owned() } else { target_lang };
+
+    let result = if pack_as_ba2 {
+        // ── BA2 output ────────────────────────────────────────────────────────
+        let ba2_name   = format!("{} - Localization.ba2", plugin_stem);
+        let output_path = std::path::Path::new(&output_dir).join(&ba2_name);
+        let src_path   = source_ba2.as_deref().map(std::path::Path::new);
+
+        log::info!("[cmd] export_strings: writing BA2 → {}", output_path.display());
+        crate::parser::strings_writer::write_strings_ba2(
+            &output_path,
+            &plugin_stem,
+            &lang,
+            &entries,
+            src_path,
+        ).map_err(|e| {
+            log::error!("[cmd] export_strings (BA2) failed: {}", e);
+            e
+        })?
+    } else {
+        // ── Loose files output ────────────────────────────────────────────────
+        crate::parser::strings_writer::write_strings_files(
+            std::path::Path::new(&output_dir),
+            &plugin_stem,
+            &lang,
+            &entries,
+        ).map_err(|e| {
+            log::error!("[cmd] export_strings (loose) failed: {}", e);
+            e
+        })?
+    };
+
+    let total = result.strings + result.dlstrings + result.ilstrings;
+    log::info!("[cmd] export_strings done — strings={} dlstrings={} ilstrings={} total={} ba2={}",
+        result.strings, result.dlstrings, result.ilstrings, total, result.is_ba2);
+
+    let out_path = if result.is_ba2 {
+        std::path::Path::new(&output_dir)
+            .join(format!("{} - Localization.ba2", plugin_stem))
+            .to_string_lossy().into_owned()
+    } else {
+        output_dir.clone()
+    };
+
+    Ok(StringsExportResult {
+        strings_count:   result.strings,
+        dlstrings_count: result.dlstrings,
+        ilstrings_count: result.ilstrings,
+        total,
+        output_dir: out_path,
+    })
 }
 
 /// Auto-detect format from file extension / content and return imported entries

@@ -146,9 +146,11 @@ BGS-Translator/
 │   │   │   ├── error.rs              # ParseError type
 │   │   │   ├── group.rs              # GRUP header parsing
 │   │   │   ├── mod.rs
-│   │   │   ├── plugin.rs             # Top-level plugin loader
+│   │   │   ├── archive.rs            # BA2 archive reader (GNRL v1/v2, GNMIP) + entry metadata extractor
+│   │   │   ├── plugin.rs             # Top-level plugin loader (dual-resolver: EN + target lang)
 │   │   │   ├── record.rs             # Record header + decompression
 │   │   │   ├── strings_file.rs       # .strings / .dlstrings / .ilstrings loader
+│   │   │   ├── strings_writer.rs     # Strings file writer (loose files + BA2 packing)
 │   │   │   ├── subrecord.rs          # Subrecord iteration
 │   │   │   └── types.rs              # Translatable record/subrecord definitions
 │   │   ├── compare/
@@ -249,9 +251,13 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Opens Bethesda `.esp` / `.esm` / `.esl` plugin files (binary format, little-endian)
 - Parses GRUP (group) / record / subrecord hierarchy
 - **Compressed records** — automatic zlib decompression (flag `0x00040000`)
-- **Localized plugins** — strings stored externally in `.strings`, `.dlstrings`, `.ilstrings` files; resolved transparently at load time
+- **Localized plugins** — strings stored externally in `.strings`, `.dlstrings`, `.ilstrings` files; resolved transparently at load time via a **dual-resolver** (English source + target language)
 - **Non-localized plugins** — strings read inline from subrecords
 - **Legacy encoding** — Windows-1252 to UTF-8 conversion for older mods
+- **BA2 archive support** — string files bundled in `.ba2` archives (Starfield style) are extracted automatically; entry hashes are read and preserved for round-trip export
+- **Source tagging** — each entry is tagged `Localized` (string file) or `Inline` (embedded), determining the correct export path
+- **Dual-language loading** — English is always the reference (`original`); the configured target language is loaded in parallel as `translated`; status is set to `Validated` automatically when a translation already exists
+- **Loading status events** — the backend emits `plugin:status` events (`loading_strings`, `parsing_records`) so the frontend can display descriptive progress during long archive extractions
 - Supported record types: `ACTI` `ALCH` `AMMO` `ARMO` `BOOK` `CELL` `CLAS` `CONT` `DIAL` `DOOR` `ENCH` `EXPL` `FACT` `FLOR` `FURN` `INFO` `INGR` `KEYM` `LCTN` `LIGH` `MESG` `MGEF` `MISC` `NOTE` `NPC_` `PERK` `PROJ` `QUST` `RACE` `SCEN` `SLGM` `SPEL` `STAT` `TERM` `WEAP` `WRLD`
 - Extracted subrecords: `FULL` `DESC` `NAM1` `NNAM` `RNAM` `CNAM` `SHRT` `EPFD` `ITXT` `DNAM` `TNAM` `INAM`
 - Entries streamed to the frontend in chunks for instant UI responsiveness on large files
@@ -260,6 +266,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Displays all translatable entries: Form ID, record type, subrecord, original string, translation, status
 - **Virtualised rendering** — only visible rows are mounted; handles plugins with tens of thousands of entries without lag
 - **Status system**: `untranslated` / `pending` / `validated` / `ignored`
+- **Source indicator badge** — each row shows an **`L`** (Localized — string file) or **`I`** (Inline — embedded in plugin) badge next to the status dot; hover reveals the string ID and file kind for localized entries
 - Sortable columns (Form ID, record type, subrecord, original, translated, status)
 - Filter bar: filter by status and/or record type
 - Full-text search across original and translated strings
@@ -352,11 +359,22 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Auto-load: when opening a plugin for which a session already exists, the session is restored automatically
 
 ### Export (Generate Translated File)
+
+#### Non-localized plugins (`.esp` / `.esm` with inline strings)
 - Writes a new `.esp` / `.esm` with all **validated** entries replaced by their translations
 - Unvalidated entries (pending / untranslated / ignored) are left at their original values
 - Correctly handles records with multiple subrecords of the same type (e.g. multiple `CNAM` journal entries within a single `QUST`) — each subrecord is matched by its original text, not by position
+
+#### Localized plugins (Starfield, Fallout 4 — string files)
+- Exports validated `Localized` entries as `.strings` / `.dlstrings` / `.ilstrings` files for the target language
+- **BA2 archive mode** (default, configurable in Settings → Misc): packs the three string files into a standard `<stem> - Localization.ba2` GNRL archive; the engine loads it automatically — no manual Data folder management required
+  - Hashes are reused from the source archive when available, guaranteeing engine compatibility; a computed fallback (`0x1003F` multiplier) is used for new languages without an existing archive
+- **Loose file mode**: writes the three files under `<output_dir>/Strings/` for manual placement or use with mod managers
+- The user picks an output folder; the correct subfolder / archive name is created automatically
+
+#### Common
 - Default output folder: `{Documents}/BGS-Translator/Traduction` (cross-platform, auto-created)
-- Output folder is configurable in Settings
+- Output folder and export mode are configurable in Settings
 - Keyboard shortcut: `Ctrl+G`
 
 ### Import / Export — Multi-format

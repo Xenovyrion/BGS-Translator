@@ -1385,6 +1385,39 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
         )}
       </Section>
 
+      {/* Strings export mode (localized plugins) */}
+      <Section label={t("settings_modal.misc.export_ba2_section", { defaultValue: "Export strings — format de sortie" })}>
+        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+          {t("settings_modal.misc.export_ba2_desc", {
+            defaultValue:
+              "Pour les plugins localisés (Starfield, Fallout 4…), choisissez si les fichiers strings traduits sont empaquetés dans une archive BA2 ou exportés en fichiers loose.",
+          })}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PillBtn
+            label={t("settings_modal.misc.export_ba2_on", { defaultValue: "Archive BA2" })}
+            active={settings.exportStringsAsBa2 !== false}
+            onClick={() => onUpdate({ exportStringsAsBa2: true })}
+          />
+          <PillBtn
+            label={t("settings_modal.misc.export_ba2_off", { defaultValue: "Fichiers loose" })}
+            active={settings.exportStringsAsBa2 === false}
+            onClick={() => onUpdate({ exportStringsAsBa2: false })}
+          />
+        </div>
+        <p style={{ fontSize: 11, color: "var(--text-2)", marginTop: 8, lineHeight: 1.4 }}>
+          {settings.exportStringsAsBa2 !== false
+            ? t("settings_modal.misc.export_ba2_hint_ba2", {
+                defaultValue:
+                  "Les hashes sont repris depuis l'archive source quand possible, sinon calculés. Le fichier BA2 est chargé automatiquement par le moteur de jeu.",
+              })
+            : t("settings_modal.misc.export_ba2_hint_loose", {
+                defaultValue:
+                  "Les fichiers .strings/.dlstrings/.ilstrings sont écrits dans <dossier>/Strings/. À placer manuellement dans le dossier Data du jeu.",
+              })}
+        </p>
+      </Section>
+
       <Section label={t("settings_modal.misc.propagate_section")}>
         <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
           {t("settings_modal.misc.propagate_desc")}

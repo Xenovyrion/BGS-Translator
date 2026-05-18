@@ -43,6 +43,7 @@ export function usePlugin({
   personalDbPath       = "",
   personalDbAutoApply  = true,
   fuzzySettings        = undefined,
+  targetLang           = "en",
 }: {
   propagateIdentical?:   boolean;
   dbApplyValidates?:     boolean;
@@ -50,11 +51,13 @@ export function usePlugin({
   personalDbPath?:       string;
   personalDbAutoApply?:  boolean;
   fuzzySettings?:        FuzzySettings;
+  targetLang?:           string;
 } = {}) {
   const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
   const [entries, setEntries]               = useState<TranslationEntry[]>([]);
   const [loading, setLoading]               = useState(false);
   const [loadingProgress, setLoadingProgress] = useState<number | null>(null);
+  const [loadingStatus, setLoadingStatus]   = useState<string | null>(null);
   const [error, setError]                   = useState<string | null>(null);
   const [filter, setFilter]               = useState<FilterMode>("all");
   const [search, setSearch]               = useState("");
@@ -184,14 +187,16 @@ export function usePlugin({
   const openPlugin = useCallback(async (path: string, dbFolder = "") => {
     setLoading(true);
     setLoadingProgress(0);
+    setLoadingStatus(null);
     setError(null);
     resetState();
 
     const accumulated: TranslationEntry[] = [];
-    let unlistenChunk: (() => void) | undefined;
-    let unlistenDone:  (() => void) | undefined;
+    let unlistenChunk:  (() => void) | undefined;
+    let unlistenDone:   (() => void) | undefined;
+    let unlistenStatus: (() => void) | undefined;
 
-    const cleanup = () => { unlistenChunk?.(); unlistenDone?.(); };
+    const cleanup = () => { unlistenChunk?.(); unlistenDone?.(); unlistenStatus?.(); };
 
     try {
       // Create a promise that resolves when plugin:done fires, then set up both
@@ -199,17 +204,21 @@ export function usePlugin({
       let resolveDone!: (count: number) => void;
       const donePromise = new Promise<number>((res) => { resolveDone = res; });
 
-      [unlistenChunk, unlistenDone] = await Promise.all([
+      [unlistenChunk, unlistenDone, unlistenStatus] = await Promise.all([
         listen<TranslationEntry[]>("plugin:chunk", (event) => {
           accumulated.push(...event.payload);
           setLoadingProgress(accumulated.length);
+          setLoadingStatus(null); // chunks arriving → clear text status
         }),
         listen<number>("plugin:done", (event) => {
           resolveDone(event.payload);
         }),
+        listen<string>("plugin:status", (event) => {
+          setLoadingStatus(event.payload);
+        }),
       ]);
 
-      const meta = await invoke<PluginMetadata>("open_plugin_cmd", { path });
+      const meta = await invoke<PluginMetadata>("open_plugin_cmd", { path, targetLang });
 
       // Show metadata immediately so the header is visible while DB applies
       setPluginInfo({ ...meta, entries: [] });
@@ -234,6 +243,7 @@ export function usePlugin({
     } finally {
       setLoading(false);
       setLoadingProgress(null);
+      setLoadingStatus(null);
     }
   }, [resetState, tryAutoLoadDb]);
 
@@ -866,7 +876,7 @@ export function usePlugin({
   }, [selectedKeys, fuzzyMatches]);
 
   return {
-    pluginInfo, entries, displayEntries, loading, loadingProgress, error,
+    pluginInfo, entries, displayEntries, loading, loadingProgress, loadingStatus, error,
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
     selectedEntry, setSelectedEntry,

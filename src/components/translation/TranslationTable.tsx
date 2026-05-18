@@ -32,7 +32,7 @@ const FIXED_COLS: Array<{
   { key: "sub_type",    labelKey: "table.col_field",     resizable: "sub_type",    sortable: "sub_type" },
 ];
 
-const DOT_WIDTH  = 22;
+const DOT_WIDTH  = 34;
 const COL_COUNT  = 7;
 const ROW_HEIGHT = 24; // px — estimation hauteur ligne
 
@@ -343,8 +343,29 @@ const TableRow = memo(function TableRow({
         userSelect: "none",
       }}
     >
-      <td style={{ padding: "0 4px", textAlign: "center" }}>
-        <div style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, margin: "0 auto", boxShadow: `0 0 4px ${statusColor}55` }} />
+      <td style={{ padding: "0 3px", textAlign: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+          <div
+            style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, flexShrink: 0, boxShadow: `0 0 4px ${statusColor}55` }}
+          />
+          <span
+            title={entry.source.type === "Localized"
+              ? `Localisé — string ID ${entry.source.string_id} (${entry.source.kind})`
+              : "Intégré dans le plugin (.esp/.esm)"}
+            style={{
+              fontSize: 10, fontWeight: 800, lineHeight: 1,
+              fontFamily: "monospace",
+              color: entry.source.type === "Localized" ? "#818cf8" : "#64748b",
+              userSelect: "none",
+              flexShrink: 0,
+              padding: "3px 4px",
+              borderRadius: 3,
+              cursor: "default",
+            }}
+          >
+            {entry.source.type === "Localized" ? "L" : "I"}
+          </span>
+        </div>
       </td>
       <td style={{ padding: "3px 6px" }}>
         <span style={{ fontSize: "var(--fz-mono, 10px)", fontWeight: 700, fontFamily: "var(--font-mono, monospace)", color: recordColor }}>

@@ -4,20 +4,26 @@ import { useTranslation } from "react-i18next";
 import { IconFolder, IconSession, IconSave, IconExport, IconSettings, IconSpinner } from "../../icons";
 import type { IconSetId } from "../../themes";
 
+const STATUS_LABELS: Record<string, string> = {
+  loading_strings:  "Extraction des strings…",
+  parsing_records:  "Lecture des enregistrements…",
+};
+
 interface Props {
-  pluginName:      string | null;
-  loading?:        boolean;
+  pluginName:       string | null;
+  loading?:         boolean;
   loadingProgress?: number | null;
-  onOpenPlugin:    () => void;
-  onOpenSession:   () => void;
-  onSave?:         () => void;
-  onExport?:       () => void;
-  onSettings:      () => void;
-  iconSet?:        IconSetId;
-  lastAutosave?:   Date | null;
+  loadingStatus?:   string | null;
+  onOpenPlugin:     () => void;
+  onOpenSession:    () => void;
+  onSave?:          () => void;
+  onExport?:        () => void;
+  onSettings:       () => void;
+  iconSet?:         IconSetId;
+  lastAutosave?:    Date | null;
 }
 
-export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
+export default function ToolBar({ pluginName, loading, loadingProgress, loadingStatus, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
   const { t } = useTranslation();
 
   const openTitle = loading
@@ -94,23 +100,27 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
         </ToolBtn>
       </ToolGroup>
 
-      {/* ── Fichier ouvert ─────────────────────── */}
-      {pluginName && (
+      {/* ── Fichier ouvert / indicateur de chargement ─── */}
+      {(pluginName || loading) && (
         <>
           <Divider />
-          <span style={{
-            fontSize: 11, color: "var(--text-3)", fontFamily: "monospace",
-            paddingLeft: 6,
-            maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }} title={pluginName}>
-            {pluginName}
-          </span>
+          {pluginName && (
+            <span style={{
+              fontSize: 11, color: "var(--text-3)", fontFamily: "monospace",
+              paddingLeft: 6,
+              maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }} title={pluginName}>
+              {pluginName}
+            </span>
+          )}
           {loading && (
             <span style={{ fontSize: 11, color: "var(--accent)", marginLeft: 8, display: "flex", alignItems: "center", gap: 5 }}>
               <IconSpinner size={11} />
               {loadingProgress != null && loadingProgress > 0
                 ? `${loadingProgress.toLocaleString()} …`
-                : t("toolbar.loading")}
+                : loadingStatus
+                  ? (STATUS_LABELS[loadingStatus] ?? loadingStatus)
+                  : t("toolbar.loading")}
             </span>
           )}
           {!loading && lastAutosave && (

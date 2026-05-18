@@ -56,6 +56,7 @@ pub fn run() {
             commands::import_translations_from_plugin_cmd,
             commands::ensure_dir_cmd,
             commands::export_plugin_cmd,
+            commands::export_strings_cmd,
             database::commands::load_db_cmd,
             database::commands::apply_db_full_cmd,
             database::commands::add_to_db_cmd,

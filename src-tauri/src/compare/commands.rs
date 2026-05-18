@@ -16,9 +16,9 @@ pub async fn check_plugin_diff_cmd(
 ) -> Result<DiffStats, String> {
     log::info!("[compare] check_diff: {} vs {}", path_old, path_new);
 
-    let old = open_file(std::path::Path::new(&path_old))
+    let old = open_file(std::path::Path::new(&path_old), "en", |_| {})
         .map_err(|e| format!("Erreur lecture plugin A : {e}"))?;
-    let new_file = open_file(std::path::Path::new(&path_new))
+    let new_file = open_file(std::path::Path::new(&path_new), "en", |_| {})
         .map_err(|e| format!("Erreur lecture plugin B : {e}"))?;
 
     let (_, stats) = compute_diff(old.entries, new_file.entries, None, None, false);
@@ -50,9 +50,9 @@ pub async fn compute_plugin_diff_cmd(
 ) -> Result<PluginDiffResult, String> {
     log::info!("[compare] compute_diff: {} vs {}", path_old, path_new);
 
-    let old = open_file(std::path::Path::new(&path_old))
+    let old = open_file(std::path::Path::new(&path_old), "en", |_| {})
         .map_err(|e| format!("Erreur lecture plugin A : {e}"))?;
-    let new_file = open_file(std::path::Path::new(&path_new))
+    let new_file = open_file(std::path::Path::new(&path_new), "en", |_| {})
         .map_err(|e| format!("Erreur lecture plugin B : {e}"))?;
 
     // Resolve session path from id (sessions are stored in the managed app-data dir)

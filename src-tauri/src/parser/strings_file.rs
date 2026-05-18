@@ -54,6 +54,16 @@ impl StringsFormat {
     }
 }
 
+/// Parse a `StringTable` directly from raw bytes (e.g. extracted from a BA2/BSA archive).
+///
+/// `ext` is the file extension without the dot: `"strings"`, `"dlstrings"`, or `"ilstrings"`.
+pub fn parse_strings_from_bytes(bytes: &[u8], ext: &str) -> Result<StringTable, ParseError> {
+    let format = StringsFormat::from_extension(ext)
+        .ok_or_else(|| ParseError::InvalidMagic(format!("Unknown strings extension: {}", ext)))?;
+    let mut cursor = Cursor::new(bytes);
+    parse_strings(&mut cursor, format)
+}
+
 pub fn load_strings_file(path: &Path) -> Result<StringTable, ParseError> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let format = StringsFormat::from_extension(ext)

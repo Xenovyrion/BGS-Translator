@@ -77,7 +77,7 @@ export default function App() {
   })();
 
   const {
-    pluginInfo, entries, displayEntries, loading, loadingProgress, error,
+    pluginInfo, entries, displayEntries, loading, loadingProgress, loadingStatus, error,
     // (usePlugin receives settings-driven options below)
     filter, setFilter, search, setSearch,
     selectedGroup, setSelectedGroup,
@@ -106,6 +106,7 @@ export default function App() {
     personalDbPath:      settings.activePersonalDbPath ?? "",
     personalDbAutoApply: settings.personalDbAutoApply  !== false,
     fuzzySettings:       settings.fuzzy,
+    targetLang:          settings.targetLanguage       ?? "en",
   });
 
   const {
@@ -519,6 +520,63 @@ export default function App() {
   const handleExport = useCallback(async () => {
     if (!pluginInfo) return;
 
+    const isLocalized = pluginInfo.is_localized;
+
+    // ── Localized plugin path (Starfield, Fallout 4…) ────────────────────────
+    if (isLocalized) {
+      // For localized plugins we generate .strings/.dlstrings/.ilstrings files.
+      // The user picks an output *folder*; files land in <folder>/Strings/.
+      const folder = (settings.exportFolder || defaultExportDir || "").replace(/[/\\]+$/, "");
+      if (folder) await invoke("ensure_dir_cmd", { path: folder }).catch(() => {});
+
+      let outputDir: string;
+      if (settings.silentExport) {
+        outputDir = folder || defaultExportDir;
+      } else {
+        const chosen = await open({
+          directory: true,
+          defaultPath: folder || defaultExportDir || undefined,
+          title: t("export.pick_strings_folder_title", { defaultValue: "Dossier de sortie (Data/)" }),
+          multiple: false,
+        });
+        if (!chosen || typeof chosen !== "string") return;
+        outputDir = chosen;
+      }
+
+      const pluginStem  = pluginInfo.plugin_name ?? "plugin";
+      const targetLang  = settings.targetLanguage ?? "en";
+      const packAsBa2   = settings.exportStringsAsBa2 !== false;
+      // Source BA2 path: same directory as plugin, named "<stem> - Localization.ba2"
+      const pluginDir   = (pluginInfo.plugin_path ?? "").replace(/[/\\][^/\\]+$/, "");
+      const sourceBa2   = pluginDir ? pluginDir + "/" + pluginStem + " - Localization.ba2" : null;
+
+      console.log("[export/strings] outputDir:", outputDir, "lang:", targetLang, "ba2:", packAsBa2, "sourceBa2:", sourceBa2);
+      try {
+        const result = await invoke<{ strings_count: number; dlstrings_count: number; ilstrings_count: number; total: number; output_dir: string }>(
+          "export_strings_cmd",
+          { outputDir, pluginStem, targetLang, sourceBa2, packAsBa2, entries },
+        );
+        const outLabel = result.output_dir ?? (packAsBa2
+          ? outputDir.replace(/[/\\]+$/, "") + "/" + pluginStem + " - Localization.ba2"
+          : outputDir.replace(/[/\\]+$/, "") + "/Strings/");
+        notify(
+          `✓ ${t("export.success")}`,
+          "success",
+          t("export.strings_success_detail", {
+            defaultValue: `${result.total.toLocaleString()} strings exportées → ${outLabel}`,
+            count: result.total,
+            dir: outLabel,
+          }),
+          8000,
+        );
+      } catch (e) {
+        notify(`⚠ ${t("export.error_title")}`, "error", String(e), 10000);
+      }
+      return;
+    }
+
+    // ── Non-localized plugin path (inline strings in the .esp/.esm) ──────────
+
     // ── 1. Resolve the source file path ─────────────────────────────────────
     let sourcePath = resolvedSourcePath || pluginInfo.plugin_path || "";
     if (!sourcePath) {
@@ -537,25 +595,19 @@ export default function App() {
     const ext      = (sourcePath.match(/(\.[^./\\]+)$/i)?.[1] ?? ".esp");
     const baseName = (pluginInfo.plugin_name ?? "output") + ext;
 
-    // Compute the output folder:
-    //   - If user configured a folder → use it exactly
-    //   - Otherwise → Documents/BGS-Translator/Traduction
     const folder = (settings.exportFolder || defaultExportDir || "").replace(/[/\\]+$/, "");
-
     const defaultOutputPath = folder ? folder + "/" + baseName : baseName;
 
     console.log("[export] source:", sourcePath);
     console.log("[export] defaultOutputPath:", defaultOutputPath);
 
-    // ── 3. Ensure the target folder exists before showing the dialog ────────
     if (folder) {
       await invoke("ensure_dir_cmd", { path: folder }).catch(() => {});
     }
 
-    // ── 4. Determine final output path ──────────────────────────────────────
+    // ── 3. Determine final output path ──────────────────────────────────────
     let outputPath: string;
     if (settings.silentExport) {
-      // Silent mode — write directly without showing a dialog
       outputPath = defaultOutputPath;
     } else {
       const chosen = await save({
@@ -566,7 +618,7 @@ export default function App() {
       outputPath = chosen;
     }
 
-    // ── 5. Run the export ───────────────────────────────────────────────────
+    // ── 4. Run the export ───────────────────────────────────────────────────
     console.log("[export] Writing to:", outputPath);
     try {
       await invoke("export_plugin_cmd", { sourcePath, outputPath, entries });
@@ -580,7 +632,8 @@ export default function App() {
       notify(`⚠ ${t("export.error_title")}`, "error", String(e), 10000);
     }
   }, [pluginInfo, resolvedSourcePath, defaultExportDir, entries,
-      settings.exportFolder, settings.silentExport, notify, t]); // eslint-disable-line react-hooks/exhaustive-deps
+      settings.exportFolder, settings.silentExport, settings.targetLanguage,
+      settings.exportStringsAsBa2, notify, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Keyboard shortcuts ──────────────────────────────────────────────────── */
 
@@ -895,6 +948,7 @@ export default function App() {
         pluginName={pluginInfo?.plugin_name ?? null}
         loading={loading}
         loadingProgress={loadingProgress}
+        loadingStatus={loadingStatus}
         onOpenPlugin={handleOpenPlugin}
         onOpenSession={handleOpenSession}
         onSave={pluginInfo ? handleSaveSession : undefined}

@@ -44,6 +44,8 @@ export interface AppSettings {
   personalDbAutoApply:  boolean; // auto-apply personal DB when opening a plugin
   // Fuzzy matching
   fuzzy: FuzzySettings;
+  // Strings export mode (localized plugins: Starfield, Fallout 4…)
+  exportStringsAsBa2: boolean; // true = pack into a BA2 archive; false = loose files
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activePersonalDbPath: "",
   personalDbAutoApply:  true,
   fuzzy: { ...DEFAULT_FUZZY_SETTINGS },
+  exportStringsAsBa2: true,
 };
 
 export function useSettings() {
