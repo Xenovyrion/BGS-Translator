@@ -1,25 +1,28 @@
 // ── Toolbar with icons ────────────────────────────────────────────────────────
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { IconFolder, IconSession, IconSave, IconExport, IconSettings, IconSpinner } from "../../icons";
+import { IconFolder, IconFile, IconSession, IconSave, IconExport, IconSettings, IconSpinner } from "../../icons";
 import type { IconSetId } from "../../themes";
 
 interface Props {
-  pluginName:       string | null;
-  loading?:         boolean;
-  loadingProgress?: number | null;
+  pluginName:         string | null;
+  isLocalized?:       boolean;
+  isStringsOnly?:     boolean;
+  loading?:           boolean;
+  loadingProgress?:   number | null;
   /** Kept for API compatibility — label is now shown by LoadingOverlay. */
-  loadingStatus?:   string | null;
-  onOpenPlugin:     () => void;
-  onOpenSession:    () => void;
-  onSave?:          () => void;
-  onExport?:        () => void;
-  onSettings:       () => void;
-  iconSet?:         IconSetId;
-  lastAutosave?:    Date | null;
+  loadingStatus?:     string | null;
+  onOpenPlugin:       () => void;
+  onOpenStringsFile?: () => void;
+  onOpenSession:      () => void;
+  onSave?:            () => void;
+  onExport?:          () => void;
+  onSettings:         () => void;
+  iconSet?:           IconSetId;
+  lastAutosave?:      Date | null;
 }
 
-export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPlugin, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
+export default function ToolBar({ pluginName, isLocalized, isStringsOnly, loading, loadingProgress, onOpenPlugin, onOpenStringsFile, onOpenSession, onSave, onExport, onSettings, iconSet = "minimal", lastAutosave }: Props) {
   const { t } = useTranslation();
 
   const openTitle = loading
@@ -49,6 +52,14 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
           accent={!pluginName && !loading}
         >
           <IconFolder set={iconSet} />
+        </ToolBtn>
+
+        <ToolBtn
+          title={t("toolbar.open_strings_file")}
+          onClick={onOpenStringsFile}
+          disabled={loading}
+        >
+          <IconFile set={iconSet} />
         </ToolBtn>
 
         <ToolBtn
@@ -101,12 +112,36 @@ export default function ToolBar({ pluginName, loading, loadingProgress, onOpenPl
         <>
           <Divider />
           {pluginName && (
-            <span style={{
-              fontSize: 11, color: "var(--text-3)", fontFamily: "monospace",
-              paddingLeft: 6,
-              maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }} title={pluginName}>
-              {pluginName}
+            <span style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 6, minWidth: 0 }}>
+              <span style={{
+                fontSize: 11, color: "var(--text-3)", fontFamily: "monospace",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                maxWidth: 460,
+              }} title={pluginName}>
+                {pluginName}
+              </span>
+              {isStringsOnly ? (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                  background: "color-mix(in srgb, #22c55e 15%, transparent)",
+                  color: "#22c55e",
+                  border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
+                  padding: "1px 6px", borderRadius: 3, flexShrink: 0,
+                  textTransform: "uppercase",
+                }}>
+                  Strings
+                </span>
+              ) : isLocalized ? (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                  background: "var(--accent-alt-dim)", color: "var(--accent-alt)",
+                  border: "1px solid var(--accent-alt-border)",
+                  padding: "1px 6px", borderRadius: 3, flexShrink: 0,
+                  textTransform: "uppercase",
+                }}>
+                  Localisé
+                </span>
+              ) : null}
             </span>
           )}
           {loading && (

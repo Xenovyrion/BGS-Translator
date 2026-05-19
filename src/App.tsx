@@ -88,7 +88,7 @@ export default function App() {
     sortConfig, toggleSort,
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
-    openPlugin, loadSession,
+    openPlugin, openStringsFile, loadSession,
     updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
     applyPersonalDbManual,
     selectedCount,
@@ -292,6 +292,16 @@ export default function App() {
 
     await openPlugin(selected, settings.dbFolder);
   }, [openPlugin, loadSession, settings.dbFolder, settings.autoLoadSession]);
+
+  const handleOpenStringsFile = useCallback(async () => {
+    const selected = await open({
+      filters: [{ name: "Bethesda Strings File", extensions: ["strings", "dlstrings", "ilstrings"] }],
+      title: t("toolbar.open_strings_file"),
+      multiple: false,
+    });
+    if (!selected || typeof selected !== "string") return;
+    await openStringsFile(selected);
+  }, [openStringsFile, t]);
 
   const handleOpenSession = useCallback(() => {
     setShowSessionPicker(true);
@@ -544,12 +554,15 @@ export default function App() {
         outputDir = chosen;
       }
 
-      const pluginStem  = pluginInfo.plugin_name ?? "plugin";
-      const targetLang  = settings.targetLanguage ?? "en";
-      const packAsBa2   = settings.exportStringsAsBa2 !== false;
-      // Source BA2 path: same directory as plugin, named "<stem> - Localization.ba2"
-      const pluginDir   = (pluginInfo.plugin_path ?? "").replace(/[/\\][^/\\]+$/, "");
-      const sourceBa2   = pluginDir ? pluginDir + "/" + pluginStem + " - Localization.ba2" : null;
+      const pluginStem   = pluginInfo.plugin_name ?? "plugin";
+      const targetLang   = settings.targetLanguage ?? "en";
+      // Standalone strings files must always export as loose files (no BA2 wrapping).
+      const packAsBa2    = pluginInfo.is_strings_only ? false : settings.exportStringsAsBa2 !== false;
+      // Source BA2 path: only meaningful for full plugins, not standalone strings files.
+      const pluginDir    = pluginInfo.is_strings_only
+        ? ""
+        : (pluginInfo.plugin_path ?? "").replace(/[/\\][^/\\]+$/, "");
+      const sourceBa2    = pluginDir ? pluginDir + "/" + pluginStem + " - Localization.ba2" : null;
 
       console.log("[export/strings] outputDir:", outputDir, "lang:", targetLang, "ba2:", packAsBa2, "sourceBa2:", sourceBa2);
       try {
@@ -951,10 +964,13 @@ export default function App() {
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
       <ToolBar
         pluginName={pluginInfo?.plugin_name ?? null}
+        isLocalized={pluginInfo?.is_localized ?? false}
+        isStringsOnly={pluginInfo?.is_strings_only ?? false}
         loading={loading}
         loadingProgress={loadingProgress}
         loadingStatus={loadingStatus}
         onOpenPlugin={handleOpenPlugin}
+        onOpenStringsFile={handleOpenStringsFile}
         onOpenSession={handleOpenSession}
         onSave={pluginInfo ? handleSaveSession : undefined}
         onExport={pluginInfo ? handleExport : undefined}
@@ -989,7 +1005,6 @@ export default function App() {
         <FilterBar
           filter={filter}
           search={search}
-          isLocalized={pluginInfo?.is_localized ?? false}
           showColumnFilters={showColumnFilters}
           onFilterChange={setFilter}
           onSearchChange={setSearch}

@@ -22,15 +22,17 @@ export interface TranslationEntry {
 }
 
 export interface PluginInfo {
-  plugin_name:  string;
-  plugin_path?: string;
-  author:       string;
-  description:  string;
-  masters:      string[];
-  is_localized: boolean;
-  version?:     number;
-  entry_count:  number;
-  entries:      TranslationEntry[];
+  plugin_name:      string;
+  plugin_path?:     string;
+  author:           string;
+  description:      string;
+  masters:          string[];
+  is_localized:     boolean;
+  /** True when source is a standalone .strings/.dlstrings/.ilstrings file (not a plugin). */
+  is_strings_only?: boolean;
+  version?:         number;
+  entry_count:      number;
+  entries:          TranslationEntry[];
 }
 
 /** Metadata returned by open_plugin_cmd — entries are streamed separately via events. */

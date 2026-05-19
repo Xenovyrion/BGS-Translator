@@ -5,7 +5,6 @@ import { IconFilter, IconSearch as IconSuggestion } from "../../icons";
 interface Props {
   filter:               FilterMode;
   search:               string;
-  isLocalized:          boolean;
   showColumnFilters:    boolean;
   onFilterChange:       (f: FilterMode) => void;
   onSearchChange:       (s: string) => void;
@@ -17,7 +16,7 @@ interface Props {
 }
 
 export default function FilterBar({
-  filter, search, isLocalized, showColumnFilters,
+  filter, search, showColumnFilters,
   onFilterChange, onSearchChange, onToggleColumnFilters,
   filterFuzzyOnly = false, onToggleFuzzyOnly, fuzzyMatchCount = 0,
 }: Props) {
@@ -114,15 +113,6 @@ export default function FilterBar({
             {fuzzyMatchCount}
           </span>
         </button>
-      )}
-
-      {isLocalized && (
-        <span style={{
-          fontSize: 10, background: "var(--accent-dim)", color: "var(--accent)",
-          padding: "2px 8px", borderRadius: 4, flexShrink: 0,
-        }}>
-          {t("filter.localized_badge")}
-        </span>
       )}
 
       {/* Column filters toggle — rightmost */}

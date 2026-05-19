@@ -46,6 +46,8 @@ export interface AppSettings {
   fuzzy: FuzzySettings;
   // Strings export mode (localized plugins: Starfield, Fallout 4…)
   exportStringsAsBa2: boolean; // true = pack into a BA2 archive; false = loose files
+  // Log retention: number of days before old log files are purged (0 = never)
+  logRetentionDays: number;
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -79,6 +81,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   personalDbAutoApply:  true,
   fuzzy: { ...DEFAULT_FUZZY_SETTINGS },
   exportStringsAsBa2: true,
+  logRetentionDays: 30,
 };
 
 export function useSettings() {
@@ -184,6 +187,14 @@ export function useSettings() {
   useEffect(() => {
     invoke("set_debug_mode_cmd", { enabled: settings.debugMode }).catch(() => {});
   }, [settings.debugMode]);
+
+  /* Purge old log files at startup and whenever retention period changes */
+  useEffect(() => {
+    const days = settings.logRetentionDays ?? 30;
+    if (days > 0) {
+      invoke("purge_logs_cmd", { maxAgeDays: days }).catch(() => {});
+    }
+  }, [settings.logRetentionDays]);
 
   const updateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings((prev) => {

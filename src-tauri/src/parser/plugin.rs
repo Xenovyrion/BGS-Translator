@@ -125,8 +125,8 @@ fn parse_tes4_data(data: &[u8], is_localized: bool) -> Result<PluginInfo, ParseE
 
 // ── String resolver loading ───────────────────────────────────────────────────
 
-/// Loads string resolvers for both source and target languages.
-/// Returns `(src_resolver, tgt_resolver)`.
+/// Loads string resolvers for both source and target languages **in parallel**
+/// using rayon. Returns `(src_resolver, tgt_resolver)`.
 /// Source language is always "en" (English); target is the user-configured language.
 fn load_string_resolvers(
     plugin_path: &Path,
@@ -134,16 +134,20 @@ fn load_string_resolvers(
     src_lang: &str,
     tgt_lang: &str,
 ) -> Result<(StringResolver, StringResolver), ParseError> {
-    let src = load_resolver_for_lang(plugin_path, info, src_lang)?;
-
-    // Avoid loading the same language twice
-    let tgt = if !tgt_lang.is_empty() && tgt_lang != src_lang {
-        load_resolver_for_lang(plugin_path, info, tgt_lang)?
+    // When both languages differ, load them simultaneously on the rayon pool —
+    // each opens its own file handles, so there is no contention.
+    if !tgt_lang.is_empty() && tgt_lang != src_lang {
+        log::debug!("[parser] Loading resolvers in parallel (src={}, tgt={})", src_lang, tgt_lang);
+        let (src_result, tgt_result) = rayon::join(
+            || load_resolver_for_lang(plugin_path, info, src_lang),
+            || load_resolver_for_lang(plugin_path, info, tgt_lang),
+        );
+        Ok((src_result?, tgt_result?))
     } else {
-        StringResolver::empty()
-    };
-
-    Ok((src, tgt))
+        // Same language or no target — load sequentially (avoids redundant I/O)
+        let src = load_resolver_for_lang(plugin_path, info, src_lang)?;
+        Ok((src, StringResolver::empty()))
+    }
 }
 
 /// Loads a StringResolver for a single language, searching loose files first,

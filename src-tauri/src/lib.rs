@@ -12,6 +12,51 @@ pub mod updater;
 
 use tauri::Manager;
 
+// ── Log retention ─────────────────────────────────────────────────────────────
+
+/// Number of days after which old log files are automatically deleted on startup.
+const LOG_RETENTION_DAYS: u64 = 30;
+
+/// Delete log files in `log_dir` whose last-modified time is older than `max_age_days`.
+/// Only files whose name starts with "bgstranslator" are touched.
+fn purge_old_logs(log_dir: &std::path::Path, max_age_days: u64) {
+    let cutoff = match std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(max_age_days * 86_400))
+    {
+        Some(t) => t,
+        None    => return,
+    };
+
+    let Ok(entries) = std::fs::read_dir(log_dir) else { return };
+
+    let mut removed = 0u32;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+
+        // Only touch log files from this application
+        let is_our_log = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with("bgstranslator"))
+            .unwrap_or(false);
+        if !is_our_log { continue; }
+
+        let Ok(meta)     = entry.metadata()  else { continue };
+        let Ok(modified) = meta.modified()   else { continue };
+
+        if modified < cutoff {
+            if std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+                log::debug!("[logs] Removed old log: {}", path.display());
+            }
+        }
+    }
+
+    if removed > 0 {
+        log::info!("[logs] Purged {} log file(s) older than {} days", removed, max_age_days);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -35,6 +80,10 @@ pub fn run() {
                 // (before the file_name was explicitly set to "bgstranslator").
                 let legacy = log_dir.join("BGS Translator.log");
                 if legacy.exists() { let _ = std::fs::remove_file(&legacy); }
+                // Note: log purge is now handled by purge_logs_cmd called from
+                // the frontend (configurable retention via settings.logRetentionDays).
+                // As a safety net, purge very old files (> LOG_RETENTION_DAYS) on startup.
+                purge_old_logs(&log_dir, LOG_RETENTION_DAYS);
             }
             log::info!("BGS Translator started — log file initialized");
             log::debug!("[system] Log dir: {:?}", app.path().app_log_dir());
@@ -49,6 +98,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::open_url_cmd,
             commands::open_plugin_cmd,
+            commands::open_strings_file_cmd,
             commands::save_session_cmd,
             commands::list_sessions_cmd,
             commands::load_session_cmd,
@@ -77,6 +127,7 @@ pub fn run() {
             commands::get_log_path_cmd,
             commands::open_log_file_cmd,
             commands::open_log_dir_cmd,
+            commands::purge_logs_cmd,
             commands::import_format_cmd,
             commands::export_xtranslator_xml_cmd,
             commands::export_esptranslator_xml_cmd,

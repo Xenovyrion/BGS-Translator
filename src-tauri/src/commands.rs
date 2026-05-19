@@ -13,17 +13,20 @@ use crate::translation::{
     writer::write_translated_plugin,
 };
 
-/// Metadata returned synchronously by open_plugin_cmd.
+/// Metadata returned synchronously by open_plugin_cmd / open_strings_file_cmd.
 /// The entries themselves are streamed via "plugin:chunk" / "plugin:done" events.
 #[derive(Serialize)]
 pub struct PluginMetadata {
-    pub plugin_name:  String,
-    pub plugin_path:  String,
-    pub author:       String,
-    pub description:  String,
-    pub masters:      Vec<String>,
-    pub is_localized: bool,
-    pub entry_count:  usize,
+    pub plugin_name:     String,
+    pub plugin_path:     String,
+    pub author:          String,
+    pub description:     String,
+    pub masters:         Vec<String>,
+    pub is_localized:    bool,
+    /// `true` when the source is a standalone `.strings` / `.dlstrings` / `.ilstrings` file
+    /// (not a full plugin). Export must always be loose files, never BA2.
+    pub is_strings_only: bool,
+    pub entry_count:     usize,
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -53,12 +56,13 @@ pub async fn open_plugin_cmd(
     window.emit("plugin:done", entry_count).map_err(|e| e.to_string())?;
 
     Ok(PluginMetadata {
-        plugin_name:  loaded.path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_owned(),
-        plugin_path:  loaded.path.to_string_lossy().into_owned(),
-        author:       loaded.info.author,
-        description:  loaded.info.description,
-        masters:      loaded.info.masters,
-        is_localized: loaded.info.is_localized,
+        plugin_name:     loaded.path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_owned(),
+        plugin_path:     loaded.path.to_string_lossy().into_owned(),
+        author:          loaded.info.author,
+        description:     loaded.info.description,
+        masters:         loaded.info.masters,
+        is_localized:    loaded.info.is_localized,
+        is_strings_only: false,
         entry_count,
     })
 }
@@ -122,6 +126,102 @@ pub async fn import_translations_from_plugin_cmd(
     })?;
     log::info!("[cmd] import_translations_from: {} entries loaded from reference", loaded.entries.len());
     Ok(loaded.entries)
+}
+
+/// Open a standalone `.strings` / `.dlstrings` / `.ilstrings` file for translation.
+///
+/// Parses the file, creates one `TranslationEntry` per string ID (source set to
+/// `StringSource::Localized` so the standard strings exporter picks it up), and
+/// streams the entries through the normal `"plugin:chunk"` / `"plugin:done"` events.
+///
+/// The returned `PluginMetadata` has `is_localized = true` and `is_strings_only = true`.
+/// The frontend must therefore always export as loose files (never BA2).
+#[tauri::command]
+pub async fn open_strings_file_cmd(
+    path:   String,
+    window: tauri::WebviewWindow,
+) -> Result<PluginMetadata, String> {
+    use crate::parser::strings_file::{load_strings_file, StringFileKind};
+    use crate::translation::entry::{EntryStatus, StringSource};
+
+    log::info!("[cmd] open_strings_file: {}", path);
+    let p   = std::path::Path::new(&path);
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+    let kind = match ext.as_str() {
+        "strings"   => StringFileKind::Strings,
+        "dlstrings" => StringFileKind::DlStrings,
+        "ilstrings" => StringFileKind::IlStrings,
+        other => return Err(format!("Extension non supportée pour un fichier strings : .{other}")),
+    };
+
+    let table = load_strings_file(p).map_err(|e| {
+        log::error!("[cmd] open_strings_file failed: {e}");
+        e.to_string()
+    })?;
+
+    // Build entries — source must be Localized so build_strings_tables picks them up at export.
+    let record_type = match kind {
+        StringFileKind::Strings   => "STRS",
+        StringFileKind::DlStrings => "DLST",
+        StringFileKind::IlStrings => "ILST",
+    };
+
+    let mut entries: Vec<crate::translation::entry::TranslationEntry> = table
+        .into_iter()
+        .map(|(string_id, text)| crate::translation::entry::TranslationEntry {
+            form_id:     string_id,
+            record_type: record_type.to_string(),
+            editor_id:   format!("{:08X}", string_id),
+            sub_type:    ext.clone(),
+            original:    text,
+            translated:  String::new(),
+            status:      EntryStatus::Untranslated,
+            source:      StringSource::Localized { string_id, kind },
+        })
+        .collect();
+
+    // Deterministic order — sort by string ID
+    entries.sort_by_key(|e| e.form_id);
+    let entry_count = entries.len();
+
+    // Strip `_xx` / `_xxx` language suffix to get a clean plugin stem.
+    // e.g. "Starfield_en" → "Starfield", "MyMod_fren" → "MyMod"
+    let raw_stem    = p.file_stem().and_then(|s| s.to_str()).unwrap_or("strings").to_string();
+    let plugin_stem = strip_lang_suffix(&raw_stem);
+
+    log::info!("[cmd] open_strings_file: {} entries, stem={}", entry_count, plugin_stem);
+
+    // Stream entries using the same events as open_plugin_cmd
+    for chunk in entries.chunks(200) {
+        window.emit("plugin:chunk", chunk).map_err(|e| e.to_string())?;
+    }
+    window.emit("plugin:done", entry_count).map_err(|e| e.to_string())?;
+
+    Ok(PluginMetadata {
+        plugin_name:     plugin_stem,
+        plugin_path:     path,
+        author:          String::new(),
+        description:     String::new(),
+        masters:         Vec::new(),
+        is_localized:    true,
+        is_strings_only: true,
+        entry_count,
+    })
+}
+
+/// Strip a trailing language-code suffix from a strings file stem.
+///
+/// Matches `_XX` or `_XXX` where XX/XXX is 2–4 ASCII letters (e.g. `_en`, `_fr`, `_fren`).
+/// Returns the stem unchanged when no such suffix is found.
+fn strip_lang_suffix(stem: &str) -> String {
+    if let Some(idx) = stem.rfind('_') {
+        let suffix = &stem[idx + 1..];
+        if (2..=4).contains(&suffix.len()) && suffix.bytes().all(|b| b.is_ascii_alphabetic()) {
+            return stem[..idx].to_string();
+        }
+    }
+    stem.to_string()
 }
 
 /// Creates a directory (and all parents) from the frontend.
@@ -392,6 +492,49 @@ pub async fn open_log_file_cmd(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn open_log_dir_cmd(app: tauri::AppHandle) -> Result<(), String> {
     let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
     open_dir_in_explorer(&dir)
+}
+
+/// Delete log files older than `max_age_days` days from the app log directory.
+/// Only files whose name starts with "bgstranslator" are touched.
+/// Called from the frontend on startup and whenever the retention setting changes.
+/// Setting `max_age_days` to 0 is a no-op (purge disabled).
+#[tauri::command]
+pub async fn purge_logs_cmd(app: tauri::AppHandle, max_age_days: u32) -> Result<u32, String> {
+    if max_age_days == 0 { return Ok(0); }
+
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(max_age_days as u64 * 86_400))
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+
+    let Ok(entries) = std::fs::read_dir(&log_dir) else { return Ok(0) };
+
+    let mut removed = 0u32;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let is_our_log = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with("bgstranslator"))
+            .unwrap_or(false);
+        if !is_our_log { continue; }
+
+        let Ok(meta)     = entry.metadata() else { continue };
+        let Ok(modified) = meta.modified()  else { continue };
+
+        if modified < cutoff {
+            if std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+                log::debug!("[logs] Purged old log: {}", path.display());
+            }
+        }
+    }
+
+    if removed > 0 {
+        log::info!("[logs] Purged {} log file(s) older than {} days", removed, max_age_days);
+    }
+    Ok(removed)
 }
 
 /// Open an https/http URL in the default system browser.

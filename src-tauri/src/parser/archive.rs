@@ -20,6 +20,7 @@ use std::{
 };
 use binrw::BinReaderExt;
 use flate2::read::ZlibDecoder;
+use rayon::prelude::*;
 
 use crate::parser::error::ParseError;
 
@@ -51,7 +52,10 @@ impl ExtractedStrings {
 /// `"plugin_stem - "` (split-archive convention used by Bethesda, e.g.
 /// `Starfield - Interface.ba2`).
 ///
-/// Returns the first archive that yields at least one non-empty string table.
+/// When multiple candidate archives exist (e.g. Starfield split archives),
+/// they are scanned **in parallel** via rayon — each opens its own file handle.
+/// Priority order is preserved: the first candidate (by sorted position) that
+/// yields a non-empty result is returned.
 pub fn extract_strings_from_archives(
     data_dir:    &Path,
     plugin_stem: &str,
@@ -61,17 +65,34 @@ pub fn extract_strings_from_archives(
     log::debug!("[archive] {} candidate(s) for '{}' / lang '{}'",
         candidates.len(), plugin_stem, lang);
 
-    for path in &candidates {
-        match try_extract(path, plugin_stem, lang) {
-            Ok(result) if !result.is_empty() => {
-                log::info!("[archive] Strings found in '{}'", path.display());
-                return Some(result);
-            }
-            Ok(_)  => {}
-            Err(e) => log::warn!("[archive] Error reading '{}': {}", path.display(), e),
-        }
+    if candidates.is_empty() {
+        return None;
     }
-    None
+
+    // Single candidate — skip rayon overhead
+    if candidates.len() == 1 {
+        return match try_extract(&candidates[0], plugin_stem, lang) {
+            Ok(r) if !r.is_empty() => {
+                log::info!("[archive][lang={}] Strings found in '{}'", lang, candidates[0].display());
+                Some(r)
+            }
+            Ok(_)  => None,
+            Err(e) => { log::warn!("[archive][lang={}] Error reading '{}': {}", lang, candidates[0].display(), e); None }
+        };
+    }
+
+    // Multiple candidates — scan in parallel, preserving priority order.
+    // `find_map_first` returns the leftmost (highest-priority) match.
+    candidates.par_iter().find_map_first(|path| {
+        match try_extract(path, plugin_stem, lang) {
+            Ok(r) if !r.is_empty() => {
+                log::info!("[archive][lang={}] Strings found in '{}'", lang, path.display());
+                Some(r)
+            }
+            Ok(_)  => None,
+            Err(e) => { log::warn!("[archive][lang={}] Error reading '{}': {}", lang, path.display(), e); None }
+        }
+    })
 }
 
 /// Read the BA2 entry metadata (hashes, ext) for all files that match a given
@@ -443,13 +464,13 @@ fn extract_from_ba2<R: Read + Seek>(
     for entry in &entries {
         let norm = entry.name.to_lowercase().replace('/', "\\");
         if norm == s_target {
-            log::info!("[ba2] Extracting '{}'", entry.name);
+            log::debug!("[ba2] Extracting '{}'", entry.name);
             result.strings = Some(read_ba2_entry(&mut r, entry)?);
         } else if norm == dl_target {
-            log::info!("[ba2] Extracting '{}'", entry.name);
+            log::debug!("[ba2] Extracting '{}'", entry.name);
             result.dlstrings = Some(read_ba2_entry(&mut r, entry)?);
         } else if norm == il_target {
-            log::info!("[ba2] Extracting '{}'", entry.name);
+            log::debug!("[ba2] Extracting '{}'", entry.name);
             result.ilstrings = Some(read_ba2_entry(&mut r, entry)?);
         }
     }
@@ -633,17 +654,17 @@ fn extract_from_bsa<R: Read + Seek>(
         if !file.folder_lower.contains("strings") { continue; }
 
         if *name == s_target {
-            log::info!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.strings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );
         } else if *name == dl_target {
-            log::info!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.dlstrings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );
         } else if *name == il_target {
-            log::info!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.ilstrings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );

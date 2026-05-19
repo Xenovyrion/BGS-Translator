@@ -213,9 +213,7 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
       </Section>
 
       <Section label={t("settings_modal.appearance.alt_rows_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.appearance.alt_rows_desc")}
-        </p>
+        <HelpText>{t("settings_modal.appearance.alt_rows_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.appearance.alt_rows_on")}  active={settings.alternateRows !== false} onClick={() => onUpdate({ alternateRows: true  })} />
           <PillBtn label={t("settings_modal.appearance.alt_rows_off")} active={settings.alternateRows === false}  onClick={() => onUpdate({ alternateRows: false })} />
@@ -223,9 +221,7 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
       </Section>
 
       <Section label={t("settings_modal.appearance.row_hover_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.appearance.row_hover_desc")}
-        </p>
+        <HelpText>{t("settings_modal.appearance.row_hover_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.appearance.row_hover_on")}  active={settings.rowHover !== false} onClick={() => onUpdate({ rowHover: true  })} />
           <PillBtn label={t("settings_modal.appearance.row_hover_off")} active={settings.rowHover === false}  onClick={() => onUpdate({ rowHover: false })} />
@@ -233,9 +229,7 @@ function AppearanceTab({ settings, onUpdate, onOpenThemeManager, onResetLayout }
       </Section>
 
       <Section label={t("settings_modal.appearance.interface_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.appearance.reset_layout_desc")}
-        </p>
+        <HelpText>{t("settings_modal.appearance.reset_layout_desc")}</HelpText>
         <button
           onClick={() => { onResetLayout?.(); }}
           style={{ ...smallBtnStyle(), gap: 7, color: "var(--danger)", borderColor: "var(--border)" }}
@@ -535,9 +529,7 @@ function SpellCheckTab({ settings, onUpdate }: TabProps) {
 
       {/* Active dictionary */}
       <Section first label={t("spellcheck.section_title")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
-          {t("spellcheck.section_desc")}
-        </p>
+        <HelpText>{t("spellcheck.section_desc")}</HelpText>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 12, color: "var(--text-2)", minWidth: 130 }}>
             {t("spellcheck.dictionary_label")}
@@ -1087,9 +1079,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
 
       {/* DB apply behavior */}
       <Section label={t("settings_modal.db.apply_validates_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.db.apply_validates_desc")}
-        </p>
+        <HelpText>{t("settings_modal.db.apply_validates_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.db.apply_validates_on")}  active={settings.dbApplyValidates !== false} onClick={() => onUpdate({ dbApplyValidates: true  })} />
           <PillBtn label={t("settings_modal.db.apply_validates_off")} active={settings.dbApplyValidates === false}  onClick={() => onUpdate({ dbApplyValidates: false })} />
@@ -1110,9 +1100,7 @@ function DatabaseTab({ settings, onUpdate }: TabProps) {
           </button>
         </div>
       }>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
-          {t("settings_modal.personal_db.section_desc")}
-        </p>
+        <HelpText>{t("settings_modal.personal_db.section_desc")}</HelpText>
 
         {/* Personal DB folder */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
@@ -1345,9 +1333,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
       {/* Export folder */}
       <Section first label={t("settings_modal.misc.export_folder_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.misc.export_folder_desc")}
-        </p>
+        <HelpText>{t("settings_modal.misc.export_folder_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="text"
@@ -1371,9 +1357,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
       {/* Silent export */}
       <Section label={t("settings_modal.misc.silent_export_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.misc.silent_export_desc")}
-        </p>
+        <HelpText>{t("settings_modal.misc.silent_export_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.misc.silent_export_on")}  active={settings.silentExport === true}  onClick={() => onUpdate({ silentExport: true  })} />
           <PillBtn label={t("settings_modal.misc.silent_export_off")} active={settings.silentExport !== true}  onClick={() => onUpdate({ silentExport: false })} />
@@ -1387,12 +1371,12 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
 
       {/* Strings export mode (localized plugins) */}
       <Section label={t("settings_modal.misc.export_ba2_section", { defaultValue: "Export strings — format de sortie" })}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+        <HelpText>
           {t("settings_modal.misc.export_ba2_desc", {
             defaultValue:
               "Pour les plugins localisés (Starfield, Fallout 4…), choisissez si les fichiers strings traduits sont empaquetés dans une archive BA2 ou exportés en fichiers loose.",
           })}
-        </p>
+        </HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn
             label={t("settings_modal.misc.export_ba2_on", { defaultValue: "Archive BA2" })}
@@ -1419,9 +1403,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
       </Section>
 
       <Section label={t("settings_modal.misc.propagate_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.misc.propagate_desc")}
-        </p>
+        <HelpText>{t("settings_modal.misc.propagate_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.misc.propagate_on")}  active={settings.propagateIdentical !== false} onClick={() => onUpdate({ propagateIdentical: true  })} />
           <PillBtn label={t("settings_modal.misc.propagate_off")} active={settings.propagateIdentical === false}  onClick={() => onUpdate({ propagateIdentical: false })} />
@@ -1429,9 +1411,7 @@ function DiversTab({ settings, onUpdate, defaultExportDir = "" }: TabProps) {
       </Section>
 
       <Section label={t("settings_modal.misc.autosession_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.misc.autosession_desc")}
-        </p>
+        <HelpText>{t("settings_modal.misc.autosession_desc")}</HelpText>
         <div style={{ display: "flex", gap: 8 }}>
           <PillBtn label={t("settings_modal.misc.autosession_on")}  active={settings.autoLoadSession === true}  onClick={() => onUpdate({ autoLoadSession: true  })} />
           <PillBtn label={t("settings_modal.misc.autosession_off")} active={settings.autoLoadSession !== true}   onClick={() => onUpdate({ autoLoadSession: false })} />
@@ -1623,9 +1603,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 
       {/* ══ API providers ═══════════════════════════════════════════════════ */}
       <SubGroup first label={t("providers.section_api")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
-          {t("providers.section_api_desc")}
-        </p>
+        <HelpText>{t("providers.section_api_desc")}</HelpText>
 
         {apiEntries.map(renderRow)}
 
@@ -1644,9 +1622,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 
       {/* ══ Browser launchers ═══════════════════════════════════════════════ */}
       <SubGroup label={t("providers.section_browser")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
-          {t("providers.section_browser_desc")}
-        </p>
+        <HelpText>{t("providers.section_browser_desc")}</HelpText>
 
         {browserEntries.map(renderRow)}
 
@@ -1668,9 +1644,7 @@ function ApiTab({ settings, onUpdate }: TabProps) {
 
       {/* Fuzzy matching */}
       <Section first label={t("fuzzy.settings_title")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 14 }}>
-          {t("fuzzy.settings_desc")}
-        </p>
+        <HelpText>{t("fuzzy.settings_desc")}</HelpText>
 
         {/* Auto-enable on plugin load — PillBtn style like other on/off settings */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
@@ -1918,9 +1892,7 @@ function AiTab({ settings, onUpdate }: TabProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <SubGroup first label={t("providers.section_ai")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 12, lineHeight: 1.5 }}>
-          {t("providers.section_ai_desc")}
-        </p>
+        <HelpText>{t("providers.section_ai_desc")}</HelpText>
         {aiEntries.map(renderRow)}
         <button
           onClick={addCustomAi}
@@ -2995,7 +2967,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
       {/* Interface language */}
       <Section first label={t("settings_modal.sys.lang_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10 }}>{t("settings_modal.sys.lang_hint")}</p>
+        <HelpText>{t("settings_modal.sys.lang_hint")}</HelpText>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {LANGUAGES.map(({ code, label }) => (
             <PillBtn key={code} label={label} active={(settings.language || "fr") === code} onClick={() => onUpdate({ language: code })} />
@@ -3018,9 +2990,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
       {/* Log file */}
       <Section label={t("settings_modal.sys.log_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.sys.log_hint")}
-        </p>
+        <HelpText>{t("settings_modal.sys.log_hint")}</HelpText>
 
         {/* Log path */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
@@ -3047,16 +3017,44 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
             <IconFile size={13} /> {t("settings_modal.sys.log_view_file")}
           </button>
         </div>
+
+        {/* Log retention */}
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 6, fontWeight: 600 }}>
+            {t("settings_modal.sys.log_retention_label")}
+          </p>
+          <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 10, lineHeight: 1.4 }}>
+            {t("settings_modal.sys.log_retention_hint")}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {([
+              { value: 0,  key: "log_retention_never" },
+              { value: 7,  key: "log_retention_7d"    },
+              { value: 14, key: "log_retention_14d"   },
+              { value: 30, key: "log_retention_30d"   },
+              { value: 60, key: "log_retention_60d"   },
+              { value: 90, key: "log_retention_90d"   },
+            ] as { value: number; key: string }[]).map(({ value, key }) => (
+              <PillBtn
+                key={value}
+                label={t(`settings_modal.sys.${key}`)}
+                active={(settings.logRetentionDays ?? 30) === value}
+                onClick={() => onUpdate({ logRetentionDays: value })}
+              />
+            ))}
+          </div>
+        </div>
+
       </Section>
 
       {/* Debug mode */}
       <Section label={t("settings_modal.sys.debug_section")}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
+            <HelpText>
               <strong style={{ color: "var(--text-1)" }}>{t("settings_modal.sys.debug_standard_name")}</strong> — {t("settings_modal.sys.debug_standard_desc")}<br />
               <strong style={{ color: "var(--text-1)" }}>{t("settings_modal.sys.debug_debug_name")}</strong> — {t("settings_modal.sys.debug_debug_desc")}
-            </p>
+            </HelpText>
             <div style={{ display: "flex", gap: 8 }}>
               <PillBtn label={t("settings_modal.sys.debug_standard_btn")} active={!settings.debugMode} onClick={() => onUpdate({ debugMode: false })} />
               <PillBtn label={t("settings_modal.sys.debug_debug_btn")}    active={settings.debugMode}  onClick={() => onUpdate({ debugMode: true  })} />
@@ -3072,9 +3070,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
       {/* Autosave */}
       <Section label={t("settings_modal.sys.autosave_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.sys.autosave_hint")}
-        </p>
+        <HelpText>{t("settings_modal.sys.autosave_hint")}</HelpText>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[
             { value: 0,  label: t("settings_modal.sys.autosave_disabled") },
@@ -3104,9 +3100,7 @@ function SystemeTab({ settings, onUpdate }: TabProps) {
 
       {/* Reset */}
       <Section label={t("settings_modal.sys.reset_section")}>
-        <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 10, lineHeight: 1.5 }}>
-          {t("settings_modal.sys.reset_hint")}
-        </p>
+        <HelpText>{t("settings_modal.sys.reset_hint")}</HelpText>
         <button
           onClick={handleReset}
           style={{
@@ -3199,6 +3193,18 @@ function Section({ label, children, first }: { label: React.ReactNode; children:
       </div>
       {children}
     </div>
+  );
+}
+
+function HelpText({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: 12, color: "var(--text-2)",
+      lineHeight: 1.5, fontStyle: "italic",
+      marginBottom: 10,
+    }}>
+      {children}
+    </p>
   );
 }
 

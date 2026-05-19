@@ -342,6 +342,58 @@ export function usePlugin({
     }
   }, [resetState, defaultDbs, personalDbPath, personalDbAutoApply]);
 
+  // ── Open a standalone .strings / .dlstrings / .ilstrings file ──────────────
+
+  const openStringsFile = useCallback(async (path: string) => {
+    setLoading(true);
+    setLoadingProgress(0);
+    setLoadingStatus(null);
+    setError(null);
+    resetState();
+
+    const accumulated: TranslationEntry[] = [];
+    let unlistenChunk:  (() => void) | undefined;
+    let unlistenDone:   (() => void) | undefined;
+    let unlistenStatus: (() => void) | undefined;
+
+    const cleanup = () => { unlistenChunk?.(); unlistenDone?.(); unlistenStatus?.(); };
+
+    try {
+      let resolveDone!: (count: number) => void;
+      const donePromise = new Promise<number>((res) => { resolveDone = res; });
+
+      [unlistenChunk, unlistenDone, unlistenStatus] = await Promise.all([
+        listen<TranslationEntry[]>("plugin:chunk", (event) => {
+          accumulated.push(...event.payload);
+          setLoadingProgress(accumulated.length);
+        }),
+        listen<number>("plugin:done", (event) => {
+          resolveDone(event.payload);
+        }),
+        listen<string>("plugin:status", (event) => {
+          setLoadingStatus(event.payload);
+        }),
+      ]);
+
+      const meta = await invoke<PluginMetadata>("open_strings_file_cmd", { path });
+      setPluginInfo({ ...meta, entries: [] });
+
+      await donePromise;
+      cleanup();
+
+      const indexed = accumulated.map((e, i) => ({ ...e, _idx: i }));
+      setPluginInfo((prev) => prev ? { ...prev, entries: indexed, entry_count: indexed.length } : null);
+      setEntries(indexed);
+    } catch (e) {
+      cleanup();
+      setError(String(e));
+    } finally {
+      setLoading(false);
+      setLoadingProgress(null);
+      setLoadingStatus(null);
+    }
+  }, [resetState]);
+
   // ── Individual updates (by _idx) ─────────────────────────────────────────
 
   const updateTranslation = useCallback((idx: number, translated: string) => {
@@ -886,7 +938,7 @@ export function usePlugin({
     sortConfig, toggleSort,
     groupStats,
     translatedCount, pendingCount, ignoredCount, untranslatedCount, progressPercent,
-    openPlugin, loadSession,
+    openPlugin, openStringsFile, loadSession,
     updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
     applyPersonalDbManual,
     selectedCount: selectedKeys.size,

@@ -251,6 +251,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Plugin Parser
 - Opens Bethesda `.esp` / `.esm` / `.esl` plugin files (binary format, little-endian)
+- **Standalone strings file import** — open a raw `.strings`, `.dlstrings`, or `.ilstrings` file directly (toolbar 📄 button or File menu); strings are displayed in the translation table exactly like a localized plugin; the language suffix is automatically stripped from the filename to derive the plugin stem (e.g. `Starfield_en.strings` → stem `Starfield`)
 - Parses GRUP (group) / record / subrecord hierarchy
 - **Compressed records** — automatic zlib decompression (flag `0x00040000`)
 - **Localized plugins** — strings stored externally in `.strings`, `.dlstrings`, `.ilstrings` files; resolved transparently at load time via a **dual-resolver** (English source + target language)
@@ -375,10 +376,16 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Loose file mode**: writes the three files under `<output_dir>/Strings/` for manual placement or use with mod managers
 - The user picks an output folder; the correct subfolder / archive name is created automatically
 
+#### Standalone strings file (`.strings` / `.dlstrings` / `.ilstrings`)
+- When a standalone strings file is open, **Generate Translated File** writes loose files directly — never BA2
+- The BA2 archive setting in Settings → Misc is ignored; this behaviour cannot be overridden
+- Output: `<output_dir>/Strings/<stem>_<target_lang>.<ext>` (same as loose-file mode for localized plugins)
+- Only the file type that was imported produces a non-empty output (e.g. opening a `.dlstrings` file only writes a `_<lang>.dlstrings`)
+
 #### Common
 - Default output folder: `{Documents}/BGS-Translator/Traduction` (cross-platform, auto-created)
 - Output folder and export mode are configurable in Settings
-- Keyboard shortcut: `Ctrl+G`
+- Keyboard shortcut: `Ctrl+E`
 
 ### Import / Export — Multi-format
 - **Import from file**: pick any existing `.esp` / `.esm` / `.esl` as a reference and import its translations into the current session — designed for the **mod-update workflow**
@@ -399,6 +406,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Interface language: English, French (auto-detected from system locale)
 - **Theme-aware CSS variable system** — all semantic colours (status dots, fuzzy scores, row highlights, provider tints) are defined as CSS custom properties that automatically adapt to any theme override; `color-mix()` generates alpha variants without per-theme duplication
 - **Loading overlay** — while a plugin is loading, a centered spinner with a status card (`Extraction des archives…` / `Lecture des enregistrements…`) covers the content area; the toolbar shows a compact entry counter during the streaming phase
+- **Toolbar status badges** — when a file is open, the toolbar displays a badge next to the filename: **LOCALISÉ** (indigo) for localized plugins with external string files, **STRINGS** (green) for standalone strings files opened directly
 - **Provider error auto-dismiss** — translation error tooltips (API key missing, model not configured…) disappear automatically after 4 seconds
 
 ### Plugin Comparison (Diff)
@@ -514,6 +522,7 @@ Translate entries using large language models — local or cloud — directly fr
 - In-app activity log for parser events, database operations, and errors
 - Persistent log file: `bgstranslator.log` in the OS app-log directory (legacy `BGS Translator.log` is deleted automatically on startup)
 - **Settings → Système**: buttons to open the log file in the default text editor or reveal the log folder in the file manager
+- **Log retention** — configurable in Settings → Système (Never / 7 / 14 / 30 / 60 / 90 days); old log files are purged automatically on startup and whenever the setting changes; default is 30 days
 
 ### Updates
 - Automatic check for new versions via GitHub Releases
