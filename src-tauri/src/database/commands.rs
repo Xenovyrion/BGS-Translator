@@ -361,6 +361,98 @@ pub async fn convert_eet_cmd(
     })
 }
 
+// ── Full-text database search ─────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn search_db_cmd(
+    state:            State<'_, DbState>,
+    query:            String,
+    personal_db_path: Option<String>,
+    max_results:      Option<usize>,
+) -> Result<Vec<crate::database::types::DbSearchMatch>, String> {
+    let limit = max_results.unwrap_or(30).min(100);
+    let mut results = Vec::new();
+
+    // Search in the reference (ref) database
+    {
+        let guard = state.0.lock().unwrap();
+        if let Some(db) = guard.as_ref() {
+            results.extend(db.search_text(&query, limit));
+        }
+    }
+
+    // Search in the personal database (loaded on-demand by path)
+    if let Some(path) = personal_db_path.filter(|p| !p.is_empty()) {
+        match crate::database::personal_format::load_bgtx(std::path::Path::new(&path)) {
+            Ok(pdb) => results.extend(pdb.search_text(&query, limit)),
+            Err(e)  => log::warn!("[search_db] Could not load personal DB '{}': {}", path, e),
+        }
+    }
+
+    // Merge, sort by score descending, trim to limit
+    results.sort_by(|a, b| b.score.cmp(&a.score));
+    results.truncate(limit);
+    log::debug!("[search_db] query={:?} → {} results", query, results.len());
+    Ok(results)
+}
+
+// ── DB browser commands ───────────────────────────────────────────────────────
+
+/// Returns the count of entries per record type for the selected source.
+/// `source`: "ref_db" | "personal_db"
+#[tauri::command]
+pub async fn get_db_record_types_cmd(
+    state:            State<'_, DbState>,
+    source:           String,
+    personal_db_path: Option<String>,
+) -> Result<Vec<crate::database::types::RecordTypeCount>, String> {
+    match source.as_str() {
+        "ref_db" => {
+            let guard = state.0.lock().unwrap();
+            let db = guard.as_ref().ok_or("No reference DB loaded")?;
+            Ok(db.record_type_counts())
+        }
+        "personal_db" => {
+            let path = personal_db_path.ok_or("personal_db_path required for personal_db source")?;
+            let db = crate::database::personal_format::load_bgtx(std::path::Path::new(&path))
+                .map_err(|e| format!("Cannot load personal DB: {}", e))?;
+            Ok(db.record_type_counts())
+        }
+        _ => Err(format!("Unknown source '{}': expected 'ref_db' or 'personal_db'", source)),
+    }
+}
+
+/// Returns a paginated list of DB entries for the browser.
+/// Filters by `record_type` (None = all types) and `search` (substring in original or translated).
+#[tauri::command]
+pub async fn get_db_entries_cmd(
+    state:            State<'_, DbState>,
+    source:           String,
+    personal_db_path: Option<String>,
+    record_type:      Option<String>,
+    search:           Option<String>,
+    offset:           usize,
+    limit:            usize,
+) -> Result<crate::database::types::DbBrowseResult, String> {
+    let rt_filter = record_type.as_deref().filter(|s| !s.is_empty());
+    let search    = search.as_deref().filter(|s| !s.is_empty());
+
+    match source.as_str() {
+        "ref_db" => {
+            let guard = state.0.lock().unwrap();
+            let db = guard.as_ref().ok_or("No reference DB loaded")?;
+            Ok(db.browse(rt_filter, search, offset, limit))
+        }
+        "personal_db" => {
+            let path = personal_db_path.ok_or("personal_db_path required for personal_db source")?;
+            let db = crate::database::personal_format::load_bgtx(std::path::Path::new(&path))
+                .map_err(|e| format!("Cannot load personal DB: {}", e))?;
+            Ok(db.browse(rt_filter, search, offset, limit))
+        }
+        _ => Err(format!("Unknown source '{}': expected 'ref_db' or 'personal_db'", source)),
+    }
+}
+
 // ── Debug mode ────────────────────────────────────────────────────────────────
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -415,7 +507,7 @@ pub struct ConvertResult {
 }
 
 /// Load any supported source format and return a list of DbEntry.
-fn load_source_as_db_entries(src: &std::path::Path) -> Result<Vec<DbEntry>, String> {
+pub(crate) fn load_source_as_db_entries(src: &std::path::Path) -> Result<Vec<DbEntry>, String> {
     let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     match ext.as_str() {
         "eet" => {
@@ -455,6 +547,88 @@ fn load_source_as_db_entries(src: &std::path::Path) -> Result<Vec<DbEntry>, Stri
         }
         _ => Err(format!("Unsupported source format: .{}", ext)),
     }
+}
+
+// ── In-place edit commands for the reference DB ───────────────────────────────
+
+/// Update the `translated` field of specific entries in the loaded reference DB (by index).
+/// Saves the modified DB back to `path` immediately.
+#[tauri::command]
+pub async fn update_ref_db_entries_cmd(
+    state:   State<'_, DbState>,
+    path:    String,
+    updates: Vec<crate::database::types::EntryUpdate>,
+) -> Result<usize, String> {
+    let mut guard = state.0.lock().unwrap();
+    let db = guard.as_mut().ok_or("No reference DB loaded")?;
+    let mut count = 0usize;
+    for u in updates {
+        if db.update_entry_at_index(u.idx, u.translated) { count += 1; }
+    }
+    save_bgt(db, std::path::Path::new(&path))?;
+    log::info!("[ref_db] {} entries updated, saved to '{}'", count, path);
+    Ok(count)
+}
+
+/// Remove all entries without a translation from the loaded reference DB and save.
+#[tauri::command]
+pub async fn purge_ref_db_cmd(
+    state: State<'_, DbState>,
+    path:  String,
+) -> Result<usize, String> {
+    let mut guard = state.0.lock().unwrap();
+    let db = guard.as_mut().ok_or("No reference DB loaded")?;
+    let removed = db.purge_untranslated();
+    save_bgt(db, std::path::Path::new(&path))?;
+    log::info!("[ref_db] {} untranslated entries purged, saved to '{}'", removed, path);
+    Ok(removed)
+}
+
+/// Manually add a single new entry to the loaded reference DB and save.
+#[tauri::command]
+pub async fn add_entry_to_ref_db_cmd(
+    state:       State<'_, DbState>,
+    path:        String,
+    original:    String,
+    translated:  String,
+    record_type: String,
+    sub_type:    String,
+    editor_id:   String,
+) -> Result<usize, String> {
+    let mut guard = state.0.lock().unwrap();
+    let db = guard.as_mut().ok_or("No reference DB loaded")?;
+    db.add_entries(vec![DbEntry {
+        form_id:     0,
+        original,
+        translated,
+        record_type: if record_type.is_empty() { None } else { Some(record_type) },
+        sub_type:    if sub_type.is_empty()    { None } else { Some(sub_type) },
+        editor_id:   if editor_id.is_empty()   { None } else { Some(editor_id) },
+    }]);
+    let count = db.entry_count();
+    save_bgt(db, std::path::Path::new(&path))?;
+    log::info!("[ref_db] Manual entry added, total {} entries, saved to '{}'", count, path);
+    Ok(count)
+}
+
+/// Merge entries from any supported source file into the loaded reference DB and save.
+#[tauri::command]
+pub async fn import_into_ref_db_cmd(
+    state:    State<'_, DbState>,
+    path:     String,
+    src_path: String,
+) -> Result<usize, String> {
+    let src = std::path::Path::new(&src_path);
+    let new_entries = load_source_as_db_entries(src)?;
+    let count = new_entries.len();
+    {
+        let mut guard = state.0.lock().unwrap();
+        let db = guard.as_mut().ok_or("No reference DB loaded")?;
+        db.add_entries(new_entries);
+        save_bgt(db, std::path::Path::new(&path))?;
+    }
+    log::info!("[ref_db] {} entries imported from '{}', saved to '{}'", count, src_path, path);
+    Ok(count)
 }
 
 /// Convert any supported source to a .bgt (reference database, v2).

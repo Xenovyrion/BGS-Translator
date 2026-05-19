@@ -2,7 +2,7 @@ use serde::Serialize;
 use crate::database::{
     personal_format::{load_bgtx, save_bgtx, peek_bgtx},
     personal_store::PersonalDb,
-    types::{PersonalDbEntry, PersonalDbInfo, PersonalDbFileInfo},
+    types::{EntryUpdate, PersonalDbEntry, PersonalDbInfo, PersonalDbFileInfo},
 };
 use crate::translation::entry::{EntryStatus, TranslationEntry};
 
@@ -205,4 +205,109 @@ pub async fn delete_personal_db_cmd(path: String) -> Result<(), String> {
         log::info!("[personal_db] Deleted '{}'", path);
     }
     Ok(())
+}
+
+// ── In-place edit commands ────────────────────────────────────────────────────
+
+/// Update the `translated` field of specific entries (identified by their index in the DB).
+/// Loads the .bgtx, applies the changes in-place, saves. Returns the number of updated entries.
+#[tauri::command]
+pub async fn update_personal_db_entries_cmd(
+    path:    String,
+    updates: Vec<EntryUpdate>,
+) -> Result<usize, String> {
+    let p = std::path::Path::new(&path);
+    let mut db = load_bgtx(p)?;
+    let mut count = 0usize;
+    for u in updates {
+        if db.update_entry_at_index(u.idx, u.translated) { count += 1; }
+    }
+    save_bgtx(&db, p)?;
+    log::info!("[personal_db] {} entries updated in '{}'", count, path);
+    Ok(count)
+}
+
+/// Remove all entries with an empty (or whitespace-only) translation from a .bgtx file.
+/// Returns the number of removed entries.
+#[tauri::command]
+pub async fn purge_personal_db_cmd(path: String) -> Result<usize, String> {
+    let p = std::path::Path::new(&path);
+    let mut db = load_bgtx(p)?;
+    let removed = db.purge_untranslated();
+    save_bgtx(&db, p)?;
+    log::info!("[personal_db] {} untranslated entries purged from '{}'", removed, path);
+    Ok(removed)
+}
+
+/// Manually add a single new entry to a .bgtx file.
+/// Creates the file if it does not exist yet.
+#[tauri::command]
+pub async fn add_entry_to_personal_db_cmd(
+    path:        String,
+    original:    String,
+    translated:  String,
+    record_type: String,
+    sub_type:    String,
+    editor_id:   String,
+) -> Result<usize, String> {
+    let p = std::path::Path::new(&path);
+    let mut db = if p.exists() {
+        load_bgtx(p)?
+    } else {
+        PersonalDb::empty(
+            p.file_stem().and_then(|s| s.to_str()).unwrap_or("Ma BDD").to_owned(),
+            path.clone(),
+            String::new(),
+            "en".into(),
+            "fr".into(),
+        )
+    };
+    db.add_entries(vec![PersonalDbEntry {
+        form_id: 0,
+        original, translated, record_type, sub_type, editor_id,
+    }]);
+    save_bgtx(&db, p)?;
+    let count = db.entry_count();
+    log::info!("[personal_db] Entry manually added to '{}' (total: {})", path, count);
+    Ok(count)
+}
+
+/// Merge entries from any supported source file (.eet, .bgt, .bgtx, .csv, .tsv, .xml)
+/// into an existing .bgtx. Creates the .bgtx if it does not exist yet.
+/// Returns the number of entries merged.
+#[tauri::command]
+pub async fn import_into_personal_db_cmd(
+    path:     String,
+    src_path: String,
+) -> Result<usize, String> {
+    let p   = std::path::Path::new(&path);
+    let src = std::path::Path::new(&src_path);
+
+    let mut db = if p.exists() {
+        load_bgtx(p)?
+    } else {
+        PersonalDb::empty(
+            p.file_stem().and_then(|s| s.to_str()).unwrap_or("Ma BDD").to_owned(),
+            path.clone(),
+            String::new(),
+            "en".into(),
+            "fr".into(),
+        )
+    };
+
+    let db_entries = super::commands::load_source_as_db_entries(src)?;
+    let new_entries: Vec<PersonalDbEntry> = db_entries.into_iter().map(|e| PersonalDbEntry {
+        form_id:     e.form_id,
+        original:    e.original,
+        translated:  e.translated,
+        record_type: e.record_type.unwrap_or_default(),
+        sub_type:    e.sub_type.unwrap_or_default(),
+        editor_id:   e.editor_id.unwrap_or_default(),
+    }).collect();
+
+    let count = new_entries.len();
+    db.add_entries(new_entries);
+    save_bgtx(&db, p)?;
+    log::info!("[personal_db] {} entries imported into '{}' from '{}'", count, path, src_path);
+    Ok(count)
 }

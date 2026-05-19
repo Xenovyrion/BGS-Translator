@@ -122,6 +122,9 @@ pub fn run() {
             database::commands::convert_to_bgt_cmd,
             database::commands::convert_to_bgtx_cmd,
             database::commands::set_debug_mode_cmd,
+            database::commands::search_db_cmd,
+            database::commands::get_db_record_types_cmd,
+            database::commands::get_db_entries_cmd,
             updater::check_update,
             updater::install_update,
             commands::get_log_path_cmd,
@@ -160,6 +163,14 @@ pub fn run() {
             database::personal_commands::apply_personal_db_cmd,
             database::personal_commands::get_personal_dbs_dir_cmd,
             database::personal_commands::delete_personal_db_cmd,
+            database::personal_commands::update_personal_db_entries_cmd,
+            database::personal_commands::purge_personal_db_cmd,
+            database::personal_commands::add_entry_to_personal_db_cmd,
+            database::personal_commands::import_into_personal_db_cmd,
+            database::commands::update_ref_db_entries_cmd,
+            database::commands::purge_ref_db_cmd,
+            database::commands::add_entry_to_ref_db_cmd,
+            database::commands::import_into_ref_db_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("BGS Translator failed to start");

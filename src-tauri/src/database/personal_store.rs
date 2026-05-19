@@ -100,6 +100,144 @@ impl PersonalDb {
         }
     }
 
+    /// Full-text search across original strings (case-insensitive substring match).
+    /// Scores: exact = 100, starts_with = 80, contains = 60.
+    /// Only returns entries that have a non-empty translation.
+    pub fn search_text(&self, query: &str, max_results: usize) -> Vec<crate::database::types::DbSearchMatch> {
+        use crate::database::types::DbSearchMatch;
+        if query.is_empty() { return vec![]; }
+        let q = query.to_lowercase();
+
+        let mut results: Vec<(u8, &PersonalDbEntry)> = self.entries.iter()
+            .filter(|e| !e.translated.is_empty())
+            .filter_map(|e| {
+                let o = e.original.to_lowercase();
+                let score = if o == q                { 100u8 }
+                       else if o.starts_with(&q[..]) {  80   }
+                       else if o.contains(&q[..])     {  60   }
+                       else                           { return None; };
+                Some((score, e))
+            })
+            .collect();
+
+        results.sort_by(|a, b| b.0.cmp(&a.0));
+        results.truncate(max_results);
+
+        results.into_iter().map(|(score, e)| DbSearchMatch {
+            source:      "personal_db".into(),
+            original:    e.original.clone(),
+            translated:  e.translated.clone(),
+            form_id:     e.form_id,
+            record_type: if e.record_type.is_empty() { None } else { Some(e.record_type.clone()) },
+            sub_type:    if e.sub_type.is_empty()    { None } else { Some(e.sub_type.clone()) },
+            editor_id:   if e.editor_id.is_empty()   { None } else { Some(e.editor_id.clone()) },
+            score,
+        }).collect()
+    }
+
+    /// Returns the count of entries per record type, sorted alphabetically.
+    pub fn record_type_counts(&self) -> Vec<crate::database::types::RecordTypeCount> {
+        use crate::database::types::RecordTypeCount;
+        let mut map: AHashMap<String, (usize, usize)> = AHashMap::new();
+        for e in &self.entries {
+            let slot = map.entry(e.record_type.clone()).or_insert((0, 0));
+            slot.0 += 1;
+            if !e.translated.is_empty() { slot.1 += 1; }
+        }
+        let mut result: Vec<RecordTypeCount> = map.into_iter()
+            .map(|(record_type, (count, translated))| RecordTypeCount { record_type, count, translated })
+            .collect();
+        result.sort_by(|a, b| a.record_type.cmp(&b.record_type));
+        result
+    }
+
+    /// Returns a paginated, filtered slice of entries for the DB browser.
+    pub fn browse(
+        &self,
+        record_type_filter: Option<&str>,
+        search:             Option<&str>,
+        offset:             usize,
+        limit:              usize,
+    ) -> crate::database::types::DbBrowseResult {
+        use crate::database::types::{DbBrowseEntry, DbBrowseResult};
+        let search_lower = search.map(|s| s.to_lowercase());
+
+        let filtered: Vec<(usize, &PersonalDbEntry)> = self.entries.iter().enumerate()
+            .filter(|(_, e)| {
+                if let Some(rt) = record_type_filter {
+                    if !rt.is_empty() && e.record_type != rt { return false; }
+                }
+                if let Some(ref sq) = search_lower {
+                    if !sq.is_empty() {
+                        let orig  = e.original.to_lowercase();
+                        let trans = e.translated.to_lowercase();
+                        if !orig.contains(sq.as_str()) && !trans.contains(sq.as_str()) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            })
+            .collect();
+
+        let total = filtered.len();
+        let entries: Vec<DbBrowseEntry> = filtered.into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(idx, e)| DbBrowseEntry {
+                idx,
+                form_id:     e.form_id,
+                record_type: e.record_type.clone(),
+                sub_type:    e.sub_type.clone(),
+                editor_id:   e.editor_id.clone(),
+                original:    e.original.clone(),
+                translated:  e.translated.clone(),
+            })
+            .collect();
+
+        DbBrowseResult { entries, total }
+    }
+
+    /// Update the `translated` field of a single entry identified by its index.
+    /// Also updates both in-memory indexes. Returns `false` if `idx` is out of range.
+    pub fn update_entry_at_index(&mut self, idx: usize, new_translated: String) -> bool {
+        if idx >= self.entries.len() { return false; }
+        let e = &mut self.entries[idx];
+        if e.form_id != 0 {
+            self.id_index.insert((e.form_id, e.sub_type.clone()), new_translated.clone());
+        }
+        self.text_index.insert(e.original.clone(), new_translated.clone());
+        e.translated = new_translated;
+        true
+    }
+
+    /// Remove all entries whose `translated` field is empty (or whitespace-only).
+    /// Rebuilds the in-memory indexes afterwards.
+    /// Returns the number of removed entries.
+    pub fn purge_untranslated(&mut self) -> usize {
+        let before = self.entries.len();
+        self.entries.retain(|e| !e.translated.trim().is_empty());
+        let removed = before - self.entries.len();
+        if removed > 0 { self.rebuild_indexes(); }
+        removed
+    }
+
+    /// Rebuild both in-memory lookup indexes from `self.entries`.
+    fn rebuild_indexes(&mut self) {
+        self.id_index.clear();
+        self.text_index.clear();
+        for e in &self.entries {
+            if e.form_id != 0 {
+                self.id_index
+                    .entry((e.form_id, e.sub_type.clone()))
+                    .or_insert_with(|| e.translated.clone());
+            }
+            self.text_index
+                .entry(e.original.clone())
+                .or_insert_with(|| e.translated.clone());
+        }
+    }
+
     pub fn entry_count(&self) -> usize { self.entries.len() }
     pub fn entries(&self) -> &[PersonalDbEntry] { &self.entries }
 

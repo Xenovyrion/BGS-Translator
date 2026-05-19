@@ -47,6 +47,9 @@ interface Props {
   globalFindShortcut?:     string;
   onApplyPersonalDb?:      () => void;
   hasActivePersonalDb?:    boolean;
+  onOpenQa?:               () => void;
+  onOpenDbManager?:        () => void;
+  dbManagerShortcut?:      string;   // e.g. "Ctrl+D"
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -62,6 +65,8 @@ export default function MenuBar({
   onOpenCompare,
   onGlobalFind, globalFindShortcut,
   onApplyPersonalDb, hasActivePersonalDb,
+  onOpenQa,
+  onOpenDbManager, dbManagerShortcut,
 }: Props) {
   const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -125,6 +130,7 @@ export default function MenuBar({
       id: "database", label: t("menu.database"),
       items: [
         { label: t("menu.db_manage"), onClick: () => { close(); onSettingsDb(); } },
+        { label: t("menu.tools_db_manager"), shortcut: dbManagerShortcut, onClick: onOpenDbManager ? () => { close(); onOpenDbManager!(); } : undefined },
         { separator: true },
         { label: t("menu.db_apply_personal"), disabled: !pluginLoaded || loading || !hasActivePersonalDb, onClick: onApplyPersonalDb ? () => { close(); onApplyPersonalDb!(); } : undefined },
         { separator: true },
@@ -150,7 +156,8 @@ export default function MenuBar({
     {
       id: "outils", label: t("menu.tools"),
       items: [
-        { label: t("menu.tools_compare"), onClick: onOpenCompare ? () => { close(); onOpenCompare!(); } : undefined },
+        { label: t("menu.tools_compare"),   onClick: onOpenCompare ? () => { close(); onOpenCompare!(); } : undefined },
+        { label: t("menu.tools_qa"), shortcut: "Ctrl+Q", disabled: !pluginLoaded || loading, onClick: onOpenQa ? () => { close(); onOpenQa!(); } : undefined },
         { separator: true },
         { label: t("menu.tools_settings"), shortcut: "Ctrl+,", onClick: () => { close(); onSettings(); } },
       ],

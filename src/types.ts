@@ -105,6 +105,7 @@ export interface KeyboardShortcuts {
   pasteTranslation: ShortcutDef;  // paste into translation
   validateEntry:    ShortcutDef;  // validate entry
   globalFind:       ShortcutDef;  // open global find & replace modal
+  searchDb:         ShortcutDef;  // open DB search modal
 }
 
 export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
@@ -114,6 +115,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
   pasteTranslation: { key: "v", ctrl: true },
   validateEntry:    { key: "Enter", ctrl: true },
   globalFind:       { key: "h", ctrl: true, shift: true },
+  searchDb:         { key: "d", ctrl: true },
 };
 
 // ── Edit-panel shortcuts (fired while the translation textarea is focused) ────
@@ -155,6 +157,42 @@ export interface PersonalDbFileInfo {
   lang_from:   string;
   lang_to:     string;
   entry_count: number;
+}
+
+// ── DB Search types ───────────────────────────────────────────────────────────
+
+export interface DbSearchMatch {
+  source:      "ref_db" | "personal_db";
+  original:    string;
+  translated:  string;
+  form_id:     number;
+  record_type: string | null;
+  sub_type:    string | null;
+  editor_id:   string | null;
+  score:       number;   // 0–100
+}
+
+// ── DB Browser types ──────────────────────────────────────────────────────────
+
+export interface DbBrowseEntry {
+  idx:         number;    // stable index in the source Vec
+  form_id:     number;
+  record_type: string;
+  sub_type:    string;
+  editor_id:   string;
+  original:    string;
+  translated:  string;
+}
+
+export interface DbBrowseResult {
+  entries: DbBrowseEntry[];
+  total:   number;
+}
+
+export interface RecordTypeCount {
+  record_type: string;
+  count:       number;
+  translated:  number;
 }
 
 // ── Compare / Diff types ──────────────────────────────────────────────────────

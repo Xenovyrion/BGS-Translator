@@ -35,6 +35,8 @@ import ThemeManagerModal from "./components/themes/ThemeManagerModal";
 import { NotificationBanner } from "./components/shared/NotificationBanner";
 import LoadingOverlay from "./components/shared/LoadingOverlay";
 import type { Notification } from "./components/shared/NotificationBanner";
+import { QaPanel } from "./components/shared/QaPanel";
+import DbManagerModal from "./components/shared/DbManagerModal";
 
 interface UpdateInfo { version: string; notes?: string }
 
@@ -96,6 +98,7 @@ export default function App() {
     autoApplyResult, clearAutoApplyResult,
     dbNotFound, clearDbNotFound,
     loadedDbInfo,
+    loadedDbPath,
     // Fuzzy
     fuzzyMatches, fuzzyScanning, filterFuzzyOnly, setFilterFuzzyOnly,
     runFuzzySingle, acceptFuzzy, dismissFuzzy, applyFuzzyToSelection,
@@ -161,6 +164,9 @@ export default function App() {
   const [notification,       setNotification]       = useState<Notification | null>(null);
   const [showDbConverter,    setShowDbConverter]    = useState(false);
   const [showCompare,        setShowCompare]        = useState(false);
+  const [showQaPanel,        setShowQaPanel]        = useState(false);
+  const [showDbManager,      setShowDbManager]      = useState(false);
+  const [dbManagerInitSearch, setDbManagerInitSearch] = useState("");
   const [compareSessions,    setCompareSessions]    = useState<SessionListItem[]>([]);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
   const [batchLoadingId,     setBatchLoadingId]     = useState<string | null>(null);
@@ -899,6 +905,8 @@ export default function App() {
       if (ctrl && e.key === "i" && pluginInfo) { e.preventDefault(); handleImportTranslations(); }
       if (ctrl && e.key === "e" && pluginInfo) { e.preventDefault(); handleExport(); }
       if (ctrl && e.key === ",") { e.preventDefault(); setShowSettings(true); }
+      if (matchShortcut(e, sc.searchDb ?? DEFAULT_SHORTCUTS.searchDb)) { e.preventDefault(); setDbManagerInitSearch(selectedEntry?.original ?? ""); setShowDbManager(true); }
+      if (pluginInfo && matchShortcut(e, { key: "q", ctrl: true })) { e.preventDefault(); setShowQaPanel(true); }
       // Global find & replace — uses configurable shortcut
       if (pluginInfo && matchShortcut(e, sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)) {
         e.preventDefault();
@@ -922,7 +930,7 @@ export default function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [handleOpenPlugin, handleSaveSession, handleImportTranslations, handleExport, pluginInfo,
-      sc.globalFind, activeProviders, selectedEntry, selectedCount,
+      sc.globalFind, sc.searchDb, activeProviders, selectedEntry, selectedCount,
       handleOpenBrowserWith, handleTranslateWith, handleTranslateBatchWith]);
 
   /* ── Render ──────────────────────────────────────────────────────────────── */
@@ -959,6 +967,9 @@ export default function App() {
         globalFindShortcut={formatShortcut(sc.globalFind ?? DEFAULT_SHORTCUTS.globalFind)}
         onApplyPersonalDb={pluginInfo ? handleApplyPersonalDbAll : undefined}
         hasActivePersonalDb={!!settings.activePersonalDbPath}
+        onOpenQa={pluginInfo ? () => setShowQaPanel(true) : undefined}
+        onOpenDbManager={() => { setDbManagerInitSearch(""); setShowDbManager(true); }}
+        dbManagerShortcut={formatShortcut(sc.searchDb ?? DEFAULT_SHORTCUTS.searchDb)}
       />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
@@ -1101,6 +1112,10 @@ export default function App() {
                 onApplyPersonalDb={settings.activePersonalDbPath ? handleApplyPersonalDbSingle : undefined}
                 onAddToPersonalDb={settings.activePersonalDbPath ? handleAddSingleToPersonalDb : undefined}
                 personalDbName={personalDbInfoLoaded?.name ?? undefined}
+                onOpenDbSearch={selectedEntry ? () => {
+                  setDbManagerInitSearch(selectedEntry.original);
+                  setShowDbManager(true);
+                } : undefined}
                 fuzzyMatch={selectedEntry._idx !== undefined ? fuzzyMatches.get(selectedEntry._idx) : undefined}
                 onAcceptFuzzy={selectedEntry._idx !== undefined ? () => acceptFuzzy(selectedEntry._idx!) : undefined}
                 onDismissFuzzy={selectedEntry._idx !== undefined ? () => dismissFuzzy(selectedEntry._idx!) : undefined}
@@ -1186,6 +1201,31 @@ export default function App() {
           defaultOutputDir={defaultDbDir}
           onClose={() => setShowDbConverter(false)}
           onConvert={handleConvertConfirm}
+        />
+      )}
+
+      {showDbManager && (
+        <DbManagerModal
+          key={dbManagerInitSearch}
+          refDbLoaded={!!loadedDbInfo}
+          refDbPath={loadedDbPath ?? undefined}
+          personalDbPath={settings.activePersonalDbPath ?? undefined}
+          initialSearch={dbManagerInitSearch || undefined}
+          onApply={selectedEntry ? (translated) => {
+            updateTranslation(selectedEntry._idx ?? 0, translated);
+          } : undefined}
+          onClose={() => setShowDbManager(false)}
+        />
+      )}
+
+      {showQaPanel && (
+        <QaPanel
+          entries={entries}
+          onClose={() => setShowQaPanel(false)}
+          onNavigate={(idx) => {
+            const target = entries.find(e => e._idx === idx);
+            if (target) setSelectedEntry(target);
+          }}
         />
       )}
 

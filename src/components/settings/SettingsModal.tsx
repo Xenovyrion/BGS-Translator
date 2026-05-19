@@ -402,6 +402,7 @@ function ShortcutsTab({ settings, onUpdate }: TabProps) {
     pasteTranslation: t("settings_modal.shortcuts.paste_translation"),
     validateEntry:    t("settings_modal.shortcuts.validate_entry"),
     globalFind:       t("settings_modal.shortcuts.global_find"),
+    searchDb:         t("settings_modal.shortcuts.search_db"),
   };
 
   const editShortcutLabels: Record<keyof EditPanelShortcuts, string> = {

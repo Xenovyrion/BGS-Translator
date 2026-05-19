@@ -62,6 +62,54 @@ pub struct PersonalDbInfo {
     pub entry_count: usize,
 }
 
+/// A single DB search result (returned by search_db_cmd).
+#[derive(Debug, Serialize)]
+pub struct DbSearchMatch {
+    pub source:      String,          // "ref_db" | "personal_db"
+    pub original:    String,
+    pub translated:  String,
+    pub form_id:     u32,
+    pub record_type: Option<String>,
+    pub sub_type:    Option<String>,
+    pub editor_id:   Option<String>,
+    pub score:       u8,              // 0–100 relevance score
+}
+
+/// A single entry returned by the DB browser (unified for ref & personal DBs).
+#[derive(Debug, Clone, Serialize)]
+pub struct DbBrowseEntry {
+    pub idx:         usize,    // index in the source Vec (stable identifier)
+    pub form_id:     u32,
+    pub record_type: String,
+    pub sub_type:    String,
+    pub editor_id:   String,
+    pub original:    String,
+    pub translated:  String,
+}
+
+/// Paginated result returned by get_db_entries_cmd.
+#[derive(Debug, Serialize)]
+pub struct DbBrowseResult {
+    pub entries: Vec<DbBrowseEntry>,
+    pub total:   usize,        // total matching entries (before pagination)
+}
+
+/// Record type with entry count and translation coverage.
+#[derive(Debug, Serialize)]
+pub struct RecordTypeCount {
+    pub record_type: String,
+    pub count:       usize,    // total entries of this type
+    pub translated:  usize,   // entries with non-empty translation
+}
+
+/// A single translated-field update sent by the DB Manager (identified by entry index).
+/// Shared between reference-DB and personal-DB edit commands.
+#[derive(Debug, serde::Deserialize)]
+pub struct EntryUpdate {
+    pub idx:        usize,
+    pub translated: String,
+}
+
 /// File listing entry for .bgtx files in a directory scan.
 #[derive(Debug, Serialize)]
 pub struct PersonalDbFileInfo {

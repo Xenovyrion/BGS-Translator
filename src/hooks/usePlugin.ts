@@ -69,6 +69,7 @@ export function usePlugin({
   const [autoApplyResult, setAutoApplyResult]       = useState<{ refDb: number; personalDb: number; session: number } | null>(null);
   const [dbNotFound, setDbNotFound]                 = useState<string | null>(null);
   const [loadedDbInfo, setLoadedDbInfo]             = useState<DbInfo | null>(null);
+  const [loadedDbPath, setLoadedDbPath]             = useState<string | null>(null);
 
   // ── Fuzzy matching state ──────────────────────────────────────────────────
   /** Map from entry `_idx` → best fuzzy match (pending suggestions). */
@@ -87,6 +88,7 @@ export function usePlugin({
     setAutoApplyResult(null);
     setDbNotFound(null);
     setLoadedDbInfo(null);
+    setLoadedDbPath(null);
     setFuzzyMatches(new Map());
     setFuzzyScanning(false);
     setFilterFuzzyOnly(false);
@@ -133,6 +135,7 @@ export function usePlugin({
       }
 
       setLoadedDbInfo(dbInfo);
+      setLoadedDbPath(dbPath);
 
       // ── Step 2: Apply personal DB(s) ────────────────────────────────────────
       // "Automatique": scan + apply every .bgtx in the folder.
@@ -290,6 +293,7 @@ export function usePlugin({
           if (dbPath) {
             const dbInfo = await invoke<DbInfo>("load_db_cmd", { path: dbPath });
             setLoadedDbInfo(dbInfo);
+            setLoadedDbPath(dbPath);
           }
         } catch { /* DB not available — silently skip */ }
       }
@@ -946,6 +950,7 @@ export function usePlugin({
     autoApplyResult, clearAutoApplyResult: () => setAutoApplyResult(null),
     dbNotFound, clearDbNotFound: () => setDbNotFound(null),
     loadedDbInfo,
+    loadedDbPath,
     // Fuzzy
     fuzzyMatches, fuzzyScanning, filterFuzzyOnly, setFilterFuzzyOnly,
     runFuzzyAuto, runFuzzySingle, acceptFuzzy, dismissFuzzy, applyFuzzyToSelection,

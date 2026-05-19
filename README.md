@@ -93,6 +93,7 @@ BGS-Translator/
 │   │   ├── shared/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
 │   │   │   ├── ConvertToBgtModal.tsx      # Floating draggable database converter (any format → .bgt/.bgtx)
+│   │   │   ├── DbManagerModal.tsx         # Floating database manager (browse, filter, edit, find & replace)
 │   │   │   ├── GlobalFindReplaceModal.tsx # Floating global find & replace window
 │   │   │   ├── LoadingOverlay.tsx         # Centered spinner overlay shown during plugin loading
 │   │   │   ├── LogPanel.tsx               # Activity / debug log panel
@@ -138,7 +139,7 @@ BGS-Translator/
 │   │   │   ├── personal_format.rs    # .bgtx binary format (magic + zstd + bincode)
 │   │   │   ├── personal_store.rs     # PersonalDb dual-index store (ID + text)
 │   │   │   ├── store.rs              # In-memory reference database store (3-level AHashMap index)
-│   │   │   └── types.rs              # DbEntry, DbInfo, PersonalDbEntry, PersonalDbInfo…
+│   │   │   └── types.rs              # DbEntry, DbInfo, PersonalDbEntry, PersonalDbInfo, EntryUpdate…
 │   │   ├── formats/
 │   │   │   ├── mod.rs
 │   │   │   ├── xtranslator_xml.rs    # xTranslator XML import/export
@@ -345,12 +346,29 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Default database per game** — in Settings → Database, assign one `.bgt` file as the default for each game; auto-apply uses this file first and falls back to a directory scan only when no explicit default is set
 - **Smart auto-detection** — when no explicit default is set, the directory scan applies a three-tier priority: exact game header match → filename heuristic (e.g. `BDD_Starfield_EN-FR.bgt`) → partial substring match; results are alphabetically sorted for determinism
 
+### Database Manager
+- Floating, draggable modal accessible from **Database → Gestionnaire de bases de données…** — stays open while working
+- **Two tabs**: Personal database (`.bgtx`) and Reference database (`.bgt`)
+- **Browse & filter**: full-text search across original and translated strings; pagination with configurable page size; total entry count with thousand separators
+- **Edit mode** — "Passer en mode modification" button activates in-place editing (button turns solid green while active); all editing features are available for both personal and reference databases
+- **In-place cell editing** — click any translated cell to edit it directly in the table; unsaved changes are tracked and highlighted
+- **Validate / Discard** — confirm or cancel all pending edits with dedicated action buttons
+- **Purge incomplete entries** — removes all entries with an empty translation in one click (with count feedback)
+- **Add row** — inline form at the top of the table to manually insert a new entry (original, translated, record type, sub-type, editor ID)
+- **Import from file** — merges any supported format (`.bgt`, `.bgtx`, `.eet`, `.xml`, `.csv`, `.tsv`) into the current database
+- **Find & Replace** — sub-panel with literal or regex search (JavaScript syntax), live preview of up to 30 affected entries (before/after coloured diff), confirmation before commit
+- **Theme-aware** — all colours use CSS variables and adapt automatically to the active theme
+- Free drag — window can be positioned anywhere on screen without boundary clamping
+
 ### Database Converter
 - Floating, draggable modal (stays open while working) — accessible from **Database → Convertisseur de bases de données…**
 - **Universal source support**: `.eet` (ESP-ESM Translator), `.bgt` v2 (reference database), `.bgtx` (personal database), `.csv`, `.tsv`, `.xml` (xTranslator or ESP-ESM Translator — auto-detected)
 - **Output format**: `.bgt` (reference database, shared) or `.bgtx` (personal database)
-- Configurable: database name, game, source language, target language, output folder
-- For `.bgt` output: read-only toggle (read-only = auto-applied at plugin open; editable = loaded manually)
+- Configurable: database name, game, **source language**, **target language** (10 languages: English, French, German, Spanish, Italian, Portuguese, Russian, Polish, Chinese, Japanese), **output folder**
+- **Output folder picker** — native folder dialog (Tauri); defaults to the `databases/` directory next to the app
+- **Database type** for `.bgt` output:
+  - *Default (read-only)* — auto-applied at plugin open (bundled / shared database)
+  - *Custom (editable)* — loaded manually; can be edited in the Database Manager
 - **form_id fully preserved** through conversion — `.eet` and existing `.bgt`/`.bgtx` sources retain their form IDs, enabling Level 1 precision matching after conversion
 - CSV/TSV import supports an optional 6th column (`FormId`, hex format) exported by BGS Translator itself
 - Inline result feedback (entry count on success, error message on failure) without closing the modal

@@ -9,7 +9,7 @@ import { ProviderLetterBadge } from "../shared/ProviderBadge";
 import {
   IconCopy, IconSearch, IconCheck, IconClose, IconReplace, IconExternalLink,
   IconArrowUp, IconArrowDown, IconCaseSensitive, IconSpellCheck,
-  IconSettings as IconGear, IconSpinner,
+  IconSettings as IconGear, IconSpinner, IconDatabase,
 } from "../../icons";
 
 interface SpellError {
@@ -59,6 +59,8 @@ interface Props {
   onApplyPersonalDb?: () => void;    // Apply personal DB to this entry
   onAddToPersonalDb?: () => void;    // Add this entry to personal DB
   personalDbName?:    string;        // Name of the active personal DB (for tooltip)
+  /** Opens the global DB search modal, pre-filled with the current entry's original text. */
+  onOpenDbSearch?:    () => void;
   /** Fuzzy suggestion for this entry (if any) */
   fuzzyMatch?:        FuzzyMatch;
   onAcceptFuzzy?:     () => void;
@@ -187,7 +189,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, activeApiProviders = [], activeLauncherProviders = [], translateLoadingId, translateErrorMap, onTranslateWith, onOpenBrowserWith, onApplyPersonalDb, onAddToPersonalDb, personalDbName, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, activeApiProviders = [], activeLauncherProviders = [], translateLoadingId, translateErrorMap, onTranslateWith, onOpenBrowserWith, onApplyPersonalDb, onAddToPersonalDb, personalDbName, onOpenDbSearch, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
   ref,
 ) {
   const { t } = useTranslation();
@@ -339,6 +341,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     setTimeout(() => findInputRef.current?.focus(), 10);
   }, []);
 
+
   const closeFind = useCallback(() => {
     setFindVisible(false);
     setFindQuery("");
@@ -459,6 +462,7 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
     if (matchShortcut(e, sc.opUpper))     { e.preventDefault(); applyOp("upper");     return; }
     if (matchShortcut(e, sc.opLower))     { e.preventDefault(); applyOp("lower");     return; }
     if (matchShortcut(e, sc.opStripTags)) { e.preventDefault(); applyOp("strip-tags"); return; }
+    // DB search is triggered globally (Ctrl+D by default) — not from this handler
 
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       onSetStatus(entry._idx ?? 0, "validated"); e.preventDefault(); return;
@@ -725,6 +729,21 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
                     <span style={{ fontSize: 10, fontWeight: 700 }}>DB</span>
                   </ToolBtn>
                 )}
+              </>
+            )}
+
+            {/* ── Group: DB Search ────────────────────────────────────────── */}
+            {onOpenDbSearch && (
+              <>
+                <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+                <ToolBtn
+                  onClick={onOpenDbSearch}
+                  title={t("db_search.btn_title")}
+                  style={{ gap: 4 }}
+                >
+                  <IconDatabase size={12} />
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>{t("db_search.btn_label")}</span>
+                </ToolBtn>
               </>
             )}
 
