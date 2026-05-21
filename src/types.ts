@@ -300,6 +300,106 @@ export function fuzzyScoreColor(score: number): string {
   return "var(--fuzzy-low)";
 }
 
+// ── Regex replacement rules ───────────────────────────────────────────────────
+
+/**
+ * A user-defined regex rule: matches `pattern` against the source (original)
+ * string and produces a translated string using `replacement` (supports $1, $2…
+ * capture groups). Rules are applied in order to untranslated entries.
+ */
+export interface RegexRule {
+  id:           string;
+  pattern:      string;   // ECMAScript regex pattern
+  replacement:  string;   // Replacement string; may use $1, $2, $& etc.
+  caseInsensitive: boolean; // true = add "i" flag (default)
+  enabled:      boolean;
+  description?: string;
+}
+
+// ── Glossary ──────────────────────────────────────────────────────────────────
+
+/**
+ * A single glossary entry: enforces that `source` (in the original text)
+ * must be rendered as `target` in the translation.
+ */
+export interface GlossaryTerm {
+  id:            string;
+  source:        string;   // source term (EN)
+  target:        string;   // required translation
+  caseSensitive: boolean;  // false = case-insensitive match
+  wholeWord:     boolean;  // true = \bterm\b boundary match
+  enabled:       boolean;
+  notes?:        string;   // optional context / comment
+}
+
+/** Return a safe regex pattern for a literal string. */
+function escapeRegexLiteral(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Check which enabled glossary terms are violated for a given source+target pair.
+ * A violation = source contains the term BUT target does NOT contain the required translation.
+ */
+export function checkGlossaryViolations(
+  source:  string,
+  target:  string,
+  terms:   GlossaryTerm[],
+): GlossaryTerm[] {
+  return terms.filter(term => {
+    if (!term.enabled || !term.source.trim() || !term.target.trim()) return false;
+    const baseFlags  = term.caseSensitive ? ""  : "i";
+    const srcPattern = term.wholeWord
+      ? `\\b${escapeRegexLiteral(term.source)}\\b`
+      : escapeRegexLiteral(term.source);
+    const srcRe  = new RegExp(srcPattern, baseFlags);
+    if (!srcRe.test(source)) return false;           // term not in source → no obligation
+    const tgtRe  = new RegExp(escapeRegexLiteral(term.target), baseFlags);
+    return !tgtRe.test(target);                      // violation if target lacks the term
+  });
+}
+
+/**
+ * Build a glossary section string for injection into AI system prompts.
+ * Returns "" when there are no enabled terms.
+ */
+export function buildGlossaryPromptSection(
+  terms:    GlossaryTerm[],
+  langFrom: string,
+  langTo:   string,
+): string {
+  const active = terms.filter(t => t.enabled && t.source.trim() && t.target.trim());
+  if (active.length === 0) return "";
+  const lines = [
+    `[Glossaire terminologique — ${langFrom.toUpperCase()}→${langTo.toUpperCase()}]`,
+    ...active.map(t => `${t.source} = ${t.target}${t.notes ? ` (${t.notes})` : ""}`),
+  ];
+  return lines.join("\n");
+}
+
+/** Ordered list of games shown in the regex-rules dropdown. */
+export const REGEX_GAME_LIST = [
+  { id: "all",        label: "Tous les jeux (universel)" },
+  { id: "starfield",  label: "Starfield" },
+  { id: "skyrim_se",  label: "Skyrim / SSE" },
+  { id: "fallout_4",  label: "Fallout 4" },
+  { id: "fallout_76", label: "Fallout 76" },
+] as const;
+
+export type RegexGameId = typeof REGEX_GAME_LIST[number]["id"];
+
+/** Map a game display name (from detectGame) to a RegexGameId key. */
+export function gameNameToKey(gameName: string): RegexGameId | string {
+  const MAP: Record<string, RegexGameId> = {
+    "Starfield":  "starfield",
+    "Skyrim SE":  "skyrim_se",
+    "Enderal":    "skyrim_se",
+    "Fallout 4":  "fallout_4",
+    "Fallout 76": "fallout_76",
+  };
+  return MAP[gameName] ?? gameName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+}
+
 // ── Provider visual style ─────────────────────────────────────────────────────
 
 export interface ProviderStyle {

@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo, FuzzyMatch, FuzzySettings, FuzzySourceEntry } from "../types";
+import type { PluginInfo, PluginMetadata, TranslationEntry, FilterMode, EntryStatus, GroupStats, SortConfig, TranslationSession, DbInfo, FuzzyMatch, FuzzySettings, FuzzySourceEntry, RegexRule } from "../types";
+import { gameNameToKey } from "../types";
 import type { DefaultDbEntry } from "./useSettings";
 
 /** Unique key based on _idx (assigned at load time) to avoid collisions
@@ -36,6 +37,47 @@ export function detectGame(masters: string[]): string {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
+/** Apply enabled regex rules to an array of entries (pure, no state mutation).
+ *  Rules are tested against the `original` text; a match produces the translated string.
+ *  Entries that already have a translation or are ignored are left untouched.
+ *  Returns the modified entries array and the count of newly-filled entries. */
+export function applyRegexRulesInline(
+  entries: TranslationEntry[],
+  rules: RegexRule[],
+  overwrite = false,
+): { entries: TranslationEntry[]; matched: number } {
+  const active = rules.filter(r => r.enabled && r.pattern.trim());
+  if (active.length === 0) return { entries, matched: 0 };
+
+  // Pre-compile regexes (skip invalid ones silently)
+  const compiled: Array<{ re: RegExp; replacement: string }> = [];
+  for (const rule of active) {
+    try {
+      const flags = "g" + (rule.caseInsensitive !== false ? "i" : "");
+      compiled.push({ re: new RegExp(rule.pattern, flags), replacement: rule.replacement });
+    } catch { /* invalid regex — skip */ }
+  }
+  if (compiled.length === 0) return { entries, matched: 0 };
+
+  let matched = 0;
+  const result = entries.map(e => {
+    if (!overwrite && (e.translated || e.status === "ignored")) return e;
+    for (const { re, replacement } of compiled) {
+      re.lastIndex = 0;
+      if (re.test(e.original)) {
+        re.lastIndex = 0;
+        const translated = e.original.replace(re, replacement);
+        if (translated !== e.original) {
+          matched++;
+          return { ...e, translated, status: "pending" as EntryStatus };
+        }
+      }
+    }
+    return e;
+  });
+  return { entries: result, matched };
+}
+
 export function usePlugin({
   propagateIdentical   = true,
   dbApplyValidates     = true,
@@ -43,6 +85,7 @@ export function usePlugin({
   personalDbPath       = "",
   personalDbAutoApply  = true,
   fuzzySettings        = undefined,
+  regexRulesByGame     = {},
   targetLang           = "en",
 }: {
   propagateIdentical?:   boolean;
@@ -51,6 +94,7 @@ export function usePlugin({
   personalDbPath?:       string;
   personalDbAutoApply?:  boolean;
   fuzzySettings?:        FuzzySettings;
+  regexRulesByGame?:     Record<string, RegexRule[]>;
   targetLang?:           string;
 } = {}) {
   const [pluginInfo, setPluginInfo]         = useState<PluginInfo | null>(null);
@@ -233,6 +277,17 @@ export function usePlugin({
       const game = detectGame(meta.masters);
       indexed = await tryAutoLoadDb(game, dbFolder, indexed);
 
+      // ── Auto-apply regex rules (after BDD pipeline, on still-untranslated entries) ──
+      const gameKey = gameNameToKey(game);
+      const combinedRules = [
+        ...(regexRulesByGame["all"]     ?? []),
+        ...(regexRulesByGame[gameKey]   ?? []),
+      ];
+      if (combinedRules.length > 0) {
+        const { entries: afterRegex, matched: regexMatched } = applyRegexRulesInline(indexed, combinedRules);
+        if (regexMatched > 0) indexed = afterRegex;
+      }
+
       setPluginInfo((prev) => prev ? { ...prev, entries: indexed, entry_count: indexed.length } : null);
       setEntries(indexed);
 
@@ -334,6 +389,20 @@ export function usePlugin({
           setPluginInfo((prev) => prev ? { ...prev, entries: current } : null);
         }
       } catch { /* Personal DB not available — silently skip */ }
+
+      // ── Auto-apply regex rules (after personal DB, on still-untranslated entries) ──
+      const sessionGame    = detectGame(session.plugin_info.masters ?? []);
+      const sessionGameKey = gameNameToKey(sessionGame);
+      const sessionRules   = [
+        ...(regexRulesByGame["all"]           ?? []),
+        ...(regexRulesByGame[sessionGameKey]  ?? []),
+      ];
+      if (sessionRules.length > 0) {
+        setEntries(prev => {
+          const { entries: afterRegex } = applyRegexRulesInline(prev, sessionRules);
+          return afterRegex;
+        });
+      }
 
       // Always emit notification so the user knows what was restored
       if (sessionCount > 0 || personalMatched > 0) {
@@ -527,6 +596,23 @@ export function usePlugin({
         return { ...e, translated: tr, status: "validated" as EntryStatus };
       });
       count = c;
+      return next;
+    });
+    return count;
+  }, []);
+
+  // ── Manual regex rule apply (all session entries) ────────────────────────
+
+  /** Apply enabled regex rules to all untranslated (or all if overwrite=true) entries.
+   *  Returns the number of entries that received a translation. */
+  const applyRegexRulesToSession = useCallback((
+    rules: RegexRule[],
+    overwrite = false,
+  ): number => {
+    let count = 0;
+    setEntries(prev => {
+      const { entries: next, matched } = applyRegexRulesInline(prev, rules, overwrite);
+      count = matched;
       return next;
     });
     return count;
@@ -944,6 +1030,7 @@ export function usePlugin({
     translatedCount, pendingCount, ignoredCount, untranslatedCount, progressPercent,
     openPlugin, openStringsFile, loadSession,
     updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
+    applyRegexRulesToSession,
     applyPersonalDbManual,
     selectedCount: selectedKeys.size,
     columnFilters, setColumnFilter,

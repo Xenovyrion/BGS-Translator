@@ -89,16 +89,18 @@ BGS-Translator/
 │   │   │   ├── ToolBar.tsx           # Quick-action toolbar
 │   │   │   └── TopBar.tsx            # Window title + controls
 │   │   ├── settings/
-│   │   │   └── SettingsModal.tsx     # Settings dialog (tabs: General, Database, Auto Translation, Spell Check, Shortcuts, Theme, System)
+│   │   │   └── SettingsModal.tsx     # Settings dialog (tabs: General, Database, Auto Translation, Spell Check, Shortcuts, Theme, Regex, System)
 │   │   ├── shared/
 │   │   │   ├── ChangelogModal.tsx         # Release notes dialog
 │   │   │   ├── ConvertToBgtModal.tsx      # Floating draggable database converter (any format → .bgt/.bgtx)
 │   │   │   ├── DbManagerModal.tsx         # Floating database manager (browse, filter, edit, find & replace)
 │   │   │   ├── GlobalFindReplaceModal.tsx # Floating global find & replace window
+│   │   │   ├── GlossaryModal.tsx          # Floating terminology glossary (per-game, CSV import/export, violation checking)
 │   │   │   ├── LoadingOverlay.tsx         # Centered spinner overlay shown during plugin loading
 │   │   │   ├── LogPanel.tsx               # Activity / debug log panel
 │   │   │   ├── NotificationBanner.tsx     # Inline success/error notification bar
 │   │   │   ├── ProviderBadge.tsx          # Letter badge component for provider buttons (D/Ol/Cl/…)
+│   │   │   ├── QaPanel.tsx                # Floating quality-assurance panel (tag errors, missing translations…)
 │   │   │   ├── SessionPickerModal.tsx     # Session selection dialog
 │   │   │   ├── UpdateBanner.tsx           # Non-intrusive update notification
 │   │   │   └── UpdateModal.tsx            # Full update dialog (release notes + install)
@@ -292,6 +294,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Spell check overlay** — misspelled words highlighted with a wavy red underline directly in the textarea; click any underlined word to open a suggestions popup; suggestions replace the word in place
 - **Fuzzy suggestion bandeau** — when a fuzzy match is available, a coloured banner appears between the toolbar and the editor showing the suggested translation, its score (%), and its origin; one-click **Accept** (→ validated) or **Dismiss**
 - **Manual fuzzy trigger** — 🔍 button in the translation toolbar runs a single-entry fuzzy search on demand, with toast feedback when no sources or no match are found
+- **Glossary violations banner** — when the active glossary has terms that are not respected in the current translation, an amber warning strip lists each violated pair (`source → expected target`) with a link to open the glossary directly
 
 ### Spell Check
 - Powered by [Nuspell](https://nuspell.github.io/) 5.x (C++ library via Rust FFI)
@@ -512,11 +515,38 @@ Translate entries using large language models — local or cloud — directly fr
 
 **All providers share:**
 - Editable system prompt with `{source_lang}` / `{target_lang}` placeholders (reset to default available)
+- **Glossary injection** — when a terminology glossary is defined for the active game, the enabled terms are automatically prepended to the AI system prompt so the model respects required translations
 - Configurable temperature (0.0 – 1.0) and max output tokens
 - Keyboard shortcut (F1–F4 + configurable) for instant one-click translation
 - Bulk translation via the BulkActionBar (one button per enabled AI provider)
 - BGS tag protection — custom `<Tag>` markup is masked before the LLM call and restored in the output; the LLM never sees raw BGS tags
 - **Per-provider visual identity** — each provider button has a dedicated brand colour and letter badge (DeepL `D` blue · Ollama `Ol` green · Claude `Cl` amber · OpenAI `Gpt` teal · Cohere `Co` purple · browser launchers outlined in their brand colour); colours are theme-compatible (semi-transparent tints on idle, solid on active)
+
+### Automatic Regex Rules
+
+Define regex-based replacement rules that are automatically applied to untranslated entries after the database pipeline — and can be re-applied manually at any time.
+
+- **Per-game scoping** — rules are organised by game key (`all` · `starfield` · `skyrim_se` · `fallout_4` · `fallout_76`); when a plugin is open, the active set is `all` rules + the game-specific bucket; the Settings tab auto-selects the detected game
+- **Collapsible rule cards** — compact header (toggle · pattern summary · reorder ↑↓ · ⚙ expand · delete); expanded body shows description, pattern → replacement fields, case-insensitive toggle, and a live test area
+- **Live test** — type any source string in the test box and see the result (or "no match") in real time; invalid regex patterns are highlighted in red
+- **Regex cheat sheet** — collapsible quick-reference table with BGS-relevant examples; links to regex101.com
+- **Two default rules** (applied to all games, pre-installed):
+  - Pure numeric strings (`^\d+$`) → copy as-is
+  - Punctuation / whitespace-only strings → copy as-is
+- **Manual apply** — `Outils → Appliquer les règles regex` runs the active ruleset against all untranslated entries; a notification reports how many entries were filled
+- Settings tab: **Settings → Règles Regex**
+
+### Terminology Glossary
+
+Maintain a per-game glossary of required source → target term mappings.
+
+- **Floating, draggable modal** (`Outils → Glossaire terminologique…`) — stays open while working
+- **Per-game scoping** — same game-key convention as regex rules; game auto-selected from the open plugin
+- **Inline row editing** — click ✏ to edit source, target, case-sensitive flag, whole-word flag and notes directly in the table row; confirm with ✓ or cancel with ✕; `Ctrl+Enter` to save, `Escape` to cancel
+- **Search & filter** — live search across source, target and notes
+- **CSV import / export** — import a CSV to merge terms (duplicates by source+target are skipped); export the full glossary for the active game as a CSV
+- **Violation checking** — for each displayed entry in the Edit Panel, `checkGlossaryViolations` tests whether enabled terms are present in the source but absent from the translation; violations are shown as an amber banner listing each `source → expected target` pair
+- **AI injection** — enabled glossary terms are prepended to the system prompt of every AI translation call for the active game
 
 ### Global Find & Replace
 - Floating, draggable window (stays open while working — no backdrop blocking the table)

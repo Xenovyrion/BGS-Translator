@@ -7,10 +7,10 @@ import { useTranslation } from "react-i18next";
 
 import "./i18n";
 import { useSettings } from "./hooks/useSettings";
-import { usePlugin } from "./hooks/usePlugin";
+import { usePlugin, detectGame } from "./hooks/usePlugin";
 import { usePersonalDb } from "./hooks/usePersonalDb";
 import { useLayout } from "./hooks/useLayout";
-import { DEFAULT_SHORTCUTS, formatShortcut, matchProviderShortcut, mapProviderError } from "./types";
+import { DEFAULT_SHORTCUTS, formatShortcut, matchProviderShortcut, mapProviderError, gameNameToKey, checkGlossaryViolations, buildGlossaryPromptSection } from "./types";
 import type { SortConfig, TranslationEntry, ShortcutDef, SessionListItem, ProviderMeta, ActiveProvider } from "./types";
 import { THEME_PRESETS, DEFAULT_RECORD_COLORS } from "./themes";
 import type { IconSetId } from "./themes";
@@ -37,6 +37,7 @@ import LoadingOverlay from "./components/shared/LoadingOverlay";
 import type { Notification } from "./components/shared/NotificationBanner";
 import { QaPanel } from "./components/shared/QaPanel";
 import DbManagerModal from "./components/shared/DbManagerModal";
+import GlossaryModal from "./components/shared/GlossaryModal";
 
 interface UpdateInfo { version: string; notes?: string }
 
@@ -92,6 +93,7 @@ export default function App() {
     translatedCount, pendingCount, ignoredCount, untranslatedCount,
     openPlugin, openStringsFile, loadSession,
     updateTranslation, setStatus, navigateBy, bulkSetStatus, applyImportedTranslations, applyTextBasedImport,
+    applyRegexRulesToSession,
     applyPersonalDbManual,
     selectedCount,
     columnFilters, setColumnFilter,
@@ -110,6 +112,7 @@ export default function App() {
     personalDbPath:      settings.activePersonalDbPath ?? "",
     personalDbAutoApply: settings.personalDbAutoApply  !== false,
     fuzzySettings:       settings.fuzzy,
+    regexRulesByGame:    settings.regexRulesByGame      ?? {},
     targetLang:          settings.targetLanguage       ?? "en",
   });
 
@@ -119,6 +122,32 @@ export default function App() {
     peekPersonalDb,
     setPersonalDbInfo,
   } = usePersonalDb();
+
+  // Detected game from the currently loaded plugin (e.g. "Starfield", "Skyrim SE")
+  const detectedGame = useMemo(
+    () => detectGame(pluginInfo?.masters ?? []),
+    [pluginInfo?.masters], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Active glossary terms = "all" + game-specific, enabled only
+  const activeGlossaryTerms = useMemo(() => {
+    const byGame  = settings.glossaryByGame ?? {};
+    const gameKey = detectedGame ? gameNameToKey(detectedGame) : "";
+    return [
+      ...(byGame["all"]              ?? []),
+      ...(gameKey ? (byGame[gameKey] ?? []) : []),
+    ].filter(t => t.enabled);
+  }, [settings.glossaryByGame, detectedGame]);
+
+  // Glossary violations for the currently selected entry
+  const glossaryViolations = useMemo(() => {
+    if (!selectedEntry || !activeGlossaryTerms.length) return [];
+    return checkGlossaryViolations(
+      selectedEntry.original,
+      selectedEntry.translated ?? "",
+      activeGlossaryTerms,
+    );
+  }, [selectedEntry, activeGlossaryTerms]);
 
   // Source path resolved interactively when session lacks it
   const [resolvedSourcePath, setResolvedSourcePath] = useState<string>("");
@@ -166,6 +195,7 @@ export default function App() {
   const [showCompare,        setShowCompare]        = useState(false);
   const [showQaPanel,        setShowQaPanel]        = useState(false);
   const [showDbManager,      setShowDbManager]      = useState(false);
+  const [showGlossary,       setShowGlossary]       = useState(false);
   const [dbManagerInitSearch, setDbManagerInitSearch] = useState("");
   const [compareSessions,    setCompareSessions]    = useState<SessionListItem[]>([]);
   const [defaultDbDir,       setDefaultDbDir]       = useState<string>("");
@@ -788,6 +818,26 @@ export default function App() {
     clearSelection();
   }, [settings.activePersonalDbPath, applyPersonalDbManual, selectedKeys, notify, t, clearSelection]);
 
+  /** Manually apply regex rules (universal + game-specific) to all untranslated entries. */
+  const handleApplyRegexRules = useCallback(() => {
+    const byGame  = settings.regexRulesByGame ?? {};
+    const gameKey = detectedGame ? gameNameToKey(detectedGame) : "";
+    const rules   = [
+      ...(byGame["all"]              ?? []),
+      ...(gameKey ? (byGame[gameKey] ?? []) : []),
+    ].filter(r => r.enabled);
+    if (rules.length === 0) {
+      notify(`ℹ ${t("regex_rules.apply_none")}`, "success", undefined, 3000);
+      return;
+    }
+    const count = applyRegexRulesToSession(rules);
+    if (count > 0) {
+      notify(`✓ ${t("regex_rules.apply_success", { count })}`, "success", undefined, 4000);
+    } else {
+      notify(`ℹ ${t("regex_rules.apply_none")}`, "success", undefined, 3000);
+    }
+  }, [settings.regexRulesByGame, detectedGame, applyRegexRulesToSession, notify, t]);
+
   // ── Build active providers list ──────────────────────────────────────────
   const activeProviders = useMemo<ActiveProvider[]>(() => {
     return (settings.providerEntries ?? [])
@@ -812,11 +862,18 @@ export default function App() {
     setTranslateLoadingId(provider.id);
     setTranslateErrorMap(prev => { const m = new Map(prev); m.delete(provider.id); return m; });
     try {
+      // Build glossary system-prompt injection (AI providers only)
+      const glossarySection = buildGlossaryPromptSection(
+        activeGlossaryTerms,
+        "en",
+        settings.targetLanguage ?? "fr",
+      );
       const result = await invoke<string>("translate_one_cmd", {
-        config:     provider.config,
-        text:       entry.original,
-        sourceLang: null,
-        targetLang: settings.targetLanguage,
+        config:          provider.config,
+        text:            entry.original,
+        sourceLang:      null,
+        targetLang:      settings.targetLanguage,
+        systemPromptExtra: glossarySection || null,
       });
       updateTranslation(entry._idx ?? 0, result);
     } catch (e) {
@@ -829,7 +886,7 @@ export default function App() {
     } finally {
       setTranslateLoadingId(null);
     }
-  }, [settings.targetLanguage, updateTranslation, t]);
+  }, [settings.targetLanguage, activeGlossaryTerms, updateTranslation, t]);
 
   // ── Open browser launcher ─────────────────────────────────────────────────
   const handleOpenBrowserWith = useCallback(async (provider: ActiveProvider, text: string) => {
@@ -970,6 +1027,9 @@ export default function App() {
         onOpenQa={pluginInfo ? () => setShowQaPanel(true) : undefined}
         onOpenDbManager={() => { setDbManagerInitSearch(""); setShowDbManager(true); }}
         dbManagerShortcut={formatShortcut(sc.searchDb ?? DEFAULT_SHORTCUTS.searchDb)}
+        onApplyRegexRules={pluginInfo ? handleApplyRegexRules : undefined}
+        hasRegexRules={Object.values(settings.regexRulesByGame ?? {}).flat().some(r => r.enabled)}
+        onOpenGlossary={() => setShowGlossary(true)}
       />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────── */}
@@ -1131,6 +1191,8 @@ export default function App() {
                     }
                   : undefined}
                 fuzzyScanning={fuzzyScanning}
+                glossaryViolations={glossaryViolations.length > 0 ? glossaryViolations : undefined}
+                onOpenGlossary={() => setShowGlossary(true)}
               />
             )}
 
@@ -1159,6 +1221,7 @@ export default function App() {
           onOpenThemeManager={() => { setShowSettings(false); setShowThemeManager(true); }}
           onResetLayout={resetLayout}
           defaultExportDir={defaultExportDir}
+          currentGame={detectedGame || undefined}
         />
       )}
 
@@ -1237,6 +1300,17 @@ export default function App() {
           onClose={() => setShowCompare(false)}
           onRecover={handleRecoverDiff}
           onRecoverAll={handleRecoverAllDiff}
+        />
+      )}
+
+      {showGlossary && (
+        <GlossaryModal
+          glossaryByGame={settings.glossaryByGame ?? {}}
+          currentGame={detectedGame || undefined}
+          langFrom="en"
+          langTo={settings.targetLanguage ?? "fr"}
+          onUpdate={(next) => updateSettings({ glossaryByGame: next })}
+          onClose={() => setShowGlossary(false)}
         />
       )}
 

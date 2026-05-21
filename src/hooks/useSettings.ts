@@ -3,7 +3,27 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_PRESETS } from "../themes";
 import type { ThemePreset } from "../themes";
 import i18n from "../i18n";
-import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type ProviderEntry, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES } from "../types";
+import { type KeyboardShortcuts, DEFAULT_SHORTCUTS, type EditPanelShortcuts, DEFAULT_EDIT_SHORTCUTS, type FuzzySettings, DEFAULT_FUZZY_SETTINGS, type ProviderEntry, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES, type RegexRule, type GlossaryTerm } from "../types";
+
+/** Two universal default rules pre-populated for every installation. */
+const DEFAULT_UNIVERSAL_RULES: RegexRule[] = [
+  {
+    id: "default_numeric",
+    pattern: "^\\d+$",
+    replacement: "$&",
+    caseInsensitive: false,
+    enabled: true,
+    description: "Chaîne purement numérique → copier tel quel",
+  },
+  {
+    id: "default_punct_only",
+    pattern: "^[\\s.,!?:;\\-_\\u2026]+$",
+    replacement: "$&",
+    caseInsensitive: false,
+    enabled: true,
+    description: "Ponctuation / espaces seuls → copier tel quel",
+  },
+];
 
 export interface DefaultDbEntry {
   path:    string;
@@ -48,6 +68,10 @@ export interface AppSettings {
   exportStringsAsBa2: boolean; // true = pack into a BA2 archive; false = loose files
   // Log retention: number of days before old log files are purged (0 = never)
   logRetentionDays: number;
+  // Regex replacement rules — keyed by game id ("all" | "starfield" | "skyrim_se" | …)
+  regexRulesByGame: Record<string, RegexRule[]>;
+  // Glossary terms — keyed by game id (same convention as regexRulesByGame)
+  glossaryByGame: Record<string, GlossaryTerm[]>;
 }
 
 const STORAGE_KEY = "bgstranslator_settings_v1";
@@ -82,6 +106,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fuzzy: { ...DEFAULT_FUZZY_SETTINGS },
   exportStringsAsBa2: true,
   logRetentionDays: 30,
+  regexRulesByGame: { all: [...DEFAULT_UNIVERSAL_RULES] },
+  glossaryByGame: {},
 };
 
 export function useSettings() {
@@ -156,10 +182,19 @@ export function useSettings() {
             : { ...e, config: { ...e.config, customModels: cleaned } };
         });
 
+        // ── Migrate regexRules (flat array) → regexRulesByGame ──────────────────
+        let regexRulesByGame: Record<string, RegexRule[]> =
+          parsed.regexRulesByGame ?? { all: [...DEFAULT_UNIVERSAL_RULES] };
+        // If user had the old flat array, move it to "all" bucket (preserves their rules)
+        if (!parsed.regexRulesByGame && Array.isArray(parsed.regexRules) && parsed.regexRules.length > 0) {
+          regexRulesByGame = { all: parsed.regexRules as RegexRule[] };
+        }
+
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
           providerEntries,
+          regexRulesByGame,
           // Merge nested objects so new keys added in later versions always have a default
           shortcuts:     { ...DEFAULT_SHORTCUTS,       ...(parsed.shortcuts      ?? {}) },
           editShortcuts: { ...DEFAULT_EDIT_SHORTCUTS,  ...(parsed.editShortcuts  ?? {}) },

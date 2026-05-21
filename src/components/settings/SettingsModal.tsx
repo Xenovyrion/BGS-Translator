@@ -7,8 +7,8 @@ import { THEME_PRESETS } from "../../themes";
 import type { ThemePreset } from "../../themes";
 import type { AppSettings } from "../../hooks/useSettings";
 import { DEFAULT_SETTINGS } from "../../hooks/useSettings";
-import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig, ProviderEntry } from "../../types";
-import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES, DEFAULT_AI_SYSTEM_PROMPT, SHORTCUT_OPTIONS } from "../../types";
+import type { ShortcutDef, KeyboardShortcuts, EditPanelShortcuts, ProviderMeta, StoredProviderConfig, ProviderEntry, RegexRule } from "../../types";
+import { DEFAULT_SHORTCUTS, DEFAULT_EDIT_SHORTCUTS, DEFAULT_FUZZY_SETTINGS, DEFAULT_PROVIDER_ENTRIES, DEFAULT_AI_PROVIDER_ENTRIES, DEFAULT_AI_SYSTEM_PROMPT, SHORTCUT_OPTIONS, REGEX_GAME_LIST, gameNameToKey } from "../../types";
 import {
   IconSettings, IconClose, IconFolder,
   IconReplace, IconCheck, IconDatabase, IconSort, IconRefresh, IconSearch,
@@ -16,8 +16,8 @@ import {
 } from "../../icons";
 import type { ReactNode } from "react";
 
-type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "ai" | "systeme";
-type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string };
+type Tab = "apparence" | "raccourcis" | "orthographe" | "database" | "divers" | "api" | "ai" | "regex" | "systeme";
+type TabProps = { settings: AppSettings; onUpdate: (u: Partial<AppSettings>) => void; onOpenThemeManager?: () => void; onResetLayout?: () => void; defaultExportDir?: string; currentGame?: string };
 
 // ── Modal principal ───────────────────────────────────────────────────────────
 
@@ -28,9 +28,10 @@ interface Props {
   onOpenThemeManager: () => void;
   onResetLayout?:     () => void;
   defaultExportDir?:  string;
+  currentGame?:       string;  // detected game name from the loaded plugin (e.g. "Starfield")
 }
 
-export default function SettingsModal({ settings, onUpdate, onClose, onOpenThemeManager, onResetLayout, defaultExportDir = "" }: Props) {
+export default function SettingsModal({ settings, onUpdate, onClose, onOpenThemeManager, onResetLayout, defaultExportDir = "", currentGame }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("apparence");
 
@@ -42,6 +43,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
     { id: "divers",      labelKey: "settings_modal.tab_misc",         icon: <IconRefresh size={13} /> },
     { id: "api",         labelKey: "settings_modal.tab_api",          icon: <IconReplace size={13} /> },
     { id: "ai",          labelKey: "settings_modal.tab_ai",           icon: <IconSearch size={13} /> },
+    { id: "regex",       labelKey: "settings_modal.tab_regex",        icon: <IconReplace size={13} /> },
     { id: "systeme",     labelKey: "settings_modal.tab_system",       icon: <IconSettings size={13} /> },
   ];
 
@@ -129,6 +131,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, onOpenTheme
           {tab === "divers"      && <DiversTab      settings={settings} onUpdate={onUpdate} defaultExportDir={defaultExportDir} />}
           {tab === "api"         && <ApiTab         settings={settings} onUpdate={onUpdate} />}
           {tab === "ai"          && <AiTab          settings={settings} onUpdate={onUpdate} />}
+          {tab === "regex"       && <RegexRulesTab  settings={settings} onUpdate={onUpdate} currentGame={currentGame} />}
           {tab === "systeme"     && <SystemeTab     settings={settings} onUpdate={onUpdate} />}
         </div>
 
@@ -3208,6 +3211,381 @@ function HelpText({ children }: { children: React.ReactNode }) {
     </p>
   );
 }
+
+// ── Regex Rules tab ───────────────────────────────────────────────────────────
+
+const REGEX_CHEAT_SHEET = [
+  { syntax: "(.+)",       meaning: "Capture tout le reste",            example: "^Glass (.+)$  →  $1 en verre" },
+  { syntax: "$1  $2 …",  meaning: "Groupe capturé N°1, 2…",           example: "([A-Z]\\w+) Sword  →  Épée $1" },
+  { syntax: "$&",         meaning: "Texte entier (copie)",             example: "^\\d+$  →  $&" },
+  { syntax: "^  $",       meaning: "Début / fin de chaîne",           example: "^The " },
+  { syntax: "\\d+",       meaning: "Un ou plusieurs chiffres",        example: "\\d+ Gold  →  $& pièces d'or" },
+  { syntax: "\\b",        meaning: "Limite de mot",                   example: "\\bPlayer\\b  →  Joueur" },
+  { syntax: "?",          meaning: "0 ou 1 fois (optionnel)",         example: "colou?r  →  couleur" },
+  { syntax: "(?:…)",      meaning: "Groupe non capturant",            example: "(?:DLC[12]) Item" },
+];
+
+function RegexRulesTab({ settings, onUpdate, currentGame }: TabProps) {
+  const { t } = useTranslation();
+
+  // Auto-select the detected game; fall back to "all"
+  const autoGameId = currentGame ? gameNameToKey(currentGame) : "all";
+  const [selectedGame, setSelectedGame] = useState<string>(
+    REGEX_GAME_LIST.some(g => g.id === autoGameId) ? autoGameId : "all"
+  );
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
+  const [newRuleId,      setNewRuleId]      = useState<string | null>(null);
+
+  const byGame                  = settings.regexRulesByGame ?? {};
+  const rules: RegexRule[]      = byGame[selectedGame] ?? [];
+
+  const updateRules = (next: RegexRule[]) =>
+    onUpdate({ regexRulesByGame: { ...byGame, [selectedGame]: next } });
+
+  const addRule = () => {
+    const r: RegexRule = {
+      id: Date.now().toString(), pattern: "", replacement: "",
+      caseInsensitive: true, enabled: true, description: "",
+    };
+    updateRules([...rules, r]);
+    setNewRuleId(r.id);
+  };
+  const deleteRule = (id: string) => { updateRules(rules.filter(r => r.id !== id)); setNewRuleId(null); };
+  const toggleRule = (id: string) => updateRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+  const moveRule   = (id: string, dir: -1 | 1) => {
+    const idx = rules.findIndex(r => r.id === id);
+    if (idx < 0) return;
+    const next = [...rules];
+    const si = idx + dir;
+    if (si < 0 || si >= next.length) return;
+    [next[idx], next[si]] = [next[si], next[idx]];
+    updateRules(next);
+  };
+  const patchRule = (id: string, patch: Partial<RegexRule>) =>
+    updateRules(rules.map(r => r.id === id ? { ...r, ...patch } : r));
+
+  const selectStyle: React.CSSProperties = {
+    background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 7,
+    color: "var(--text-1)", fontSize: 12, padding: "6px 10px", cursor: "pointer", outline: "none",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Section first label={t("settings_modal.tab_regex")}>
+        <HelpText>{t("regex_rules.desc")}</HelpText>
+
+        {/* ── Game selector + doc link ─────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 600 }}>
+            {t("regex_rules.game_label")}
+          </label>
+          <select value={selectedGame} onChange={e => setSelectedGame(e.target.value)} style={selectStyle}>
+            {REGEX_GAME_LIST.map(g => (
+              <option key={g.id} value={g.id}>{g.label}</option>
+            ))}
+          </select>
+          {currentGame && selectedGame !== gameNameToKey(currentGame) && (
+            <button
+              onClick={() => {
+                const k = gameNameToKey(currentGame);
+                if (REGEX_GAME_LIST.some(g => g.id === k)) setSelectedGame(k);
+              }}
+              style={{ ...selectStyle, padding: "6px 10px", fontSize: 11, color: "var(--accent)", border: "1px solid var(--accent)" }}
+            >
+              ↩ {REGEX_GAME_LIST.find(g => g.id === gameNameToKey(currentGame))?.label ?? currentGame}
+            </button>
+          )}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setShowCheatSheet(v => !v)}
+              style={{ ...selectStyle, fontSize: 11, color: "var(--text-2)" }}
+            >
+              {showCheatSheet ? "▲" : "▼"} {t("regex_rules.cheatsheet_btn")}
+            </button>
+            <a
+              href="https://regex101.com"
+              target="_blank" rel="noreferrer"
+              style={{ ...selectStyle, textDecoration: "none", color: "var(--accent)", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              ↗ regex101
+            </a>
+          </div>
+        </div>
+
+        {/* ── Cheat sheet ──────────────────────────────────────────────── */}
+        {showCheatSheet && (
+          <div style={{
+            marginBottom: 16, borderRadius: 8, border: "1px solid var(--border)",
+            background: "var(--bg-hover)", padding: "12px 14px",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              {t("regex_rules.cheatsheet_title")}
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ color: "var(--text-3)" }}>
+                  <th style={{ textAlign: "left", paddingBottom: 4, width: "14%", fontWeight: 600 }}>{t("regex_rules.cs_syntax")}</th>
+                  <th style={{ textAlign: "left", paddingBottom: 4, width: "30%", fontWeight: 600 }}>{t("regex_rules.cs_meaning")}</th>
+                  <th style={{ textAlign: "left", paddingBottom: 4, fontWeight: 600 }}>{t("regex_rules.cs_example")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {REGEX_CHEAT_SHEET.map((row, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)", lineHeight: 1.8 }}>
+                    <td style={{ fontFamily: "monospace", color: "var(--accent)", paddingRight: 8 }}>{row.syntax}</td>
+                    <td style={{ color: "var(--text-2)", paddingRight: 8 }}>{row.meaning}</td>
+                    <td style={{ fontFamily: "monospace", color: "var(--text-3)" }}>{row.example}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── Rule list ────────────────────────────────────────────────── */}
+        {rules.length === 0 && (
+          <div style={{ padding: "20px 0", textAlign: "center", color: "var(--text-3)", fontSize: 12, fontStyle: "italic" }}>
+            {t("regex_rules.empty")}
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {rules.map((rule, idx) => (
+            <RegexRuleCard
+              key={rule.id}
+              rule={rule}
+              isFirst={idx === 0}
+              isLast={idx === rules.length - 1}
+              autoExpand={rule.id === newRuleId}
+              onToggle={() => toggleRule(rule.id)}
+              onDelete={() => deleteRule(rule.id)}
+              onMoveUp={() => moveRule(rule.id, -1)}
+              onMoveDown={() => moveRule(rule.id, 1)}
+              onPatch={(patch) => patchRule(rule.id, patch)}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={addRule}
+          style={{
+            marginTop: 10, alignSelf: "flex-start",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "7px 14px", borderRadius: 7,
+            background: "var(--accent)", color: "#fff",
+            border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+          }}
+        >
+          + {t("regex_rules.add")}
+        </button>
+      </Section>
+    </div>
+  );
+}
+
+// ── Regex Rule Card (collapsible) ─────────────────────────────────────────────
+
+function RegexRuleCard({
+  rule, isFirst, isLast, autoExpand,
+  onToggle, onDelete, onMoveUp, onMoveDown, onPatch,
+}: {
+  rule: RegexRule;
+  isFirst: boolean;
+  isLast: boolean;
+  autoExpand: boolean;
+  onToggle:   () => void;
+  onDelete:   () => void;
+  onMoveUp:   () => void;
+  onMoveDown: () => void;
+  onPatch:    (p: Partial<RegexRule>) => void;
+}) {
+  const { t } = useTranslation();
+  const [expanded,  setExpanded]  = useState(autoExpand);
+  const [testInput, setTestInput] = useState("");
+
+  // Pattern validity check
+  const patternValid = (() => {
+    if (!rule.pattern.trim()) return true;
+    try { new RegExp(rule.pattern); return true; }
+    catch { return false; }
+  })();
+
+  // Live preview
+  const preview = (() => {
+    if (!testInput || !rule.pattern.trim() || !patternValid) return null;
+    try {
+      const flags = "g" + (rule.caseInsensitive !== false ? "i" : "");
+      const re = new RegExp(rule.pattern, flags);
+      if (!re.test(testInput)) return null;
+      re.lastIndex = 0;
+      const result = testInput.replace(re, rule.replacement);
+      return result !== testInput ? result : null;
+    } catch { return null; }
+  })();
+
+  const monoInput: React.CSSProperties = {
+    background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 6,
+    padding: "5px 9px", fontSize: 12, color: "var(--text-1)",
+    fontFamily: "monospace", outline: "none", width: "100%", boxSizing: "border-box",
+  };
+  const patternBorder = !patternValid ? "1px solid var(--danger, #e05)" : "1px solid var(--border)";
+
+  // Summary for compact row
+  const summary = rule.description?.trim()
+    || (rule.pattern ? `/${rule.pattern}/ → ${rule.replacement || "…"}` : t("regex_rules.new_rule"));
+
+  return (
+    <div style={{
+      border: "1px solid var(--border)", borderRadius: 8,
+      background: "var(--bg-card)", overflow: "hidden",
+      opacity: rule.enabled ? 1 : 0.55,
+    }}>
+      {/* ── Compact header ──────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+        background: expanded ? "var(--bg-hover)" : "transparent",
+        borderBottom: expanded ? "1px solid var(--border)" : "none",
+      }}>
+        {/* Toggle switch */}
+        <button
+          onClick={onToggle}
+          title={rule.enabled ? t("regex_rules.disable") : t("regex_rules.enable")}
+          style={{
+            width: 30, height: 17, borderRadius: 8.5, border: "none",
+            background: rule.enabled ? "var(--accent)" : "var(--border)",
+            cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s",
+          }}
+        >
+          <span style={{
+            position: "absolute", top: 2,
+            left: rule.enabled ? 15 : 2,
+            width: 13, height: 13, borderRadius: "50%",
+            background: "#fff", transition: "left 0.2s",
+          }} />
+        </button>
+
+        {/* Summary text (click to expand) */}
+        <span
+          onClick={() => setExpanded(v => !v)}
+          style={{
+            flex: 1, fontSize: 12, color: "var(--text-1)",
+            fontFamily: rule.description ? "inherit" : "monospace",
+            cursor: "pointer", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
+          }}
+        >
+          {summary}
+        </span>
+
+        {/* Reorder + expand + delete */}
+        <button onClick={onMoveUp}   disabled={isFirst} title="↑" style={ruleSmallBtn}> ↑ </button>
+        <button onClick={onMoveDown} disabled={isLast}  title="↓" style={ruleSmallBtn}> ↓ </button>
+        <button
+          onClick={() => setExpanded(v => !v)}
+          title={expanded ? t("regex_rules.collapse") : t("regex_rules.expand")}
+          style={{ ...ruleSmallBtn, color: expanded ? "var(--accent)" : "var(--text-2)" }}
+        >⚙</button>
+        <button
+          onClick={onDelete}
+          title={t("regex_rules.delete")}
+          style={{ ...ruleSmallBtn, color: "var(--danger, #e05)" }}
+        >✕</button>
+      </div>
+
+      {/* ── Expanded body ───────────────────────────────────────────── */}
+      {expanded && (
+        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Description */}
+          <div>
+            <label style={fieldLabel}>{t("regex_rules.description_label")}</label>
+            <input
+              value={rule.description ?? ""}
+              onChange={e => onPatch({ description: e.target.value })}
+              placeholder={t("regex_rules.description_placeholder")}
+              style={{ ...monoInput, fontFamily: "inherit" }}
+            />
+          </div>
+
+          {/* Pattern → Replacement */}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabel}>{t("regex_rules.pattern_label")}</label>
+              <input
+                value={rule.pattern}
+                onChange={e => onPatch({ pattern: e.target.value })}
+                placeholder={t("regex_rules.pattern_placeholder")}
+                style={{ ...monoInput, border: patternBorder }}
+              />
+              {!patternValid && (
+                <span style={{ fontSize: 10, color: "var(--danger, #e05)", marginTop: 2, display: "block" }}>
+                  {t("regex_rules.invalid_regex")}
+                </span>
+              )}
+            </div>
+            <span style={{ color: "var(--text-3)", fontSize: 16, paddingBottom: 6, flexShrink: 0 }}>→</span>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabel}>{t("regex_rules.replacement_label")}</label>
+              <input
+                value={rule.replacement}
+                onChange={e => onPatch({ replacement: e.target.value })}
+                placeholder={t("regex_rules.replacement_placeholder")}
+                style={monoInput}
+              />
+            </div>
+          </div>
+
+          {/* Options */}
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "var(--text-2)" }}>
+            <input
+              type="checkbox"
+              checked={rule.caseInsensitive !== false}
+              onChange={e => onPatch({ caseInsensitive: e.target.checked })}
+              style={{ accentColor: "var(--accent)", cursor: "pointer" }}
+            />
+            {t("regex_rules.case_insensitive")}
+          </label>
+
+          {/* Live test */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: "var(--bg-hover)", borderRadius: 7, padding: "8px 10px" }}>
+            <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, fontWeight: 600 }}>
+              {t("regex_rules.test_input")}
+            </span>
+            <input
+              value={testInput}
+              onChange={e => setTestInput(e.target.value)}
+              placeholder={t("regex_rules.test_placeholder")}
+              style={{ ...monoInput, flex: 1, minWidth: 100, fontFamily: "inherit" }}
+            />
+            {testInput && (
+              <span style={{ fontSize: 11, flexShrink: 0 }}>
+                {!patternValid ? (
+                  <span style={{ color: "var(--danger, #e05)" }}>{t("regex_rules.invalid_regex")}</span>
+                ) : preview != null ? (
+                  <span style={{ color: "var(--accent)" }}>
+                    {t("regex_rules.test_result")}&nbsp;<strong style={{ fontFamily: "monospace" }}>{preview}</strong>
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--text-3)", fontStyle: "italic" }}>{t("regex_rules.no_match")}</span>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const fieldLabel: React.CSSProperties = {
+  display: "block", fontSize: 10, fontWeight: 600,
+  color: "var(--text-3)", textTransform: "uppercase",
+  letterSpacing: "0.06em", marginBottom: 4,
+};
+
+const ruleSmallBtn: React.CSSProperties = {
+  background: "none", border: "none", borderRadius: 4,
+  cursor: "pointer", color: "var(--text-3)", padding: "3px 6px",
+  fontSize: 12, lineHeight: 1,
+};
 
 function PillBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (

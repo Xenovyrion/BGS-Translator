@@ -50,6 +50,9 @@ interface Props {
   onOpenQa?:               () => void;
   onOpenDbManager?:        () => void;
   dbManagerShortcut?:      string;   // e.g. "Ctrl+D"
+  onApplyRegexRules?:      () => void;
+  hasRegexRules?:          boolean;
+  onOpenGlossary?:         () => void;
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -67,6 +70,8 @@ export default function MenuBar({
   onApplyPersonalDb, hasActivePersonalDb,
   onOpenQa,
   onOpenDbManager, dbManagerShortcut,
+  onApplyRegexRules, hasRegexRules,
+  onOpenGlossary,
 }: Props) {
   const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -158,6 +163,9 @@ export default function MenuBar({
       items: [
         { label: t("menu.tools_compare"),   onClick: onOpenCompare ? () => { close(); onOpenCompare!(); } : undefined },
         { label: t("menu.tools_qa"), shortcut: "Ctrl+Q", disabled: !pluginLoaded || loading, onClick: onOpenQa ? () => { close(); onOpenQa!(); } : undefined },
+        { separator: true },
+        { label: t("menu.tools_apply_regex"), disabled: !pluginLoaded || loading || !hasRegexRules, onClick: onApplyRegexRules ? () => { close(); onApplyRegexRules!(); } : undefined },
+        { label: t("menu.tools_glossary"),   onClick: onOpenGlossary ? () => { close(); onOpenGlossary!(); } : undefined },
         { separator: true },
         { label: t("menu.tools_settings"), shortcut: "Ctrl+,", onClick: () => { close(); onSettings(); } },
       ],

@@ -68,6 +68,10 @@ interface Props {
   /** Manual fuzzy trigger for this single entry */
   onRunFuzzy?:        () => void;
   fuzzyScanning?:     boolean;
+  /** Glossary violations for the current source+translation pair. */
+  glossaryViolations?: import("../../types").GlossaryTerm[];
+  /** Opens the glossary modal. */
+  onOpenGlossary?:     () => void;
 }
 
 // ── Layout constants ───────────────────────────────────────────────────────
@@ -189,7 +193,7 @@ function ToolBtn({ children, onClick, title, active, disabled, style }: {
 
 // ── EditPanel ──────────────────────────────────────────────────────────────
 const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
-  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, activeApiProviders = [], activeLauncherProviders = [], translateLoadingId, translateErrorMap, onTranslateWith, onOpenBrowserWith, onApplyPersonalDb, onAddToPersonalDb, personalDbName, onOpenDbSearch, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false },
+  { entry, onTranslate, onSetStatus, onClose, onFocusTable, panelHeight, onPanelResize, recordColors, editShortcuts: editSc, spellLang, spellRealtime, spellDebounce = 600, activeApiProviders = [], activeLauncherProviders = [], translateLoadingId, translateErrorMap, onTranslateWith, onOpenBrowserWith, onApplyPersonalDb, onAddToPersonalDb, personalDbName, onOpenDbSearch, fuzzyMatch, onAcceptFuzzy, onDismissFuzzy, onRunFuzzy, fuzzyScanning = false, glossaryViolations, onOpenGlossary },
   ref,
 ) {
   const { t } = useTranslation();
@@ -664,6 +668,44 @@ const EditPanel = forwardRef<EditPanelHandle, Props>(function EditPanel(
           >
             <IconClose size={12} /> {t("fuzzy.dismiss")}
           </button>
+        </div>
+      )}
+
+      {/* ── Glossary violations banner ────────────────────────────────── */}
+      {glossaryViolations && glossaryViolations.length > 0 && (
+        <div style={{
+          flexShrink: 0, padding: "4px 10px",
+          background: "rgba(245,158,11,0.12)",
+          borderBottom: "1px solid rgba(245,158,11,0.35)",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--warning, #f59e0b)", flexShrink: 0 }}>
+            ⚠ {t("glossary.violation_banner_title")}
+          </span>
+          {glossaryViolations.map(term => (
+            <span key={term.id} style={{
+              fontSize: 10, padding: "1px 6px",
+              background: "rgba(245,158,11,0.18)", border: "1px solid rgba(245,158,11,0.4)",
+              borderRadius: 4, color: "var(--warning, #f59e0b)",
+              fontFamily: "monospace", whiteSpace: "nowrap",
+            }}>
+              {term.source} → {term.target}
+            </span>
+          ))}
+          {onOpenGlossary && (
+            <button
+              onClick={onOpenGlossary}
+              style={{
+                marginLeft: "auto", height: 20, padding: "0 7px", flexShrink: 0,
+                borderRadius: 4, border: "1px solid rgba(245,158,11,0.5)",
+                cursor: "pointer", fontSize: 10, fontWeight: 600,
+                background: "transparent", color: "var(--warning, #f59e0b)",
+                boxSizing: "border-box",
+              }}
+            >
+              {t("glossary.open_btn")}
+            </button>
+          )}
         </div>
       )}
 
