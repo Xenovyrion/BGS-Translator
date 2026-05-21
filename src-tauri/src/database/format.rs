@@ -78,13 +78,14 @@ pub fn save_bgt(db: &TranslationDb, path: &std::path::Path) -> Result<(), String
         lang_to:   db.lang_to.clone(),
         entries:   db.entries().to_vec(),
     };
-    let encoded     = bincode::serialize(&data).map_err(|e| e.to_string())?;
-    let compressed  = zstd::encode_all(encoded.as_slice(), 3).map_err(|e| e.to_string())?;
-    let mut file    = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    file.write_all(BGT_MAGIC).map_err(|e| e.to_string())?;
-    file.write_all(&[BGT_VERSION]).map_err(|e| e.to_string())?;
-    file.write_all(&compressed).map_err(|e| e.to_string())?;
-    Ok(())
+    let encoded    = bincode::serialize(&data).map_err(|e| e.to_string())?;
+    let compressed = zstd::encode_all(encoded.as_slice(), 3).map_err(|e| e.to_string())?;
+    let out_dir    = path.parent().unwrap_or(std::path::Path::new("."));
+    let mut tmp    = tempfile::NamedTempFile::new_in(out_dir).map_err(|e| e.to_string())?;
+    tmp.write_all(BGT_MAGIC).map_err(|e| e.to_string())?;
+    tmp.write_all(&[BGT_VERSION]).map_err(|e| e.to_string())?;
+    tmp.write_all(&compressed).map_err(|e| e.to_string())?;
+    tmp.persist(path).map(|_| ()).map_err(|e| e.error.to_string())
 }
 
 pub fn load_bgt(path: &std::path::Path) -> Result<TranslationDb, String> {
@@ -230,17 +231,17 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
 
     while i < entry_count {
         if pos + 8 > file_size {
-            log::warn!("[eet] Premature end of file at entry {}/{} (pos={})", i, entry_count, pos);
+            tracing::warn!("[eet] Premature end of file at entry {}/{} (pos={})", i, entry_count, pos);
             break;
         }
 
         // ── Entry marker validation (record_type_len must be 4) ──
         let rt_len_raw = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap());
         if rt_len_raw != 4 {
-            log::warn!("[eet] Desync at entry {}: rt_len={} pos={}/{}", i, rt_len_raw, pos, file_size);
+            tracing::warn!("[eet] Desync at entry {}: rt_len={} pos={}/{}", i, rt_len_raw, pos, file_size);
             sync_errors += 1;
             if sync_errors > 500 {
-                log::error!("[eet] Too many desync errors, aborting parse");
+                tracing::error!("[eet] Too many desync errors, aborting parse");
                 break;
             }
             match scan_for_entry(&data, pos + 1) {
@@ -258,7 +259,7 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
                 match read_lp_string(&data, &mut pos) {
                     Ok(s) => s,
                     Err(_) => {
-                        log::warn!("[eet] Entry {} field '{}' unreadable", i, $label);
+                        tracing::warn!("[eet] Entry {} field '{}' unreadable", i, $label);
                         pos = scan_for_entry(&data, entry_start + 1).unwrap_or(file_size);
                         i += 1;
                         continue;
@@ -271,7 +272,7 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
                 match read_u32_le(&data, &mut pos) {
                     Ok(v) => v,
                     Err(_) => {
-                        log::warn!("[eet] Entry {} field '{}' unreadable", i, $label);
+                        tracing::warn!("[eet] Entry {} field '{}' unreadable", i, $label);
                         pos = scan_for_entry(&data, entry_start + 1).unwrap_or(file_size);
                         i += 1;
                         continue;
@@ -311,7 +312,7 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
         }
 
         if i < 3 {
-            log::debug!("[eet] Entry {} : {}/{}", i, record_type, sub_type);
+            tracing::debug!("[eet] Entry {} : {}/{}", i, record_type, sub_type);
         }
 
         i += 1;
@@ -329,9 +330,9 @@ pub fn load_eet(path: &std::path::Path) -> Result<(String, Vec<DbEntry>), String
     }
 
     if sync_errors > 0 {
-        log::warn!("[eet] {} desync error(s) during parsing", sync_errors);
+        tracing::warn!("[eet] {} desync error(s) during parsing", sync_errors);
     }
-    log::info!("[eet] {} entries loaded from '{}' (declared: {})",
+    tracing::info!("[eet] {} entries loaded from '{}' (declared: {})",
         entries.len(), path.display(), entry_count);
     Ok((game_name, entries))
 }

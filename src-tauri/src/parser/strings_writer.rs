@@ -18,7 +18,6 @@
 
 use std::{
     collections::HashMap,
-    fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
@@ -119,10 +118,11 @@ pub fn write_strings_file(path: &Path, table: &StringTable, ext: &str) -> Result
 
     let data_size = data_block.len() as u32;
 
-    // ── Write to disk ────────────────────────────────────────────────────────
-    let file = File::create(path)
-        .map_err(|e| format!("Cannot create '{}': {e}", path.display()))?;
-    let mut w = BufWriter::new(file);
+    // ── Write to disk (atomic: write to temp, then rename) ───────────────────
+    let out_dir = path.parent().unwrap_or(Path::new("."));
+    let tmp = tempfile::NamedTempFile::new_in(out_dir)
+        .map_err(|e| format!("Cannot create temp file for '{}': {e}", path.display()))?;
+    let mut w = BufWriter::new(&tmp);
 
     // Header
     w.write_all(&count.to_le_bytes())     .map_err(|e| e.to_string())?;
@@ -136,8 +136,12 @@ pub fn write_strings_file(path: &Path, table: &StringTable, ext: &str) -> Result
 
     // Data block
     w.write_all(&data_block).map_err(|e| e.to_string())?;
+    drop(w); // flush BufWriter before persisting
 
-    log::info!("[strings_writer] {} entries → {}", count, path.display());
+    tmp.persist(path)
+        .map_err(|e| format!("Cannot persist '{}': {}", path.display(), e.error))?;
+
+    tracing::info!("[strings_writer] {} entries → {}", count, path.display());
     Ok(())
 }
 
@@ -236,19 +240,19 @@ pub fn write_strings_ba2(
     // ── Read existing entries from source BA2 (excluding the target language) ─
     let existing: Vec<Ba2RawEntry> = source_ba2.map_or_else(
         || {
-            log::warn!("[ba2_writer] No source BA2 provided — output will contain only new strings");
+            tracing::warn!("[ba2_writer] No source BA2 provided — output will contain only new strings");
             Vec::new()
         },
         |p| {
             if p.exists() {
                 let v = crate::parser::archive::read_ba2_all_entries_with_data(p, Some(lang));
                 if v.is_empty() {
-                    log::warn!("[ba2_writer] Source BA2 '{}' yielded no existing entries \
+                    tracing::warn!("[ba2_writer] Source BA2 '{}' yielded no existing entries \
                                 (unreadable or already empty)", p.display());
                 }
                 v
             } else {
-                log::warn!("[ba2_writer] Source BA2 '{}' not found — output will contain only new strings",
+                tracing::warn!("[ba2_writer] Source BA2 '{}' not found — output will contain only new strings",
                     p.display());
                 Vec::new()
             }
@@ -260,9 +264,9 @@ pub fn write_strings_ba2(
         crate::parser::archive::read_ba2_entry_metadata(p, lang)
     });
     if source_meta_lang.is_some() {
-        log::info!("[ba2_writer] Reusing hashes from source archive for lang '{}'", lang);
+        tracing::info!("[ba2_writer] Reusing hashes from source archive for lang '{}'", lang);
     } else {
-        log::info!("[ba2_writer] No existing hashes for lang '{}' — computing", lang);
+        tracing::info!("[ba2_writer] No existing hashes for lang '{}' — computing", lang);
     }
 
     // ── Layout (v2 GNRL) ──────────────────────────────────────────────────────
@@ -291,13 +295,14 @@ pub fn write_strings_ba2(
     }
     let names_offset = cur_offset;
 
-    // ── Write ─────────────────────────────────────────────────────────────────
+    // ── Write (atomic: write to temp, then rename) ────────────────────────────
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create dir: {e}"))?;
     }
-    let file = File::create(output_path)
-        .map_err(|e| format!("Cannot create '{}': {e}", output_path.display()))?;
-    let mut w = BufWriter::new(file);
+    let out_dir = output_path.parent().unwrap_or(std::path::Path::new("."));
+    let tmp = tempfile::NamedTempFile::new_in(out_dir)
+        .map_err(|e| format!("Cannot create temp file for '{}': {e}", output_path.display()))?;
+    let mut w = BufWriter::new(&tmp);
 
     // Header (32 bytes for v2)
     w.write_all(MAGIC)                          .map_err(|e| e.to_string())?;
@@ -363,7 +368,11 @@ pub fn write_strings_ba2(
         w.write_all(bytes)                               .map_err(|e| e.to_string())?;
     }
 
-    log::info!("[ba2_writer] Wrote {} files ({} existing + {} new) to {}",
+    drop(w); // flush BufWriter before persisting
+    tmp.persist(output_path)
+        .map_err(|e| format!("Cannot persist '{}': {}", output_path.display(), e.error))?;
+
+    tracing::info!("[ba2_writer] Wrote {} files ({} existing + {} new) to {}",
         total_count, existing.len(), new_items.len(), output_path.display());
 
     Ok(StringsWriteResult {
@@ -393,7 +402,7 @@ fn resolve_entry_meta(
     if let Some(meta) = source_meta {
         let norm = item.name.to_lowercase().replace('/', "\\");
         if let Some(m) = meta.iter().find(|m| m.name.to_lowercase().replace('/', "\\") == norm) {
-            log::debug!("[ba2_writer] Using source hash for '{}'", item.name);
+            tracing::debug!("[ba2_writer] Using source hash for '{}'", item.name);
             return (m.dir_hash, m.ext, m.file_hash, m.flags, m.unknown);
         }
     }
@@ -406,7 +415,7 @@ fn resolve_entry_meta(
     let (dir_part, name_part, ext_4) = split_ba2_path(&item.name, &item.ext_str);
     let dir_hash  = ba2_path_hash(&dir_part);
     let file_hash = ba2_path_hash(&name_part);
-    log::debug!("[ba2_writer] Computed hash for '{}': dir={:08X} file={:08X}",
+    tracing::debug!("[ba2_writer] Computed hash for '{}': dir={:08X} file={:08X}",
         item.name, dir_hash, file_hash);
     (dir_hash, ext_4, file_hash, 0, 0)
 }

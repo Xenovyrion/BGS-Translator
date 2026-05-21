@@ -2,13 +2,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
-    #[error("Erreur I/O : {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Erreur de lecture binaire : {0}")]
+    #[error("Binary read error: {0}")]
     BinRw(#[from] binrw::Error),
 
-    #[error("Magic invalide : {0}")]
+    #[error("Invalid magic bytes: {0}")]
     InvalidMagic(String),
 
     #[error("Unexpected end of file")]

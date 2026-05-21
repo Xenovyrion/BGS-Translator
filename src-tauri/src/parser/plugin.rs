@@ -44,55 +44,55 @@ pub struct LoadedFile {
 /// `on_status` is an optional progress callback called with a short string key at key
 /// stages (e.g. `"loading_strings"`, `"parsing_records"`).  Pass `|_| {}` to ignore.
 pub fn open_file(path: &Path, target_lang: &str, on_status: impl Fn(&str)) -> Result<LoadedFile, ParseError> {
-    log::info!("[parser] Open file : {}", path.display());
+    tracing::info!("[parser] Open file : {}", path.display());
 
     let file = File::open(path).map_err(|e| {
-        log::error!("[parser] Unable to open the file : {}", e);
+        tracing::error!("[parser] Unable to open the file : {}", e);
         ParseError::Io(e)
     })?;
     let mut reader = BufReader::new(file);
 
     // --- Read the TES4 record (plugin header) ---
-    log::debug!("[parser] Reading the TES4 record...");
+    tracing::debug!("[parser] Reading the TES4 record...");
     let tes4 = RawRecord::read(&mut reader).map_err(|e| {
-        log::error!("[parser] TES4 read error : {}", e);
+        tracing::error!("[parser] TES4 read error : {}", e);
         e
     })?;
 
     if &tes4.header.rec_type != b"TES4" {
         let msg = format!("Expected TES4, found {}", tes4.header.type_str());
-        log::error!("[parser] Invalid magic : {}", msg);
+        tracing::error!("[parser] Invalid magic : {}", msg);
         return Err(ParseError::InvalidMagic(msg));
     }
 
     let is_localized = tes4.header.is_localized();
-    log::info!("[parser] Localized file : {}", is_localized);
+    tracing::info!("[parser] Localized file : {}", is_localized);
 
     let info = parse_tes4_data(&tes4.data, is_localized)?;
-    log::info!("[parser] Author : {:?} | Masters : {:?}", info.author, info.masters);
+    tracing::info!("[parser] Author : {:?} | Masters : {:?}", info.author, info.masters);
 
     // --- Load .strings files if localized ---
     // Always use "en" as source language; target_lang for pre-populated translations.
     let (src_resolver, tgt_resolver) = if is_localized {
-        log::debug!("[parser] Loading .strings files (src=en, tgt={})...", target_lang);
+        tracing::debug!("[parser] Loading .strings files (src=en, tgt={})...", target_lang);
         on_status("loading_strings");
         let resolvers = load_string_resolvers(path, &info, "en", target_lang)?;
-        log::info!("[parser] src strings={} dlstrings={} ilstrings={}",
+        tracing::info!("[parser] src strings={} dlstrings={} ilstrings={}",
             resolvers.0.strings.len(), resolvers.0.dlstrings.len(), resolvers.0.ilstrings.len());
-        log::info!("[parser] tgt strings={} dlstrings={} ilstrings={}",
+        tracing::info!("[parser] tgt strings={} dlstrings={} ilstrings={}",
             resolvers.1.strings.len(), resolvers.1.dlstrings.len(), resolvers.1.ilstrings.len());
         resolvers
     } else {
-        log::debug!("[parser] Not localized file, no .strings files needed");
+        tracing::debug!("[parser] Not localized file, no .strings files needed");
         (StringResolver::empty(), StringResolver::empty())
     };
 
     // --- Loop GRUPs and extract strings ---
-    log::debug!("[parser] Loop on GRUPs...");
+    tracing::debug!("[parser] Loop on GRUPs...");
     on_status("parsing_records");
     let mut entries = Vec::new();
     parse_groups(&mut reader, is_localized, &src_resolver, &tgt_resolver, &mut entries)?;
-    log::info!("[parser] {} translatable entries extracted", entries.len());
+    tracing::info!("[parser] {} translatable entries extracted", entries.len());
 
     Ok(LoadedFile { path: path.to_owned(), info, entries })
 }
@@ -137,7 +137,7 @@ fn load_string_resolvers(
     // When both languages differ, load them simultaneously on the rayon pool —
     // each opens its own file handles, so there is no contention.
     if !tgt_lang.is_empty() && tgt_lang != src_lang {
-        log::debug!("[parser] Loading resolvers in parallel (src={}, tgt={})", src_lang, tgt_lang);
+        tracing::debug!("[parser] Loading resolvers in parallel (src={}, tgt={})", src_lang, tgt_lang);
         let (src_result, tgt_result) = rayon::join(
             || load_resolver_for_lang(plugin_path, info, src_lang),
             || load_resolver_for_lang(plugin_path, info, tgt_lang),
@@ -175,57 +175,57 @@ fn load_resolver_for_lang(
     let i_path = strings_dir.join(format!("{}.ilstrings", base));
 
     if s_path.exists() {
-        log::info!("[strings] Loading : {}", s_path.display());
+        tracing::info!("[strings] Loading : {}", s_path.display());
         resolver.strings = load_strings_file(&s_path).unwrap_or_else(|e| {
-            log::error!("[strings] Read error .strings : {}", e);
+            tracing::error!("[strings] Read error .strings : {}", e);
             Default::default()
         });
     }
     if d_path.exists() {
-        log::info!("[strings] Loading : {}", d_path.display());
+        tracing::info!("[strings] Loading : {}", d_path.display());
         resolver.dlstrings = load_strings_file(&d_path).unwrap_or_else(|e| {
-            log::error!("[strings] Read error .dlstrings : {}", e);
+            tracing::error!("[strings] Read error .dlstrings : {}", e);
             Default::default()
         });
     }
     if i_path.exists() {
-        log::info!("[strings] Loading : {}", i_path.display());
+        tracing::info!("[strings] Loading : {}", i_path.display());
         resolver.ilstrings = load_strings_file(&i_path).unwrap_or_else(|e| {
-            log::error!("[strings] Read error .ilstrings : {}", e);
+            tracing::error!("[strings] Read error .ilstrings : {}", e);
             Default::default()
         });
     }
 
     // 2. Archive fallback (BA2 / BSA)
     if resolver.strings.is_empty() && resolver.dlstrings.is_empty() && resolver.ilstrings.is_empty() {
-        log::debug!("[strings] No loose files for lang '{}' — searching archives…", lang);
+        tracing::debug!("[strings] No loose files for lang '{}' — searching archives…", lang);
         if let Some(ex) = extract_strings_from_archives(data_dir, plugin_stem, lang) {
             if let Some(bytes) = ex.strings {
                 resolver.strings = parse_strings_from_bytes(&bytes, "strings").unwrap_or_else(|e| {
-                    log::error!("[strings] Archive .strings parse error: {}", e);
+                    tracing::error!("[strings] Archive .strings parse error: {}", e);
                     Default::default()
                 });
             }
             if let Some(bytes) = ex.dlstrings {
                 resolver.dlstrings = parse_strings_from_bytes(&bytes, "dlstrings").unwrap_or_else(|e| {
-                    log::error!("[strings] Archive .dlstrings parse error: {}", e);
+                    tracing::error!("[strings] Archive .dlstrings parse error: {}", e);
                     Default::default()
                 });
             }
             if let Some(bytes) = ex.ilstrings {
                 resolver.ilstrings = parse_strings_from_bytes(&bytes, "ilstrings").unwrap_or_else(|e| {
-                    log::error!("[strings] Archive .ilstrings parse error: {}", e);
+                    tracing::error!("[strings] Archive .ilstrings parse error: {}", e);
                     Default::default()
                 });
             }
 
             if !resolver.strings.is_empty() || !resolver.dlstrings.is_empty() || !resolver.ilstrings.is_empty() {
-                log::info!("[strings] Strings loaded from archive for lang '{}'", lang);
+                tracing::info!("[strings] Strings loaded from archive for lang '{}'", lang);
             }
         }
 
         if resolver.strings.is_empty() && resolver.dlstrings.is_empty() && resolver.ilstrings.is_empty() {
-            log::warn!("[strings] No .strings files found for lang '{}' (loose or in archives)", lang);
+            tracing::warn!("[strings] No .strings files found for lang '{}' (loose or in archives)", lang);
         }
     }
 

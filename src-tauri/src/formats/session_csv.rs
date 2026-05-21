@@ -171,7 +171,7 @@ pub fn import(path: &Path) -> Result<Vec<ImportedEntry>, String> {
         });
     }
 
-    log::info!("[session_csv] import: {} entries from '{}'", entries.len(), path.display());
+    tracing::info!("[session_csv] import: {} entries from '{}'", entries.len(), path.display());
     Ok(entries)
 }
 
@@ -213,6 +213,6 @@ pub fn export(path: &Path, entries: &[TranslationEntry]) -> Result<usize, String
     }
 
     std::fs::write(path, out.as_bytes()).map_err(|e| e.to_string())?;
-    log::info!("[session_csv] export: {} entries to '{}'", count, path.display());
+    tracing::info!("[session_csv] export: {} entries to '{}'", count, path.display());
     Ok(count)
 }

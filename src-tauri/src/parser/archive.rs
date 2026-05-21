@@ -62,7 +62,7 @@ pub fn extract_strings_from_archives(
     lang:        &str,
 ) -> Option<ExtractedStrings> {
     let candidates = find_candidate_archives(data_dir, plugin_stem);
-    log::debug!("[archive] {} candidate(s) for '{}' / lang '{}'",
+    tracing::debug!("[archive] {} candidate(s) for '{}' / lang '{}'",
         candidates.len(), plugin_stem, lang);
 
     if candidates.is_empty() {
@@ -73,11 +73,11 @@ pub fn extract_strings_from_archives(
     if candidates.len() == 1 {
         return match try_extract(&candidates[0], plugin_stem, lang) {
             Ok(r) if !r.is_empty() => {
-                log::info!("[archive][lang={}] Strings found in '{}'", lang, candidates[0].display());
+                tracing::info!("[archive][lang={}] Strings found in '{}'", lang, candidates[0].display());
                 Some(r)
             }
             Ok(_)  => None,
-            Err(e) => { log::warn!("[archive][lang={}] Error reading '{}': {}", lang, candidates[0].display(), e); None }
+            Err(e) => { tracing::warn!("[archive][lang={}] Error reading '{}': {}", lang, candidates[0].display(), e); None }
         };
     }
 
@@ -86,11 +86,11 @@ pub fn extract_strings_from_archives(
     candidates.par_iter().find_map_first(|path| {
         match try_extract(path, plugin_stem, lang) {
             Ok(r) if !r.is_empty() => {
-                log::info!("[archive][lang={}] Strings found in '{}'", lang, path.display());
+                tracing::info!("[archive][lang={}] Strings found in '{}'", lang, path.display());
                 Some(r)
             }
             Ok(_)  => None,
-            Err(e) => { log::warn!("[archive][lang={}] Error reading '{}': {}", lang, path.display(), e); None }
+            Err(e) => { tracing::warn!("[archive][lang={}] Error reading '{}': {}", lang, path.display(), e); None }
         }
     })
 }
@@ -229,7 +229,7 @@ pub fn read_ba2_all_entries_with_data(
             if let Some(ref pats) = excl {
                 let name_lower = name.to_lowercase().replace('/', "\\");
                 if pats.iter().any(|p| name_lower.ends_with(p.as_str())) {
-                    log::debug!("[ba2_reader] Excluding '{}' (will be replaced)", name);
+                    tracing::debug!("[ba2_reader] Excluding '{}' (will be replaced)", name);
                     continue;
                 }
             }
@@ -257,7 +257,7 @@ pub fn read_ba2_all_entries_with_data(
             });
         }
 
-        log::info!("[ba2_reader] {} existing entries kept from source archive (excluded lang={:?})",
+        tracing::info!("[ba2_reader] {} existing entries kept from source archive (excluded lang={:?})",
             result.len(), exclude_lang);
         Some(result)
     };
@@ -412,7 +412,7 @@ fn extract_from_ba2<R: Read + Seek>(
     }
     // Position is now at the start of file entries for both v1 and v2.
 
-    log::debug!("[ba2] version={} type={} files={} names_at=0x{:x}",
+    tracing::debug!("[ba2] version={} type={} files={} names_at=0x{:x}",
         version,
         std::str::from_utf8(&arch_type).unwrap_or("????"),
         file_count, names_offset);
@@ -464,13 +464,13 @@ fn extract_from_ba2<R: Read + Seek>(
     for entry in &entries {
         let norm = entry.name.to_lowercase().replace('/', "\\");
         if norm == s_target {
-            log::debug!("[ba2] Extracting '{}'", entry.name);
+            tracing::debug!("[ba2] Extracting '{}'", entry.name);
             result.strings = Some(read_ba2_entry(&mut r, entry)?);
         } else if norm == dl_target {
-            log::debug!("[ba2] Extracting '{}'", entry.name);
+            tracing::debug!("[ba2] Extracting '{}'", entry.name);
             result.dlstrings = Some(read_ba2_entry(&mut r, entry)?);
         } else if norm == il_target {
-            log::debug!("[ba2] Extracting '{}'", entry.name);
+            tracing::debug!("[ba2] Extracting '{}'", entry.name);
             result.ilstrings = Some(read_ba2_entry(&mut r, entry)?);
         }
     }
@@ -501,7 +501,7 @@ fn read_ba2_entry<R: Read + Seek>(r: &mut R, e: &Ba2Entry) -> Result<Vec<u8>, Pa
             _ => {
                 // LZ4 (comp_type=2) is used by some Starfield archives.
                 // Strings files are not expected to use LZ4 in practice.
-                log::warn!("[ba2] Unsupported compression type {} for '{}' — skipping",
+                tracing::warn!("[ba2] Unsupported compression type {} for '{}' — skipping",
                     e.comp_type, e.name);
                 Err(ParseError::InvalidMagic(format!("Unsupported BA2 compression: {}", e.comp_type)))
             }
@@ -562,7 +562,7 @@ fn extract_from_bsa<R: Read + Seek>(
     // Bit 8 (0x100) = "Embed File Name in data block" — Skyrim SE
     let embed_file_name    = archive_flags & 0x100 != 0;
 
-    log::debug!("[bsa] v{} folders={} files={} dir_names={} compressed={} embed_name={}",
+    tracing::debug!("[bsa] v{} folders={} files={} dir_names={} compressed={} embed_name={}",
         version, folder_count, file_count,
         has_dir_names, default_compressed, embed_file_name);
 
@@ -654,17 +654,17 @@ fn extract_from_bsa<R: Read + Seek>(
         if !file.folder_lower.contains("strings") { continue; }
 
         if *name == s_target {
-            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            tracing::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.strings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );
         } else if *name == dl_target {
-            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            tracing::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.dlstrings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );
         } else if *name == il_target {
-            log::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
+            tracing::debug!("[bsa] Extracting '{}/{}'", file.folder_lower, name);
             result.ilstrings = Some(
                 read_bsa_file(&mut r, file.data_offset, file.size, file.is_compressed, embed_file_name)?
             );

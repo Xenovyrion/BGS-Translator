@@ -69,10 +69,12 @@ pub fn save_session(session: &TranslationSession, path: &std::path::Path) -> Res
     use std::io::Write;
     let json       = serde_json::to_string(session).map_err(|e| e.to_string())?;
     let compressed = zstd::encode_all(json.as_bytes(), 3).map_err(|e| e.to_string())?;
-    let mut file   = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    file.write_all(SESSION_MAGIC).map_err(|e| e.to_string())?;
-    file.write_all(&[SESSION_VERSION]).map_err(|e| e.to_string())?;
-    file.write_all(&compressed).map_err(|e| e.to_string())
+    let out_dir    = path.parent().unwrap_or(std::path::Path::new("."));
+    let mut tmp    = tempfile::NamedTempFile::new_in(out_dir).map_err(|e| e.to_string())?;
+    tmp.write_all(SESSION_MAGIC).map_err(|e| e.to_string())?;
+    tmp.write_all(&[SESSION_VERSION]).map_err(|e| e.to_string())?;
+    tmp.write_all(&compressed).map_err(|e| e.to_string())?;
+    tmp.persist(path).map(|_| ()).map_err(|e| e.error.to_string())
 }
 
 /// Loads a session. Supports v2 (JSON+zstd) and legacy plain-JSON files.
@@ -180,7 +182,7 @@ pub fn list_sessions_all(app: &tauri::AppHandle) -> Result<Vec<SessionListItem>,
                     saved_at,
                 });
             }
-            Err(e) => log::warn!("[session] Skipping unreadable session {:?}: {}", path, e),
+            Err(e) => tracing::warn!("[session] Skipping unreadable session {:?}: {}", path, e),
         }
     }
 

@@ -12,7 +12,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use super::{tags, ProviderConfig};
-use log::{info, warn, error, debug};
+use tracing::{info, warn, error, debug};
 
 // ── Default system prompt ─────────────────────────────────────────────────────
 
@@ -302,7 +302,8 @@ async fn openai_compat_translate(config: &ProviderConfig, system: &str, text: &s
         .header("content-type", "application/json");
 
     if let Some(key) = config.api_key.as_deref().filter(|k| !k.trim().is_empty()) {
-        req = req.header("Authorization", format!("Bearer {key}"));
+        let auth = zeroize::Zeroizing::new(format!("Bearer {key}"));
+        req = req.header("Authorization", auth.as_str());
     }
 
     let resp = req.json(&body).send().await

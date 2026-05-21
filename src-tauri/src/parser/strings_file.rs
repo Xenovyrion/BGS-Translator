@@ -67,11 +67,14 @@ pub fn parse_strings_from_bytes(bytes: &[u8], ext: &str) -> Result<StringTable, 
 pub fn load_strings_file(path: &Path) -> Result<StringTable, ParseError> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let format = StringsFormat::from_extension(ext)
-        .ok_or_else(|| ParseError::InvalidMagic(format!("Extension inconnue : {}", ext)))?;
+        .ok_or_else(|| ParseError::InvalidMagic(format!("Unknown extension: .{}", ext)))?;
 
+    tracing::debug!("[strings_file] Loading {:?}", path);
     let file = File::open(path)?;
     let mut r = BufReader::new(file);
-    parse_strings(&mut r, format)
+    let table = parse_strings(&mut r, format)?;
+    tracing::debug!("[strings_file] Loaded {} entries from {:?}", table.len(), path);
+    Ok(table)
 }
 
 fn parse_strings<R: Read + Seek>(r: &mut R, format: StringsFormat) -> Result<StringTable, ParseError> {

@@ -600,7 +600,6 @@ export default function App() {
         : (pluginInfo.plugin_path ?? "").replace(/[/\\][^/\\]+$/, "");
       const sourceBa2    = pluginDir ? pluginDir + "/" + pluginStem + " - Localization.ba2" : null;
 
-      console.log("[export/strings] outputDir:", outputDir, "lang:", targetLang, "ba2:", packAsBa2, "sourceBa2:", sourceBa2);
       try {
         const result = await invoke<{ strings_count: number; dlstrings_count: number; ilstrings_count: number; total: number; output_dir: string }>(
           "export_strings_cmd",
@@ -648,8 +647,6 @@ export default function App() {
     const folder = (settings.exportFolder || defaultExportDir || "").replace(/[/\\]+$/, "");
     const defaultOutputPath = folder ? folder + "/" + baseName : baseName;
 
-    console.log("[export] source:", sourcePath);
-    console.log("[export] defaultOutputPath:", defaultOutputPath);
 
     if (folder) {
       await invoke("ensure_dir_cmd", { path: folder }).catch(() => {});
@@ -669,7 +666,6 @@ export default function App() {
     }
 
     // ── 4. Run the export ───────────────────────────────────────────────────
-    console.log("[export] Writing to:", outputPath);
     try {
       await invoke("export_plugin_cmd", { sourcePath, outputPath, entries });
       const validated = entries.filter(e => e.status === "validated").length;

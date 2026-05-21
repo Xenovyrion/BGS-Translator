@@ -199,6 +199,10 @@ BGS-Translator/
 | HTTP client | `reqwest` 0.12 (rustls-tls) | Dictionary downloads + AI provider API calls (Ollama, Claude, Cohere, OpenAI…) — no OpenSSL dependency |
 | Fuzzy matching | `strsim` 0.11 · `rayon` 1 | Jaro-Winkler (short strings) + Levenshtein (long strings); parallel bulk scan |
 | Spell check | [Nuspell](https://nuspell.github.io/) 5.x | C ABI wrapper · ICU · 47 languages |
+| Concurrency | `parking_lot` 0.12 | Panic-free `Mutex` / `RwLock` — no `.unwrap()` on lock acquisition |
+| File safety | `tempfile` 3 | Atomic write-then-rename for all persistent files — crash-safe output |
+| Memory safety | `zeroize` 1 | API keys wiped from RAM after each provider call |
+| Structured logging | `tracing` 0.1 + `tracing-subscriber` 0.3 | Structured, async-compatible log events; bridged to `tauri-plugin-log` via the `log` feature |
 | Virtualisation | `@tanstack/react-virtual` 3 | Windowed rendering for large entry lists |
 | Styling | Tailwind CSS 3 + CSS variables | 13 built-in themes, full colour customisation |
 | i18n | `i18next` 25 + `react-i18next` 16 | EN / FR, auto-detected from system locale |
@@ -312,7 +316,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 
 ### Bulk Actions
 - Select multiple entries and apply a status change in one click
-- **Apply Fuzzy to selection** (`🔍 Appliquer Fuzzy`) — fills all entries in the selection that have a pending fuzzy suggestion; accepted entries are set to `validated` directly
+- **Apply Fuzzy to selection** (`🔍 Apply Fuzzy`) — fills all entries in the selection that have a pending fuzzy suggestion; accepted entries are set to `validated` directly
 - **Apply personal DB to selection** (`↓ [DB name]`) — fills empty translations in the selected rows from the personal database
 - **Save selection to personal DB** (`+ [DB name]`) — writes all translated entries in the selection to the active personal database
 - **Selection is automatically cleared** after any bulk action (validate, fuzzy apply, DB apply, DeepL batch, add to DB) — no manual deselection needed
@@ -325,11 +329,11 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Apply mode** (Settings → Database):
   - *Automatic* — scan the entire personal databases folder and apply all `.bgtx` files found, in alphabetical order
   - *Manual* — apply only the Active database; additional files in the folder are ignored until manually triggered
-- **Manual apply — all entries**: Database menu → *Appliquer BDD personnelle (toutes les entrées)*
+- **Manual apply — all entries**: Database menu → *Apply personal database (all entries)*
 - **Manual apply — selection**: `↓ [DB name]` button in the bulk action bar (fills only empty translations in the selection)
 - **Save entry from Edit Panel**: `+ DB` button adds the currently edited entry directly to the active personal database
 - **Save selection in bulk**: `+ [DB name]` button in the bulk action bar
-- Managed in **Settings → Database → BDD PERSONNELLE (.BGTX)**:
+- Managed in **Settings → Database → Personal Database (.bgtx)**:
   - Configure the personal databases folder (defaults to `personal_dbs/` next to the executable)
   - Create new `.bgtx` databases (name, game, source/target language)
   - Activate / deactivate the write target
@@ -350,10 +354,10 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - **Smart auto-detection** — when no explicit default is set, the directory scan applies a three-tier priority: exact game header match → filename heuristic (e.g. `BDD_Starfield_EN-FR.bgt`) → partial substring match; results are alphabetically sorted for determinism
 
 ### Database Manager
-- Floating, draggable modal accessible from **Database → Gestionnaire de bases de données…** — stays open while working
+- Floating, draggable modal accessible from **Database → Database Manager…** — stays open while working
 - **Two tabs**: Personal database (`.bgtx`) and Reference database (`.bgt`)
 - **Browse & filter**: full-text search across original and translated strings; pagination with configurable page size; total entry count with thousand separators
-- **Edit mode** — "Passer en mode modification" button activates in-place editing (button turns solid green while active); all editing features are available for both personal and reference databases
+- **Edit mode** — "Enable edit mode" button activates in-place editing (button turns solid green while active); all editing features are available for both personal and reference databases
 - **In-place cell editing** — click any translated cell to edit it directly in the table; unsaved changes are tracked and highlighted
 - **Validate / Discard** — confirm or cancel all pending edits with dedicated action buttons
 - **Purge incomplete entries** — removes all entries with an empty translation in one click (with count feedback)
@@ -364,7 +368,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Free drag — window can be positioned anywhere on screen without boundary clamping
 
 ### Database Converter
-- Floating, draggable modal (stays open while working) — accessible from **Database → Convertisseur de bases de données…**
+- Floating, draggable modal (stays open while working) — accessible from **Database → Database Converter…**
 - **Universal source support**: `.eet` (ESP-ESM Translator), `.bgt` v2 (reference database), `.bgtx` (personal database), `.csv`, `.tsv`, `.xml` (xTranslator or ESP-ESM Translator — auto-detected)
 - **Output format**: `.bgt` (reference database, shared) or `.bgtx` (personal database)
 - Configurable: database name, game, **source language**, **target language** (10 languages: English, French, German, Spanish, Italian, Portuguese, Russian, Polish, Chinese, Japanese), **output folder**
@@ -419,15 +423,15 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
 - Keyboard shortcut: `Ctrl+I`
 
 ### Interface
-- 13 built-in themes: Sombre, Clair, Nord, Dracula, Catppuccin, Océan, Forêt, Tokyo Night, Solarized, Gruvbox, Monokai, Rose Pine, Solarized Clair
+- 13 built-in themes: Dark, Light, Nord, Dracula, Catppuccin, Ocean, Forest, Tokyo Night, Solarized, Gruvbox, Monokai, Rose Pine, Solarized Light
 - Full colour customisation per zone (menus, toolbar, sidebar, table, edit panel…)
 - Per-zone typography: choose font family (sans-serif, serif, monospace) and size independently for UI, table content, and monospace (IDs)
 - 3 icon sets: Minimal, Material, Classic
 - Record-type colour coding (customisable per type)
 - Interface language: English, French (auto-detected from system locale)
-- **Theme-aware CSS variable system** — all semantic colours (status dots, fuzzy scores, row highlights, provider tints) are defined as CSS custom properties that automatically adapt to any theme override; `color-mix()` generates alpha variants without per-theme duplication
-- **Loading overlay** — while a plugin is loading, a centered spinner with a status card (`Extraction des archives…` / `Lecture des enregistrements…`) covers the content area; the toolbar shows a compact entry counter during the streaming phase
-- **Toolbar status badges** — when a file is open, the toolbar displays a badge next to the filename: **LOCALISÉ** (indigo) for localized plugins with external string files, **STRINGS** (green) for standalone strings files opened directly
+- **Theme-aware CSS variable system** — all semantic colours (status dots, fuzzy scores, row highlights, provider tints, diff colours) are defined as CSS custom properties that automatically adapt to any theme override; `color-mix()` generates alpha variants without per-theme duplication; the compare module uses dedicated diff variables (`--diff-added`, `--diff-removed`, `--diff-modified`, `--diff-unchanged`, `--diff-recoverable`, `--modal-backdrop`, `--highlight-match`) defined in every built-in theme
+- **Loading overlay** — while a plugin is loading, a centered spinner with a status card (`Extracting archives…` / `Reading records…`) covers the content area; the toolbar shows a compact entry counter during the streaming phase
+- **Toolbar status badges** — when a file is open, the toolbar displays a badge next to the filename: **LOCALIZED** (indigo) for localized plugins with external string files, **STRINGS** (green) for standalone strings files opened directly
 - **Provider error auto-dismiss** — translation error tooltips (API key missing, model not configured…) disappear automatically after 4 seconds
 
 ### Plugin Comparison (Diff)
@@ -447,7 +451,7 @@ The installer and executable are output to `src-tauri/target/release/bundle/`.
   - "Recoverable only" checkbox to focus on translatable entries
   - Full-text search across Editor ID, Form ID and field text
 - **Stats bar**: real-time counts of added / removed / modified / unchanged records + total recoverable fields
-- Accessible from **Database → Comparer les plugins…** or the toolbar button
+- Accessible from **Database → Compare Plugins…** or the toolbar button
 - Uses theme font and size CSS variables (`--font-ui`, `--fz-table`, `--font-mono`, etc.) for visual consistency
 
 ### Fuzzy Matching
@@ -471,7 +475,7 @@ Long strings additionally require a **bigram Jaccard pre-filter** (≥ 20% overl
 **Workflows**:
 - **Auto-scan** — runs automatically when a plugin is opened; all untranslated entries are scanned in the background; matched entries show a coloured badge in the translation table
 - **Filter by fuzzy** — `Fuzzy (N)` chip in the filter bar isolates all entries with a pending suggestion
-- **Bulk accept** — select fuzzy-tagged entries and click **🔍 Appliquer Fuzzy** in the BulkActionBar; accepted entries are set to `validated` and the suggestion is consumed
+- **Bulk accept** — select fuzzy-tagged entries and click **🔍 Apply Fuzzy** in the BulkActionBar; accepted entries are set to `validated` and the suggestion is consumed
 - **Manual trigger** — click the 🔍 button in the EditPanel toolbar to run a single-entry scan on demand
 - **Suggestion bandeau** — coloured banner in the EditPanel showing the suggested text, its score, and the source (session / personal DB); **Accept** applies the suggestion and validates the entry; **Dismiss** removes it
 
@@ -479,7 +483,7 @@ Long strings additionally require a **bigram Jaccard pre-filter** (≥ 20% overl
 1. Current session — entries with a translation and status ≠ `untranslated`
 2. Personal database — entries from the active `.bgtx` file *(wiring in progress)*
 
-**Settings** (`Settings → Auto Translation → Autres réglages`):
+**Settings** (`Settings → Auto Translation → Other settings`):
 - Enable / disable auto-scan on plugin open
 - Jaro-Winkler threshold (default 78 %)
 - Levenshtein threshold (default 65 %)
@@ -533,14 +537,14 @@ Define regex-based replacement rules that are automatically applied to untransla
 - **Two default rules** (applied to all games, pre-installed):
   - Pure numeric strings (`^\d+$`) → copy as-is
   - Punctuation / whitespace-only strings → copy as-is
-- **Manual apply** — `Outils → Appliquer les règles regex` runs the active ruleset against all untranslated entries; a notification reports how many entries were filled
-- Settings tab: **Settings → Règles Regex**
+- **Manual apply** — `Tools → Apply Regex Rules` runs the active ruleset against all untranslated entries; a notification reports how many entries were filled
+- Settings tab: **Settings → Regex Rules**
 
 ### Terminology Glossary
 
 Maintain a per-game glossary of required source → target term mappings.
 
-- **Floating, draggable modal** (`Outils → Glossaire terminologique…`) — stays open while working
+- **Floating, draggable modal** (`Tools → Terminology Glossary…`) — stays open while working
 - **Per-game scoping** — same game-key convention as regex rules; game auto-selected from the open plugin
 - **Inline row editing** — click ✏ to edit source, target, case-sensitive flag, whole-word flag and notes directly in the table row; confirm with ✓ or cancel with ✕; `Ctrl+Enter` to save, `Escape` to cancel
 - **Search & filter** — live search across source, target and notes

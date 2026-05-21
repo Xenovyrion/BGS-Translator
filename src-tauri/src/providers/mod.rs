@@ -38,7 +38,8 @@ pub struct ProviderMeta {
 
 /// All fields a provider might need.  Each provider only reads what it uses.
 /// Fields are deserialized from camelCase JS objects (Tauri → serde).
-#[derive(Deserialize, Clone, Debug)]
+/// `ZeroizeOnDrop` ensures the API key is wiped from RAM when the config is dropped.
+#[derive(Deserialize, Clone, Debug, zeroize::Zeroize, zeroize::ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderConfig {
     /// Provider ID: "deepl" | "microsoft" | "libretranslate" | "mymemory"

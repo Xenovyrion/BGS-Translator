@@ -8,23 +8,23 @@ use crate::translation::session::{get_sessions_dir, load_session};
 // ── Quick diff check — returns only stats ─────────────────────────────────────
 
 /// Parses both plugins and returns aggregate diff statistics only.
-/// Much lighter over IPC than the full diff — use this for the "Vérifier" button.
+/// Much lighter over IPC than the full diff — use this for the "Check" button.
 #[tauri::command]
 pub async fn check_plugin_diff_cmd(
     path_old: String,
     path_new: String,
 ) -> Result<DiffStats, String> {
-    log::info!("[compare] check_diff: {} vs {}", path_old, path_new);
+    tracing::info!("[compare] check_diff: {} vs {}", path_old, path_new);
 
     let old = open_file(std::path::Path::new(&path_old), "en", |_| {})
-        .map_err(|e| format!("Erreur lecture plugin A : {e}"))?;
+        .map_err(|e| format!("Cannot read plugin A: {e}"))?;
     let new_file = open_file(std::path::Path::new(&path_new), "en", |_| {})
-        .map_err(|e| format!("Erreur lecture plugin B : {e}"))?;
+        .map_err(|e| format!("Cannot read plugin B: {e}"))?;
 
     let (_, stats) = compute_diff(old.entries, new_file.entries, None, None, false);
 
-    log::info!(
-        "[compare] check_diff done — +{} -{} ~{} ={} (récupérables: {})",
+    tracing::info!(
+        "[compare] check_diff done — +{} -{} ~{} ={} (recoverable: {})",
         stats.added, stats.removed, stats.modified, stats.unchanged, stats.recoverable
     );
     Ok(stats)
@@ -48,12 +48,12 @@ pub async fn compute_plugin_diff_cmd(
     state:             State<'_, DbState>,
     app:               tauri::AppHandle,
 ) -> Result<PluginDiffResult, String> {
-    log::info!("[compare] compute_diff: {} vs {}", path_old, path_new);
+    tracing::info!("[compare] compute_diff: {} vs {}", path_old, path_new);
 
     let old = open_file(std::path::Path::new(&path_old), "en", |_| {})
-        .map_err(|e| format!("Erreur lecture plugin A : {e}"))?;
+        .map_err(|e| format!("Cannot read plugin A: {e}"))?;
     let new_file = open_file(std::path::Path::new(&path_new), "en", |_| {})
-        .map_err(|e| format!("Erreur lecture plugin B : {e}"))?;
+        .map_err(|e| format!("Cannot read plugin B: {e}"))?;
 
     // Resolve session path from id (sessions are stored in the managed app-data dir)
     let session_lookup: Option<SessionLookup> = match session_id.as_deref() {
@@ -61,11 +61,11 @@ pub async fn compute_plugin_diff_cmd(
             let sess_path = get_sessions_dir(&app)?.join(format!("{}.bgts", id));
             match load_session(&sess_path) {
                 Ok(sess) => {
-                    log::info!("[compare] Session chargée : {} entrées", sess.entries.len());
+                    tracing::info!("[compare] Session loaded: {} entries", sess.entries.len());
                     Some(SessionLookup::build(&sess.entries))
                 }
                 Err(e) => {
-                    log::warn!("[compare] Impossible de charger la session '{}': {}", id, e);
+                    tracing::warn!("[compare] Cannot load session '{}': {}", id, e);
                     None
                 }
             }
@@ -74,7 +74,7 @@ pub async fn compute_plugin_diff_cmd(
     };
 
     // Grab a reference to the currently loaded reference DB (if any)
-    let db_guard = state.0.lock().map_err(|e| e.to_string())?;
+    let db_guard = state.0.lock();
     let db_ref   = db_guard.as_ref();
 
     let (records, stats) = compute_diff(
@@ -85,8 +85,8 @@ pub async fn compute_plugin_diff_cmd(
         include_unchanged,
     );
 
-    log::info!(
-        "[compare] compute_diff done — +{} -{} ~{} ={} (récupérables: {})",
+    tracing::info!(
+        "[compare] compute_diff done — +{} -{} ~{} ={} (recoverable: {})",
         stats.added, stats.removed, stats.modified, stats.unchanged, stats.recoverable
     );
 

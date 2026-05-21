@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tauri::State;
 use serde::Serialize;
 
@@ -18,15 +18,16 @@ pub struct DbState(pub Mutex<Option<TranslationDb>>);
 // ── Load a database ───────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[tracing::instrument(skip(state))]
 pub async fn load_db_cmd(state: State<'_, DbState>, path: String) -> Result<DbInfo, String> {
-    log::debug!("[db] Loading database: {}", path);
+    tracing::debug!("[db] Loading database: {}", path);
     let db = load_any(std::path::Path::new(&path)).map_err(|e| {
-        log::error!("[db] Load error: {}", e);
+        tracing::error!("[db] Load error: {}", e);
         e
     })?;
     let info = db.info();
-    log::info!("[db] {} entries loaded from '{}'", info.entry_count, info.name);
-    *state.0.lock().unwrap() = Some(db);
+    tracing::info!("[db] {} entries loaded from '{}'", info.entry_count, info.name);
+    *state.0.lock() = Some(db);
     Ok(info)
 }
 
@@ -37,7 +38,7 @@ pub async fn apply_db_cmd(
     state:   State<'_, DbState>,
     entries: Vec<TranslationEntry>,
 ) -> Result<ApplyResult, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock();
     let Some(db) = guard.as_ref() else {
         return Ok(ApplyResult { matched: 0, total: entries.len() });
     };
@@ -61,7 +62,7 @@ pub async fn apply_db_cmd(
         })
         .collect();
 
-    log::info!("[db] apply_db: {}/{} entries translated", matched, total);
+    tracing::info!("[db] apply_db: {}/{} entries translated", matched, total);
     Ok(ApplyResult { matched, total })
 }
 
@@ -74,14 +75,15 @@ pub struct ApplyResultFull {
 }
 
 #[tauri::command]
+#[tracing::instrument(skip(state, entries))]
 pub async fn apply_db_full_cmd(
     state:   State<'_, DbState>,
     entries: Vec<TranslationEntry>,
 ) -> Result<ApplyResultFull, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock();
     let Some(db) = guard.as_ref() else {
         let total = entries.len();
-        log::debug!("[db] apply_db_full: no database loaded, skipping");
+        tracing::debug!("[db] apply_db_full: no database loaded, skipping");
         return Ok(ApplyResultFull { matched: 0, total, entries });
     };
 
@@ -104,7 +106,7 @@ pub async fn apply_db_full_cmd(
         })
         .collect();
 
-    log::info!("[db] apply_db_full: {}/{} entries translated", matched, total);
+    tracing::info!("[db] apply_db_full: {}/{} entries translated", matched, total);
     Ok(ApplyResultFull { matched, total, entries })
 }
 
@@ -115,7 +117,7 @@ pub async fn add_to_db_cmd(
     state:   State<'_, DbState>,
     entries: Vec<TranslationEntry>,
 ) -> Result<usize, String> {
-    let mut guard = state.0.lock().unwrap();
+    let mut guard = state.0.lock();
     let db = guard.as_mut().ok_or("No database loaded")?;
     if db.read_only { return Err("This database is read-only".into()); }
 
@@ -134,7 +136,7 @@ pub async fn add_to_db_cmd(
 
     let count = new_entries.len();
     db.add_entries(new_entries);
-    log::info!("[db] {} entries added to the database", count);
+    tracing::info!("[db] {} entries added to the database", count);
     Ok(count)
 }
 
@@ -142,9 +144,9 @@ pub async fn add_to_db_cmd(
 
 #[tauri::command]
 pub async fn save_db_cmd(state: State<'_, DbState>, path: String) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock();
     let db    = guard.as_ref().ok_or("No database loaded")?;
-    log::info!("[db] Saving database to: {}", path);
+    tracing::info!("[db] Saving database to: {}", path);
     save_bgt(db, std::path::Path::new(&path))
 }
 
@@ -154,10 +156,10 @@ pub async fn export_db_cmd(
     path:   String,
     format: String,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock();
     let db    = guard.as_ref().ok_or("No database loaded")?;
     let p     = std::path::Path::new(&path);
-    log::info!("[db] Exporting database as {} to: {}", format, path);
+    tracing::info!("[db] Exporting database as {} to: {}", format, path);
     match format.as_str() {
         "bgt" => save_bgt(db, p),
         "csv" => export_delimited(db, p, ','),
@@ -170,7 +172,7 @@ pub async fn export_db_cmd(
 
 #[tauri::command]
 pub async fn get_db_info_cmd(state: State<'_, DbState>) -> Result<Option<DbInfo>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock();
     Ok(guard.as_ref().map(|db| db.info()))
 }
 
@@ -284,8 +286,8 @@ pub async fn find_db_for_game_cmd(
 
     let result = exact_match.or(filename_match).or(substring_match);
     match &result {
-        Some(p) => log::info!("[db] Auto-detected DB '{}' for game '{}'", p, game),
-        None    => log::info!("[db] No matching DB found for game '{}'", game),
+        Some(p) => tracing::info!("[db] Auto-detected DB '{}' for game '{}'", p, game),
+        None    => tracing::info!("[db] No matching DB found for game '{}'", game),
     }
     Ok(result)
 }
@@ -338,7 +340,7 @@ pub async fn convert_eet_cmd(
             if detected_game.is_empty() { "unknown".to_string() } else { detected_game }
         });
 
-    log::info!("[eet→bgt] Game: '{}'", game);
+    tracing::info!("[eet→bgt] Game: '{}'", game);
     let db = TranslationDb::from_entries(
         stem.clone(), game.clone(), "en".into(), "fr".into(), false, entries,
     );
@@ -349,7 +351,7 @@ pub async fn convert_eet_cmd(
         "Unable to write .bgt file to the databases/ directory".to_string()
     })?;
 
-    log::info!("[eet→bgt] {} entries converted → '{}'", count, dest.display());
+    tracing::info!("[eet→bgt] {} entries converted → '{}'", count, dest.display());
     Ok(DbFileInfo {
         name:      stem,
         path:      dest.to_string_lossy().into_owned(),
@@ -375,7 +377,7 @@ pub async fn search_db_cmd(
 
     // Search in the reference (ref) database
     {
-        let guard = state.0.lock().unwrap();
+        let guard = state.0.lock();
         if let Some(db) = guard.as_ref() {
             results.extend(db.search_text(&query, limit));
         }
@@ -385,14 +387,14 @@ pub async fn search_db_cmd(
     if let Some(path) = personal_db_path.filter(|p| !p.is_empty()) {
         match crate::database::personal_format::load_bgtx(std::path::Path::new(&path)) {
             Ok(pdb) => results.extend(pdb.search_text(&query, limit)),
-            Err(e)  => log::warn!("[search_db] Could not load personal DB '{}': {}", path, e),
+            Err(e)  => tracing::warn!("[search_db] Could not load personal DB '{}': {}", path, e),
         }
     }
 
     // Merge, sort by score descending, trim to limit
     results.sort_by(|a, b| b.score.cmp(&a.score));
     results.truncate(limit);
-    log::debug!("[search_db] query={:?} → {} results", query, results.len());
+    tracing::debug!("[search_db] query={:?} → {} results", query, results.len());
     Ok(results)
 }
 
@@ -408,7 +410,7 @@ pub async fn get_db_record_types_cmd(
 ) -> Result<Vec<crate::database::types::RecordTypeCount>, String> {
     match source.as_str() {
         "ref_db" => {
-            let guard = state.0.lock().unwrap();
+            let guard = state.0.lock();
             let db = guard.as_ref().ok_or("No reference DB loaded")?;
             Ok(db.record_type_counts())
         }
@@ -439,7 +441,7 @@ pub async fn get_db_entries_cmd(
 
     match source.as_str() {
         "ref_db" => {
-            let guard = state.0.lock().unwrap();
+            let guard = state.0.lock();
             let db = guard.as_ref().ok_or("No reference DB loaded")?;
             Ok(db.browse(rt_filter, search, offset, limit))
         }
@@ -459,7 +461,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Enables or disables advanced debug mode.
-/// When enabled, log::debug!() calls are written to the log file.
+/// When enabled, tracing::debug!() calls are written to the log file.
 /// When disabled, only Info/Warn/Error messages are logged.
 #[tauri::command]
 pub fn set_debug_mode_cmd(enabled: bool) {
@@ -470,7 +472,7 @@ pub fn set_debug_mode_cmd(enabled: bool) {
     } else {
         log::set_max_level(log::LevelFilter::Info);
     }
-    log::info!("[system] Debug mode {}", if enabled { "enabled (verbose logging)" } else { "disabled" });
+    tracing::info!("[system] Debug mode {}", if enabled { "enabled (verbose logging)" } else { "disabled" });
 }
 
 // ── Create an empty database ──────────────────────────────────────────────────
@@ -485,8 +487,8 @@ pub async fn create_db_cmd(
 ) -> Result<DbInfo, String> {
     let db   = TranslationDb::from_entries(name, game, lang_from, lang_to, false, vec![]);
     let info = db.info();
-    log::info!("[db] Empty database created: '{}' ({} → {})", info.name, info.lang_from, info.lang_to);
-    *state.0.lock().unwrap() = Some(db);
+    tracing::info!("[db] Empty database created: '{}' ({} → {})", info.name, info.lang_from, info.lang_to);
+    *state.0.lock() = Some(db);
     Ok(info)
 }
 
@@ -559,14 +561,14 @@ pub async fn update_ref_db_entries_cmd(
     path:    String,
     updates: Vec<crate::database::types::EntryUpdate>,
 ) -> Result<usize, String> {
-    let mut guard = state.0.lock().unwrap();
+    let mut guard = state.0.lock();
     let db = guard.as_mut().ok_or("No reference DB loaded")?;
     let mut count = 0usize;
     for u in updates {
         if db.update_entry_at_index(u.idx, u.translated) { count += 1; }
     }
     save_bgt(db, std::path::Path::new(&path))?;
-    log::info!("[ref_db] {} entries updated, saved to '{}'", count, path);
+    tracing::info!("[ref_db] {} entries updated, saved to '{}'", count, path);
     Ok(count)
 }
 
@@ -576,11 +578,11 @@ pub async fn purge_ref_db_cmd(
     state: State<'_, DbState>,
     path:  String,
 ) -> Result<usize, String> {
-    let mut guard = state.0.lock().unwrap();
+    let mut guard = state.0.lock();
     let db = guard.as_mut().ok_or("No reference DB loaded")?;
     let removed = db.purge_untranslated();
     save_bgt(db, std::path::Path::new(&path))?;
-    log::info!("[ref_db] {} untranslated entries purged, saved to '{}'", removed, path);
+    tracing::info!("[ref_db] {} untranslated entries purged, saved to '{}'", removed, path);
     Ok(removed)
 }
 
@@ -595,7 +597,7 @@ pub async fn add_entry_to_ref_db_cmd(
     sub_type:    String,
     editor_id:   String,
 ) -> Result<usize, String> {
-    let mut guard = state.0.lock().unwrap();
+    let mut guard = state.0.lock();
     let db = guard.as_mut().ok_or("No reference DB loaded")?;
     db.add_entries(vec![DbEntry {
         form_id:     0,
@@ -607,7 +609,7 @@ pub async fn add_entry_to_ref_db_cmd(
     }]);
     let count = db.entry_count();
     save_bgt(db, std::path::Path::new(&path))?;
-    log::info!("[ref_db] Manual entry added, total {} entries, saved to '{}'", count, path);
+    tracing::info!("[ref_db] Manual entry added, total {} entries, saved to '{}'", count, path);
     Ok(count)
 }
 
@@ -622,12 +624,12 @@ pub async fn import_into_ref_db_cmd(
     let new_entries = load_source_as_db_entries(src)?;
     let count = new_entries.len();
     {
-        let mut guard = state.0.lock().unwrap();
+        let mut guard = state.0.lock();
         let db = guard.as_mut().ok_or("No reference DB loaded")?;
         db.add_entries(new_entries);
         save_bgt(db, std::path::Path::new(&path))?;
     }
-    log::info!("[ref_db] {} entries imported from '{}', saved to '{}'", count, src_path, path);
+    tracing::info!("[ref_db] {} entries imported from '{}', saved to '{}'", count, src_path, path);
     Ok(count)
 }
 
@@ -651,7 +653,7 @@ pub async fn convert_to_bgt_cmd(
 
     let db = TranslationDb::from_entries(name, game, lang_from, lang_to, read_only, entries);
     save_bgt(&db, dest)?;
-    log::info!("[converter] .bgt: {} entries → '{}'", count, dest.display());
+    tracing::info!("[converter] .bgt: {} entries → '{}'", count, dest.display());
     Ok(ConvertResult { path: out_path, entry_count: count })
 }
 
@@ -683,6 +685,6 @@ pub async fn convert_to_bgtx_cmd(
 
     let db = PersonalDb::from_entries(name, dest.to_string_lossy().into_owned(), game, lang_from, lang_to, personal_entries);
     save_bgtx(&db, dest)?;
-    log::info!("[converter] .bgtx: {} entries → '{}'", count, dest.display());
+    tracing::info!("[converter] .bgtx: {} entries → '{}'", count, dest.display());
     Ok(ConvertResult { path: out_path, entry_count: count })
 }

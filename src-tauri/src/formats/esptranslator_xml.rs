@@ -97,7 +97,7 @@ pub fn import(path: &Path) -> Result<Vec<ImportedEntry>, String> {
         }
     }
 
-    log::info!("[et_xml] import: {} entries from '{}'", entries.len(), path.display());
+    tracing::info!("[et_xml] import: {} entries from '{}'", entries.len(), path.display());
     Ok(entries)
 }
 
@@ -152,6 +152,6 @@ pub fn export(
     out.push_str("</EspTranslator>\n");
 
     std::fs::write(path, out.as_bytes()).map_err(|e| e.to_string())?;
-    log::info!("[et_xml] export: {} entries to '{}'", count, path.display());
+    tracing::info!("[et_xml] export: {} entries to '{}'", count, path.display());
     Ok(count)
 }

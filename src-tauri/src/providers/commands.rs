@@ -13,6 +13,7 @@ pub async fn get_providers_cmd() -> Vec<ProviderMeta> {
 
 /// Translate a single text with the given provider config.
 #[tauri::command]
+#[tracing::instrument(skip(config, text))]
 pub async fn translate_one_cmd(
     config:      ProviderConfig,
     text:        String,

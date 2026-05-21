@@ -46,7 +46,9 @@ impl TranslationDb {
             text_only.entry(e.original.clone()).or_insert_with(|| e.translated.clone());
         }
 
-        TranslationDb { name, game, lang_from, lang_to, read_only, entries, by_id, contextual, text_only }
+        let db = TranslationDb { name, game, lang_from, lang_to, read_only, entries, by_id, contextual, text_only };
+        tracing::info!("[db] Indexed {} entries for '{}'", db.entries.len(), db.name);
+        db
     }
 
     /// 3-level lookup: (form_id + sub_type + original) → contextual → plain-text.

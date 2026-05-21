@@ -47,13 +47,13 @@ fn purge_old_logs(log_dir: &std::path::Path, max_age_days: u64) {
         if modified < cutoff {
             if std::fs::remove_file(&path).is_ok() {
                 removed += 1;
-                log::debug!("[logs] Removed old log: {}", path.display());
+                tracing::debug!("[logs] Removed old log: {}", path.display());
             }
         }
     }
 
     if removed > 0 {
-        log::info!("[logs] Purged {} log file(s) older than {} days", removed, max_age_days);
+        tracing::info!("[logs] Purged {} log file(s) older than {} days", removed, max_age_days);
     }
 }
 
@@ -85,15 +85,15 @@ pub fn run() {
                 // As a safety net, purge very old files (> LOG_RETENTION_DAYS) on startup.
                 purge_old_logs(&log_dir, LOG_RETENTION_DAYS);
             }
-            log::info!("BGS Translator started — log file initialized");
-            log::debug!("[system] Log dir: {:?}", app.path().app_log_dir());
+            tracing::info!("BGS Translator started — log file initialized");
+            tracing::debug!("[system] Log dir: {:?}", app.path().app_log_dir());
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(database::DbState(std::sync::Mutex::new(None)))
+        .manage(database::DbState(parking_lot::Mutex::new(None)))
         .manage(spellcheck::commands::SpellState::new())
         .invoke_handler(tauri::generate_handler![
             commands::open_url_cmd,

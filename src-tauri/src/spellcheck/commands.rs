@@ -1,6 +1,6 @@
 use std::io::Write as _;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 #[cfg(nuspell_available)]
 use std::collections::HashMap;
@@ -223,7 +223,7 @@ pub async fn delete_dictionary_cmd(
     }
 
     #[cfg(nuspell_available)]
-    state.0.lock().unwrap().remove(&lang);
+    state.0.lock().remove(&lang);
 
     #[cfg(not(nuspell_available))]
     let _ = state;
@@ -253,7 +253,7 @@ pub async fn spellcheck_cmd(
     #[cfg(nuspell_available)]
     {
         {
-            let mut map = state.0.lock().unwrap();
+            let mut map = state.0.lock();
             if !map.contains_key(&lang) {
                 let entry = CATALOG
                     .iter()
@@ -264,17 +264,22 @@ pub async fn spellcheck_cmd(
                 if !aff.exists() {
                     return Err(format!("Dictionary {lang} is not installed"));
                 }
+                tracing::info!("[spellcheck] Loading dictionary '{}'", lang);
                 map.insert(lang.clone(), Spellchecker::load(&aff)?);
+                tracing::info!("[spellcheck] Dictionary '{}' loaded and cached", lang);
             }
         }
-        let map = state.0.lock().unwrap();
-        let checker = map.get(&lang).unwrap();
+        let map = state.0.lock();
+        let checker = map.get(&lang)
+            .ok_or_else(|| format!("Dictionary '{}' not loaded", lang))?;
         let mut errors = Vec::new();
         for (word, char_start) in tokenize(&text) {
             if !checker.spell(&word) {
+                tracing::debug!("[spellcheck] '{}' flagged at char {}", word, char_start);
                 errors.push(SpellError { char_len: word.chars().count(), word, char_start });
             }
         }
+        tracing::debug!("[spellcheck] {} error(s) found in {} chars", errors.len(), text.len());
         Ok(errors)
     }
 }
@@ -295,7 +300,7 @@ pub async fn get_suggestions_cmd(
     #[cfg(nuspell_available)]
     {
         {
-            let mut map = state.0.lock().unwrap();
+            let mut map = state.0.lock();
             if !map.contains_key(&lang) {
                 let entry = CATALOG
                     .iter()
@@ -306,10 +311,15 @@ pub async fn get_suggestions_cmd(
                 if !aff.exists() {
                     return Err(format!("Dictionary {lang} is not installed"));
                 }
+                tracing::info!("[spellcheck] Loading dictionary '{}' for suggestions", lang);
                 map.insert(lang.clone(), Spellchecker::load(&aff)?);
             }
         }
-        let map = state.0.lock().unwrap();
-        Ok(map.get(&lang).unwrap().suggest(&word))
+        let map = state.0.lock();
+        let checker = map.get(&lang)
+            .ok_or_else(|| format!("Dictionary '{}' not loaded", lang))?;
+        let suggestions = checker.suggest(&word);
+        tracing::debug!("[spellcheck] {} suggestion(s) for '{}'", suggestions.len(), word);
+        Ok(suggestions)
     }
 }

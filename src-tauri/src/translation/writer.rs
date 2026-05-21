@@ -29,10 +29,10 @@ pub fn write_translated_plugin(
     output_path: &Path,
     entries: &[TranslationEntry],
 ) -> Result<(), String> {
-    log::info!("[writer] Starting export");
-    log::info!("[writer]   source : {}", source_path.display());
-    log::info!("[writer]   output : {}", output_path.display());
-    log::info!("[writer]   total entries : {}", entries.len());
+    tracing::info!("[writer] Starting export");
+    tracing::info!("[writer]   source : {}", source_path.display());
+    tracing::info!("[writer]   output : {}", output_path.display());
+    tracing::info!("[writer]   total entries : {}", entries.len());
 
     let validated_count = entries.iter().filter(|e| e.status == EntryStatus::Validated).count();
 
@@ -48,47 +48,53 @@ pub fn write_translated_plugin(
     }
     let translation_count: usize = map.values().map(|m| m.len()).sum();
 
-    log::info!("[writer]   validated entries        : {}", validated_count);
-    log::info!("[writer]   translations to apply    : {} across {} form_id+sub_type groups", translation_count, map.len());
+    tracing::info!("[writer]   validated entries        : {}", validated_count);
+    tracing::info!("[writer]   translations to apply    : {} across {} form_id+sub_type groups", translation_count, map.len());
 
     // Ensure the output directory exists
     if let Some(parent) = output_path.parent() {
         if !parent.as_os_str().is_empty() {
-            log::debug!("[writer] Creating output directory: {}", parent.display());
+            tracing::debug!("[writer] Creating output directory: {}", parent.display());
             std::fs::create_dir_all(parent).map_err(|e| {
                 let msg = format!("Cannot create output directory '{}': {}", parent.display(), e);
-                log::error!("[writer] {}", msg);
+                tracing::error!("[writer] {}", msg);
                 msg
             })?;
         }
     }
 
-    log::debug!("[writer] Opening source file…");
+    tracing::debug!("[writer] Opening source file…");
     let src = File::open(source_path).map_err(|e| {
         let msg = format!("Cannot open source '{}': {}", source_path.display(), e);
-        log::error!("[writer] {}", msg);
+        tracing::error!("[writer] {}", msg);
         msg
     })?;
     let mut reader = BufReader::new(src);
 
-    log::debug!("[writer] Creating output file…");
-    let dst = File::create(output_path).map_err(|e| {
-        let msg = format!("Cannot create output '{}': {}", output_path.display(), e);
-        log::error!("[writer] {}", msg);
+    tracing::debug!("[writer] Creating temporary output file…");
+    let out_dir = output_path.parent().unwrap_or(std::path::Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(out_dir).map_err(|e| {
+        let msg = format!("Cannot create temp file in '{}': {}", out_dir.display(), e);
+        tracing::error!("[writer] {}", msg);
         msg
     })?;
-    let mut writer = BufWriter::new(dst);
 
-    let result = copy_and_patch(&mut reader, &mut writer, &map).map_err(|e| {
-        let msg = e.to_string();
-        log::error!("[writer] copy_and_patch failed: {}", msg);
-        msg
-    });
-
-    if result.is_ok() {
-        log::info!("[writer] Export completed successfully → {}", output_path.display());
+    {
+        let mut writer = BufWriter::new(&mut tmp);
+        copy_and_patch(&mut reader, &mut writer, &map).map_err(|e| {
+            let msg = e.to_string();
+            tracing::error!("[writer] copy_and_patch failed: {}", msg);
+            msg
+        })?;
     }
-    result
+
+    tmp.persist(output_path).map_err(|e| {
+        let msg = format!("Cannot persist output '{}': {}", output_path.display(), e.error);
+        tracing::error!("[writer] {}", msg);
+        msg
+    })?;
+    tracing::info!("[writer] Export completed successfully → {}", output_path.display());
+    Ok(())
 }
 
 fn copy_and_patch<R: Read + Seek, W: Write>(
@@ -96,7 +102,7 @@ fn copy_and_patch<R: Read + Seek, W: Write>(
     w: &mut W,
     map: &TranslationMap,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    log::debug!("[writer] copy_and_patch: reading TES4 header…");
+    tracing::debug!("[writer] copy_and_patch: reading TES4 header…");
     // Read and copy the TES4 record exactly as it is
     let tes4_header = RecordHeader::read(r)?;
     let mut tes4_data = vec![0u8; tes4_header.data_size as usize];
@@ -129,7 +135,7 @@ fn copy_and_patch<R: Read + Seek, W: Write>(
             // Patch records in translatable groups; copy others verbatim
             let label_str = std::str::from_utf8(&group.label).unwrap_or("????");
             let is_trans = is_translatable_record(&group.label);
-            log::debug!("[writer] GRUP {} — translatable={}, data_size={}", label_str, is_trans, data_size);
+            tracing::debug!("[writer] GRUP {} — translatable={}, data_size={}", label_str, is_trans, data_size);
             let patched = if is_trans {
                 patch_group_data(&group_data, map, &form_id_set)?
             } else {
@@ -256,9 +262,9 @@ fn patch_group_data(
 
             // Patch subrecords
             let rec_type_str = std::str::from_utf8(&rec_type).unwrap_or("????");
-            log::debug!("[writer] Patching {} FormID={} (compressed={})", rec_type_str, fid_hex, is_compressed);
+            tracing::debug!("[writer] Patching {} FormID={} (compressed={})", rec_type_str, fid_hex, is_compressed);
             let patched_body = patch_subrecords(&record_body, &fid_hex, map)?;
-            log::debug!("[writer]   body size: {} → {} bytes", record_body.len(), patched_body.len());
+            tracing::debug!("[writer]   body size: {} → {} bytes", record_body.len(), patched_body.len());
 
             // Write record header — clear compression flag (we always write uncompressed)
             let new_flags = flags & !FLAG_COMPRESSED;
@@ -337,7 +343,7 @@ fn patch_subrecords(
             if let Some(translated) = translations.get(&current_text) {
                 let mut new_data = translated.as_bytes().to_vec();
                 new_data.push(0u8);
-                log::debug!("[writer]   subrecord {} replaced ({} → {} bytes)", outer_key, actual_size, new_data.len());
+                tracing::debug!("[writer]   subrecord {} replaced ({} → {} bytes)", outer_key, actual_size, new_data.len());
                 write_subrecord(&mut output, &sub_type, &new_data);
                 replaced = true;
             }

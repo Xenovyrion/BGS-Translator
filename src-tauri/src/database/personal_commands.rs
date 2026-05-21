@@ -51,7 +51,7 @@ pub async fn create_personal_db_cmd(
         game, lang_from, lang_to,
     );
     save_bgtx(&db, &path)?;
-    log::info!("[personal_db] Created '{}' at '{}'", name, path.display());
+    tracing::info!("[personal_db] Created '{}' at '{}'", name, path.display());
     Ok(db.info())
 }
 
@@ -141,7 +141,7 @@ pub async fn add_to_personal_db_cmd(
     let added = new_entries.len();
     db.add_entries(new_entries);
     save_bgtx(&db, p)?;
-    log::info!("[personal_db] {} entries added to '{}' (total: {})", added, path, db.entry_count());
+    tracing::info!("[personal_db] {} entries added to '{}' (total: {})", added, path, db.entry_count());
     Ok(db.info())
 }
 
@@ -186,7 +186,7 @@ pub async fn apply_personal_db_cmd(
         })
         .collect();
 
-    log::info!("[personal_db] apply '{}': {}/{} matched", path, matched, total);
+    tracing::info!("[personal_db] apply '{}': {}/{} matched", path, matched, total);
     Ok(PersonalApplyResult { matched, total, entries })
 }
 
@@ -202,7 +202,7 @@ pub async fn delete_personal_db_cmd(path: String) -> Result<(), String> {
     let p = std::path::Path::new(&path);
     if p.exists() {
         std::fs::remove_file(p).map_err(|e| e.to_string())?;
-        log::info!("[personal_db] Deleted '{}'", path);
+        tracing::info!("[personal_db] Deleted '{}'", path);
     }
     Ok(())
 }
@@ -223,7 +223,7 @@ pub async fn update_personal_db_entries_cmd(
         if db.update_entry_at_index(u.idx, u.translated) { count += 1; }
     }
     save_bgtx(&db, p)?;
-    log::info!("[personal_db] {} entries updated in '{}'", count, path);
+    tracing::info!("[personal_db] {} entries updated in '{}'", count, path);
     Ok(count)
 }
 
@@ -235,7 +235,7 @@ pub async fn purge_personal_db_cmd(path: String) -> Result<usize, String> {
     let mut db = load_bgtx(p)?;
     let removed = db.purge_untranslated();
     save_bgtx(&db, p)?;
-    log::info!("[personal_db] {} untranslated entries purged from '{}'", removed, path);
+    tracing::info!("[personal_db] {} untranslated entries purged from '{}'", removed, path);
     Ok(removed)
 }
 
@@ -268,7 +268,7 @@ pub async fn add_entry_to_personal_db_cmd(
     }]);
     save_bgtx(&db, p)?;
     let count = db.entry_count();
-    log::info!("[personal_db] Entry manually added to '{}' (total: {})", path, count);
+    tracing::info!("[personal_db] Entry manually added to '{}' (total: {})", path, count);
     Ok(count)
 }
 
@@ -308,6 +308,6 @@ pub async fn import_into_personal_db_cmd(
     let count = new_entries.len();
     db.add_entries(new_entries);
     save_bgtx(&db, p)?;
-    log::info!("[personal_db] {} entries imported into '{}' from '{}'", count, path, src_path);
+    tracing::info!("[personal_db] {} entries imported into '{}' from '{}'", count, path, src_path);
     Ok(count)
 }

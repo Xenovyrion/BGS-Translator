@@ -180,7 +180,7 @@ export default function CompareModal({
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.55)",
+        background: "var(--modal-backdrop, rgba(0,0,0,0.55))",
         display: "flex", alignItems: "stretch", justifyContent: "stretch",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -269,8 +269,8 @@ export default function CompareModal({
               {recoveryMode && (
                 <span style={{
                   marginLeft: 8,
-                  background: "rgba(34,197,94,0.15)", color: "#22c55e",
-                  border: "1px solid rgba(34,197,94,0.3)",
+                  background: "color-mix(in srgb, var(--diff-added) 15%, transparent)", color: "var(--diff-added)",
+                  border: "1px solid color-mix(in srgb, var(--diff-added) 30%, transparent)",
                   borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 600,
                 }}>
                   {t("compare.active_plugin")}
@@ -293,7 +293,7 @@ export default function CompareModal({
               </button>
             </div>
             {recoveryMode && (
-              <div style={{ fontSize: 10, color: "#22c55e", opacity: 0.8 }}>
+              <div style={{ fontSize: 10, color: "var(--diff-added)", opacity: 0.8 }}>
                 {t("compare.recovery_mode_hint")}
               </div>
             )}
@@ -322,7 +322,7 @@ export default function CompareModal({
               ...btnStyle,
               padding: "5px 16px",
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--bg-primary, #fff)",
               opacity: canRun ? 1 : 0.4,
             }}
           >
@@ -332,7 +332,7 @@ export default function CompareModal({
           {/* Check result inline — stats only, no extra button */}
           {phase.kind === "check_done" && <CheckResult stats={phase.stats} />}
           {phase.kind === "error" && (
-            <span style={{ fontSize: 11, color: "#ef4444", flex: 1 }}>
+            <span style={{ fontSize: 11, color: "var(--diff-removed)", flex: 1 }}>
               ⚠ {phase.message}
             </span>
           )}
@@ -449,8 +449,8 @@ function IdlePlaceholder({ t }: { t: (k: string) => string }) {
       {/* Usage guide */}
       <div style={{
         maxWidth: 560,
-        background: "rgba(59,130,246,0.07)",
-        border: "1px solid rgba(59,130,246,0.2)",
+        background: "var(--accent-dim, rgba(59,130,246,0.07))",
+        border: "1px solid color-mix(in srgb, var(--accent) 20%, transparent)",
         borderRadius: 8,
         padding: "16px 20px",
         display: "flex", flexDirection: "column", gap: 10,
@@ -461,11 +461,11 @@ function IdlePlaceholder({ t }: { t: (k: string) => string }) {
         </div>
         <div style={{ fontSize: 12, color: "var(--text-2)", display: "flex", flexDirection: "column", gap: 6, lineHeight: 1.6 }}>
           <div>
-            <span style={{ color: "#f59e0b", fontWeight: 600 }}>Plugin A</span>
+            <span style={{ color: "var(--diff-modified)", fontWeight: 600 }}>Plugin A</span>
             {" — "}{t("compare.usage_plugin_a")}
           </div>
           <div>
-            <span style={{ color: "#22c55e", fontWeight: 600 }}>Plugin B</span>
+            <span style={{ color: "var(--diff-added)", fontWeight: 600 }}>Plugin B</span>
             {" — "}{t("compare.usage_plugin_b")}
           </div>
           <div style={{ marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--border)", color: "var(--text-2)" }}>
@@ -512,7 +512,7 @@ function CheckResult({ stats }: { stats: DiffStats }) {
 
   if (noChanges) {
     return (
-      <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 600 }}>
+      <span style={{ fontSize: 12, color: "var(--diff-added)", fontWeight: 600 }}>
         ✅ {t("compare.check_no_diff")}
       </span>
     );
@@ -520,13 +520,13 @@ function CheckResult({ stats }: { stats: DiffStats }) {
 
   return (
     <span style={{ fontSize: 12, color: "var(--text-1)" }}>
-      <span style={{ color: "#22c55e", fontWeight: 600 }}>+{stats.added}</span>
+      <span style={{ color: "var(--diff-added)", fontWeight: 600 }}>+{stats.added}</span>
       {" · "}
-      <span style={{ color: "#ef4444", fontWeight: 600 }}>−{stats.removed}</span>
+      <span style={{ color: "var(--diff-removed)", fontWeight: 600 }}>−{stats.removed}</span>
       {" · "}
-      <span style={{ color: "#f59e0b", fontWeight: 600 }}>~{stats.modified}</span>
+      <span style={{ color: "var(--diff-modified)", fontWeight: 600 }}>~{stats.modified}</span>
       {stats.recoverable > 0 && (
-        <span style={{ color: "#818cf8", fontWeight: 600 }}> · ✨{stats.recoverable}</span>
+        <span style={{ color: "var(--diff-recoverable)", fontWeight: 600 }}> · ✨{stats.recoverable}</span>
       )}
       <span style={{ color: "var(--text-2)", marginLeft: 6, fontSize: 11 }}>
         — {t("compare.check_hint")}
@@ -536,10 +536,10 @@ function CheckResult({ stats }: { stats: DiffStats }) {
 }
 
 const KIND_COLOR_FILTER: Record<ChangeKind, string> = {
-  added:     "#22c55e",
-  removed:   "#ef4444",
-  modified:  "#f59e0b",
-  unchanged: "#64748b",
+  added:     "var(--diff-added)",
+  removed:   "var(--diff-removed)",
+  modified:  "var(--diff-modified)",
+  unchanged: "var(--diff-unchanged)",
 };
 
 function FilterChip({ kind, active, onToggle }: { kind: ChangeKind; active: boolean; onToggle: () => void }) {
@@ -552,7 +552,7 @@ function FilterChip({ kind, active, onToggle }: { kind: ChangeKind; active: bool
       style={{
         display: "flex", alignItems: "center", gap: 5,
         padding: "2px 10px",
-        background: active ? `${color}20` : "transparent",
+        background: active ? `color-mix(in srgb, ${color} 12%, transparent)` : "transparent",
         border: `1px solid ${active ? color : "var(--border)"}`,
         borderRadius: 12,
         color: active ? color : "var(--text-2)",

@@ -45,7 +45,7 @@ pub async fn get_fuzzy_matches_cmd(
         return Ok(vec![]);
     }
 
-    log::debug!(
+    tracing::debug!(
         "[fuzzy] bulk_search: {} targets × {} sources (jw≥{:.0}% lev≥{:.0}%)",
         targets.len(), sources.len(),
         threshold_jw * 100.0, threshold_lev * 100.0,
@@ -53,16 +53,16 @@ pub async fn get_fuzzy_matches_cmd(
 
     let results = tokio::task::spawn_blocking(move || {
         let index = TextIndex::build(sources);
-        log::debug!("[fuzzy] index built: {} unique source strings", index.len());
+        tracing::debug!("[fuzzy] index built: {} unique source strings", index.len());
         index.bulk_search(&targets, threshold_jw, threshold_lev)
     })
     .await
     .map_err(|e| {
-        log::error!("[fuzzy] bulk_search panicked: {}", e);
+        tracing::error!("[fuzzy] bulk_search panicked: {}", e);
         e.to_string()
     })?;
 
-    log::info!("[fuzzy] bulk_search done — {} matches found", results.len());
+    tracing::info!("[fuzzy] bulk_search done — {} matches found", results.len());
     Ok(results)
 }
 
@@ -83,7 +83,7 @@ pub async fn get_fuzzy_match_single_cmd(
         return Ok(None);
     }
 
-    log::debug!(
+    tracing::debug!(
         "[fuzzy] single_search: '{}…' × {} sources",
         original.chars().take(40).collect::<String>(),
         sources.len(),
@@ -102,7 +102,7 @@ pub async fn get_fuzzy_match_single_cmd(
     })
     .await
     .map_err(|e| {
-        log::error!("[fuzzy] single_search panicked: {}", e);
+        tracing::error!("[fuzzy] single_search panicked: {}", e);
         e.to_string()
     })?;
 

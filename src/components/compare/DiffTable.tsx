@@ -7,16 +7,16 @@ import { IconSave, IconDatabase } from "../../icons";
 // ── Colours per change kind ───────────────────────────────────────────────────
 
 const KIND_COLOR: Record<ChangeKind, string> = {
-  added:     "#22c55e",
-  removed:   "#ef4444",
-  modified:  "#f59e0b",
-  unchanged: "#64748b",
+  added:     "var(--diff-added)",
+  removed:   "var(--diff-removed)",
+  modified:  "var(--diff-modified)",
+  unchanged: "var(--diff-unchanged)",
 };
 
 const KIND_BG: Record<ChangeKind, string> = {
-  added:     "rgba(34,197,94,0.06)",
-  removed:   "rgba(239,68,68,0.06)",
-  modified:  "rgba(245,158,11,0.06)",
+  added:     "color-mix(in srgb, var(--diff-added) 8%, transparent)",
+  removed:   "color-mix(in srgb, var(--diff-removed) 8%, transparent)",
+  modified:  "color-mix(in srgb, var(--diff-modified) 8%, transparent)",
   unchanged: "transparent",
 };
 
@@ -225,8 +225,8 @@ export default function DiffTable({
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "6px 14px",
-          background: "rgba(99,102,241,0.08)",
-          borderBottom: "1px solid rgba(99,102,241,0.2)",
+          background: "color-mix(in srgb, var(--diff-recoverable) 8%, transparent)",
+          borderBottom: "1px solid color-mix(in srgb, var(--diff-recoverable) 20%, transparent)",
           flexShrink: 0,
         }}>
           <span style={{ fontSize: "var(--fz-ui, 11px)", fontFamily: "var(--font-ui)", color: "var(--text-2)" }}>
@@ -237,7 +237,7 @@ export default function DiffTable({
             style={{
               padding: "3px 12px",
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--bg-primary, #fff)",
               border: "none",
               borderRadius: 5,
               fontSize: "var(--fz-ui, 11px)",
@@ -428,9 +428,9 @@ function RecordRow({
           <span
             title={t("compare.recoverable_hint", { count: record.recoverable_count })}
             style={{
-              background: "rgba(99,102,241,0.15)",
-              color: "#818cf8",
-              border: "1px solid rgba(99,102,241,0.25)",
+              background: "color-mix(in srgb, var(--diff-recoverable) 15%, transparent)",
+              color: "var(--diff-recoverable)",
+              border: "1px solid color-mix(in srgb, var(--diff-recoverable) 25%, transparent)",
               borderRadius: 4,
               padding: "1px 6px",
               fontSize: "var(--fz-ui, 11px)",
